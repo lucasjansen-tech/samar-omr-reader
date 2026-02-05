@@ -1,30 +1,29 @@
 import streamlit as st
-import os
 
-# Configuração da página deve ser a PRIMEIRA linha
-st.set_page_config(page_title="SAMAR OMR", layout="centered")
+# O comando set_page_config DEVE ser o primeiro
+st.set_page_config(page_title="SAMAR DEBUG", layout="centered")
 
-st.title("📊 SISTEMA SAMAR - SEMED RAPOSA")
+st.title("🛠️ MODO DE DIAGNÓSTICO SAMAR")
 
-# Teste Simples de Interface
-st.write("Se você está vendo esta mensagem, a interface carregou com sucesso!")
+st.write("Se você está lendo isso, o Streamlit está funcionando!")
 
-# Verificação de arquivos críticos
-col1, col2 = st.columns(2)
-with col1:
-    if os.path.exists("omr_engine.py"):
-        st.success("Motor OMR: OK")
-    else:
-        st.error("Motor OMR: Faltando")
+# Tenta importar as bibliotecas e mostra o erro na tela se falhar
+try:
+    import cv2
+    st.success("✅ OpenCV carregado com sucesso!")
+except Exception as e:
+    st.error(f"❌ Erro ao carregar OpenCV: {e}")
 
-with col2:
-    if os.path.exists("Frame 18.png"):
-        st.success("Logo: OK")
-    else:
-        st.warning("Logo: Faltando")
+try:
+    import numpy as np
+    st.success("✅ Numpy carregado com sucesso!")
+except Exception as e:
+    st.error(f"❌ Erro ao carregar Numpy: {e}")
 
-# Botão de Upload para teste
-arquivo = st.file_uploader("Teste de Upload", type=['pdf', 'jpg', 'png'])
+try:
+    from pdf2image import convert_from_bytes
+    st.success("✅ PDF2Image carregado com sucesso!")
+except Exception as e:
+    st.error(f"❌ Erro ao carregar PDF2Image: {e}")
 
-if arquivo:
-    st.write(f"Arquivo '{arquivo.name}' recebido com sucesso!")
+st.info("Verifique se as mensagens acima estão em verde.")
