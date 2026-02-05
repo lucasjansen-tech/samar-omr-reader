@@ -1,28 +1,30 @@
 import streamlit as st
 import os
 
-# Configuração da página deve ser SEMPRE o primeiro comando Streamlit
-st.set_page_config(page_title="SAMAR OMR - Raposa", layout="wide")
+# Configuração da página deve ser a PRIMEIRA linha
+st.set_page_config(page_title="SAMAR OMR", layout="centered")
 
 st.title("📊 SISTEMA SAMAR - SEMED RAPOSA")
 
-# Verificação de arquivos no repositório
-st.sidebar.header("Status do Servidor")
-if os.path.exists("omr_engine.py"):
-    st.sidebar.success("✅ omr_engine.py carregado")
-else:
-    st.sidebar.error("❌ omr_engine.py não encontrado no GitHub")
+# Teste Simples de Interface
+st.write("Se você está vendo esta mensagem, a interface carregou com sucesso!")
 
-# Tentativa de carregar a imagem da logo com segurança
-if os.path.exists("Frame 18.png"):
-    st.image("Frame 18.png")
-else:
-    st.warning("⚠️ Logo 'Frame 18.png' não encontrada. Verifique o nome do arquivo no GitHub.")
+# Verificação de arquivos críticos
+col1, col2 = st.columns(2)
+with col1:
+    if os.path.exists("omr_engine.py"):
+        st.success("Motor OMR: OK")
+    else:
+        st.error("Motor OMR: Faltando")
 
-# Interface de Upload
-st.write("### Envio de Gabaritos")
-upload = st.file_uploader("Suba o PDF ou Imagem dos Gabaritos", type=["pdf", "jpg", "png"])
+with col2:
+    if os.path.exists("Frame 18.png"):
+        st.success("Logo: OK")
+    else:
+        st.warning("Logo: Faltando")
 
-if upload:
-    st.info(f"Arquivo recebido: {upload.name}. Iniciando processamento...")
-    # Aqui chamaremos a função do omr_engine.py após confirmarmos que a tela abriu.
+# Botão de Upload para teste
+arquivo = st.file_uploader("Teste de Upload", type=['pdf', 'jpg', 'png'])
+
+if arquivo:
+    st.write(f"Arquivo '{arquivo.name}' recebido com sucesso!")
