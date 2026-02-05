@@ -8,148 +8,143 @@ def tratar_entrada(img_pil):
 
 def alinhar_gabarito(imagem):
     gray = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY)
-    # Binarização agressiva para pegar apenas o que é PRETO PURO (âncoras)
+    
+    # Binarização focada em objetos sólidos pretos (Âncoras)
     _, thresh = cv2.threshold(gray, 80, 255, cv2.THRESH_BINARY_INV)
     
     # Encontra contornos
     cnts, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    ancoras_candidatas = []
-
-    img_debug = imagem.copy()
+    ancoras = []
 
     for c in cnts:
         area = cv2.contourArea(c)
-        # Filtra quadrados pretos (Tamanho médio esperado no SAMAR)
-        if 300 < area < 5000: 
+        # Filtro de tamanho para pegar apenas os quadrados das âncoras
+        if 400 < area < 8000: 
             peri = cv2.arcLength(c, True)
             approx = cv2.approxPolyDP(c, 0.04 * peri, True)
-            if len(approx) == 4: # É um quadrado?
-                M = cv2.moments(c)
-                if M["m00"] != 0:
-                    cx = int(M["m10"] / M["m00"])
-                    cy = int(M["m01"] / M["m00"])
-                    ancoras_candidatas.append((cx, cy))
-                    # Marca em vermelho para você ver se ele achou
-                    cv2.drawContours(img_debug, [approx], -1, (0, 0, 255), 5)
+            
+            # Verifica se é um quadrado (4 vértices)
+            if len(approx) == 4:
+                (x, y, w, h) = cv2.boundingRect(approx)
+                aspect_ratio = w / float(h)
+                # Verifica se é "quadrado" (proporção próxima de 1)
+                if 0.8 <= aspect_ratio <= 1.2:
+                    M = cv2.moments(c)
+                    if M["m00"] != 0:
+                        cx = int(M["m10"] / M["m00"])
+                        cy = int(M["m01"] / M["m00"])
+                        ancoras.append((cx, cy))
 
     # Precisamos de exatamente 4 âncoras
-    if len(ancoras_candidatas) >= 4:
-        # Ordena os pontos (Top-Esq, Top-Dir, Inf-Dir, Inf-Esq)
-        pts = np.array(ancoras_candidatas[:4], dtype="float32")
+    if len(ancoras) == 4:
+        pts = np.array(ancoras, dtype="float32")
         
-        # Lógica de ordenação robusta
+        # Ordenação: Top-Esq, Top-Dir, Inf-Dir, Inf-Esq
         s = pts.sum(axis=1)
         diff = np.diff(pts, axis=1)
         
-        tl = pts[np.argmin(s)]       # Menor soma = Top-Left
-        br = pts[np.argmax(s)]       # Maior soma = Bottom-Right
-        tr = pts[np.argmin(diff)]    # Menor diferença = Top-Right
-        bl = pts[np.argmax(diff)]    # Maior diferença = Bottom-Left
+        tl = pts[np.argmin(s)]
+        br = pts[np.argmax(s)]
+        tr = pts[np.argmin(diff)]
+        bl = pts[np.argmax(diff)]
         
         rect = np.array([tl, tr, br, bl], dtype="float32")
 
-        # Dimensões fixas para onde vamos esticar a imagem (Padronização)
-        width, height = 800, 1000
+        # Warp para tamanho fixo PADRÃO (800x1100)
+        # Isso garante que as coordenadas das bolinhas sejam sempre as mesmas
         dst = np.array([
             [0, 0],
-            [width - 1, 0],
-            [width - 1, height - 1],
-            [0, height - 1]], dtype="float32")
+            [800 - 1, 0],
+            [800 - 1, 1100 - 1],
+            [0, 1100 - 1]], dtype="float32")
 
         M = cv2.getPerspectiveTransform(rect, dst)
-        warped = cv2.warpPerspective(imagem, M, (width, height))
-        
-        return warped, img_debug
-
-    return None, img_debug
+        warped = cv2.warpPerspective(imagem, M, (800, 1100))
+        return warped
+    
+    return None
 
 def extrair_dados(img_warped, gab_oficial=None):
-    # Agora trabalhamos na imagem recortada (800x1000)
-    # O (0,0) é o centro da âncora superior esquerda
-    
     gray = cv2.cvtColor(img_warped, cv2.COLOR_BGR2GRAY)
     thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
     
     res = {"respostas": {}, "frequencia": ""}
-    vis = img_warped.copy()
+    # Cria uma cópia da imagem para desenhar a "Máscara"
+    img_mask = img_warped.copy() 
 
-    # --- 1. FREQUÊNCIA (Baseada no Topo Esquerdo) ---
-    # Ajuste de coordenadas relativo à âncora superior esquerda (0,0)
-    start_y_freq = 110  # Distância vertical da âncora até a primeira bolinha (0)
-    step_y = 24.5       # Distância entre bolinhas
-    
-    cols_freq = [
-        ("D", 85),  # Coluna D está ~85px para a direita da âncora
-        ("U", 125)  # Coluna U está ~125px para a direita
-    ]
-    
-    f_code = ""
+    # --- 1. FREQUÊNCIA (Colunas D e U) ---
+    # Coordenadas ajustadas para o warp de 800x1100
+    cols_freq = [("D", 85), ("U", 125)]
+    freq_result = ""
+
     for nome, x in cols_freq:
-        pixels_col = []
+        votos = []
         for i in range(10):
-            y = int(start_y_freq + (i * step_y))
-            # Desenha onde está procurando (Círculo Azul Vazio)
-            cv2.circle(vis, (x, y), 5, (255, 100, 0), 1)
-            
+            y = int(140 + (i * 26.5)) # Ajuste fino vertical
             roi = thresh[y-8:y+8, x-8:x+8]
-            pixels_col.append(cv2.countNonZero(roi))
+            votos.append(cv2.countNonZero(roi))
         
-        # Verifica qual está marcado
-        if max(pixels_col) > 60:
-            idx = np.argmax(pixels_col)
-            f_code += str(idx)
-            # Marca o encontrado (Azul Preenchido)
-            y_hit = int(start_y_freq + (idx * step_y))
-            cv2.circle(vis, (x, y_hit), 9, (255, 0, 0), -1)
+        # Se marcou algo
+        if max(votos) > 60:
+            idx = np.argmax(votos)
+            freq_result += str(idx)
+            # Desenha na máscara (Azul para dados cadastrais)
+            cv2.circle(img_mask, (x, int(140 + (idx * 26.5))), 10, (255, 0, 0), -1)
         else:
-            f_code += "0"
+            freq_result += "0" # Padrão: Se não marcou, é 0
             
-    res["frequencia"] = f_code
+    res["frequencia"] = freq_result
 
-    # --- 2. QUESTÕES (Grade de 4 Blocos) ---
-    # Coordenadas medidas a partir das âncoras cortadas
-    # Bloco 1 (Q1) começa mais abaixo
-    
-    y_start_blocos = 290
-    step_x_questions = 38  # Distância entre A e B
-    
+    # --- 2. QUESTÕES (Grade Completa) ---
+    # Coordenadas dos blocos
     blocos = [
-        (175, y_start_blocos, 1),   # Bloco 1 (Esq)
-        (430, y_start_blocos, 14),  # Bloco 2 (Dir)
-        (175, 670, 27),             # Bloco 3 (Esq Baixo)
-        (430, 670, 40)              # Bloco 4 (Dir Baixo)
+        (175, 335, 1),   # Bloco 1 (Esq)
+        (430, 335, 14),  # Bloco 2 (Dir)
+        (175, 755, 27),  # Bloco 3 (Esq Baixo)
+        (430, 755, 40)   # Bloco 4 (Dir Baixo)
     ]
     
-    for (bx, by, q_start) in blocos:
-        for i in range(13): # 13 questões por bloco
-            q_num = q_start + i
-            cy = int(by + (i * 25.2)) # Passo vertical das questões
-            
-            votos_q = []
-            for j in range(4): # A, B, C, D
-                cx = int(bx + (j * step_x_questions))
-                # Guia visual (onde o robô olha)
-                cv2.circle(vis, (cx, cy), 4, (0, 255, 0), 1)
-                
-                roi = thresh[cy-9:cy+9, cx-9:cx+9]
-                votos_q.append(cv2.countNonZero(roi))
-            
-            # Análise
-            marcou = max(votos_q) > 65
-            idx_max = np.argmax(votos_q)
-            letra = ["A", "B", "C", "D"][idx_max] if marcou else "."
-            res["respostas"][q_num] = letra
-            
-            if marcou:
-                # Marcação do Aluno (Verde Preenchido)
-                cx_hit = int(bx + (idx_max * step_x_questions))
-                cv2.circle(vis, (cx_hit, cy), 10, (0, 255, 0), -1)
-            
-            # Correção Visual (Gabarito)
-            if gab_oficial and gab_oficial.get(q_num):
-                correta_idx = ["A", "B", "C", "D"].index(gab_oficial[q_num])
-                cx_corr = int(bx + (correta_idx * step_x_questions))
-                # Ponto vermelho no centro da correta
-                cv2.circle(vis, (cx_corr, cy), 4, (0, 0, 255), -1)
+    step_x = 39 # Distância horizontal entre bolinhas
+    step_y = 28 # Distância vertical entre questões
 
-    return res, vis
+    for (bx, by, q_start) in blocos:
+        for i in range(13):
+            q_num = q_start + i
+            cy = int(by + (i * step_y))
+            
+            pixels_q = []
+            for j in range(4): # A, B, C, D
+                cx = int(bx + (j * step_x))
+                roi = thresh[cy-10:cy+10, cx-10:cx+10]
+                pixels_q.append(cv2.countNonZero(roi))
+            
+            marcou = max(pixels_q) > 65
+            idx_aluno = np.argmax(pixels_q)
+            letra_aluno = ["A", "B", "C", "D"][idx_aluno] if marcou else "."
+            res["respostas"][q_num] = letra_aluno
+
+            # --- LÓGICA DA MÁSCARA VISUAL ---
+            if gab_oficial and q_num in gab_oficial:
+                correta = gab_oficial[q_num]
+                idx_correta = ["A", "B", "C", "D"].index(correta)
+                cx_correta = int(bx + (idx_correta * step_x))
+
+                if letra_aluno == correta:
+                    # ACERTOU: Pinta a bolinha do aluno de VERDE
+                    cx_aluno = int(bx + (idx_aluno * step_x))
+                    cv2.circle(img_mask, (cx_aluno, cy), 12, (0, 255, 0), -1) 
+                else:
+                    if marcou:
+                        # ERROU: Pinta a bolinha do aluno de VERMELHO
+                        cx_aluno = int(bx + (idx_aluno * step_x))
+                        cv2.circle(img_mask, (cx_aluno, cy), 12, (0, 0, 255), -1)
+                    
+                    # MOSTRA A CORRETA: Desenha um anel VERDE na resposta certa
+                    cv2.circle(img_mask, (cx_correta, cy), 12, (0, 255, 0), 2)
+            
+            elif marcou:
+                # Se não tem gabarito, apenas marca o que o aluno fez em amarelo (neutro)
+                cx_aluno = int(bx + (idx_aluno * step_x))
+                cv2.circle(img_mask, (cx_aluno, cy), 10, (0, 255, 255), -1)
+
+    return res, img_mask
