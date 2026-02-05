@@ -3,14 +3,17 @@ import pandas as pd
 from pdf2image import convert_from_bytes
 from omr_engine import tratar_entrada, alinhar_gabarito, extrair_dados
 
-st.set_page_config(page_title="SAMAR - SEMED Raposa", layout="wide")
+st.set_page_config(page_title="SAMAR OMR - SEMED Raposa", layout="wide")
+st.title("📊 SAMAR - Sistema de Auditoria de Gabaritos")
 
-st.title("📊 SAMAR - Processamento e Auditoria Visual")
-
-# Gabarito Raiz
-with st.expander("⚙️ Configurar Gabarito Raiz (Respostas Corretas)"):
-    c = st.columns(4)
-    gab_raiz = {i: c[(i-1)//13].selectbox(f"Q{i}", ["A","B","C","D"], key=f"r{i}") for i in range(1, 53)}
+# Configuração do Gabarito Raiz
+with st.sidebar:
+    st.header("⚙️ Gabarito Oficial")
+    c1, c2 = st.columns(2)
+    gab_raiz = {}
+    for i in range(1, 53):
+        with (c1 if i <= 26 else c2):
+            gab_raiz[i] = st.selectbox(f"Q{i}", ["A","B","C","D"], key=f"r{i}")
 
 upload = st.file_uploader("Upload TESTE OMR.pdf", type=["pdf"])
 
@@ -26,25 +29,22 @@ if upload:
             dados, img_vis = extrair_dados(alinhada, gab_raiz)
             acertos = sum(1 for q, r in dados["respostas"].items() if r == gab_raiz.get(q))
             
-            res_row = {"Arquivo": upload.name, "Página": i+1, "Freq": dados["frequencia"], "Acertos": acertos}
+            res_row = {"Página": i+1, "Frequência": dados["frequencia"], "Acertos": acertos, "Nota": f"{(acertos/52)*100:.1f}%"}
             res_row.update(dados["respostas"])
             resultados.append(res_row)
             
-            # Auditoria Visual
-            st.write(f"### Auditoria Página {i+1} (Freq: {dados['frequencia']})")
-            col1, col2 = st.columns(2)
-            col1.image(img_diag, caption="Diagnóstico de Âncoras (Vermelho)")
-            col2.image(img_vis, caption="Validação de Respostas (Verde/Vermelho)")
+            # Layout de Auditoria
+            st.write(f"### Página {i+1} | Frequência Detectada: **{dados['frequencia']}**")
+            st.image(img_vis, use_container_width=True)
         else:
-            st.error(f"Página {i+1}: Âncoras não encontradas. Verifique se o papel não está cortado.")
-            st.image(img_diag, caption="Falha no Alinhamento", width=400)
+            st.error(f"Página {i+1}: Erro de alinhamento. Mostrando diagnóstico:")
+            st.image(img_diag, width=500)
 
     if resultados:
         df = pd.DataFrame(resultados)
-        st.subheader("📋 Tabela Consolidada")
+        st.subheader("📋 Relatório Consolidado")
         st.dataframe(df)
 
-        # EXPORTAÇÃO CORRIGIDA (EXCEL BRASILEIRO)
-        # O encoding utf-8-sig resolve caracteres estranhos no Excel
+        # Exportação para Excel (Configuração Brasil)
         csv = df.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
-        st.download_button("📥 Baixar Planilha para Excel", csv, "relatorio_samar.csv", "text/csv")
+        st.download_button("📥 Baixar Resultados para Excel", csv, "relatorio_samar.csv", "text/csv")
