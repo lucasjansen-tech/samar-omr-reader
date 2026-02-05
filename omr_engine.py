@@ -28,16 +28,32 @@ def alinhar_gabarito(imagem):
         return cv2.warpPerspective(imagem, M, (800, 1100))
     return None
 
-def extrair_respostas(alinhada):
+def extrair_dados(alinhada):
     gray = cv2.cvtColor(alinhada, cv2.COLOR_BGR2GRAY)
     thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
-    respostas = {}
+    
+    resultados = {"respostas": {}, "frequencia": ""}
+    
+    # 1. Leitura da Frequência (D e U)
+    freq_coords = {"D": {"x": 55, "y": 250}, "U": {"x": 90, "y": 250}}
+    valor_freq = ""
+    for col in ["D", "U"]:
+        col_pixels = []
+        for i in range(10): # Bolinhas de 0 a 9
+            y = freq_coords[col]["y"] + (i * 24)
+            roi = thresh[y:y+18, freq_coords[col]["x"]:freq_coords[col]["x"]+18]
+            col_pixels.append(cv2.countNonZero(roi))
+        valor_freq += str(np.argmax(col_pixels)) if max(col_pixels) > 120 else "?"
+    resultados["frequencia"] = valor_freq
+
+    # 2. Leitura dos Blocos (52 questões)
     blocos = {
         "LP1": {"x": 138, "y": 420, "start": 1},
         "LP2": {"x": 368, "y": 420, "start": 14},
         "MT1": {"x": 138, "y": 755, "start": 27},
         "MT2": {"x": 368, "y": 755, "start": 40}
     }
+    
     for _, b in blocos.items():
         for i in range(13):
             q_idx = b["start"] + i
@@ -47,5 +63,12 @@ def extrair_respostas(alinhada):
                 x = b["x"] + (j * 35)
                 roi = thresh[y:y+18, x:x+18]
                 pixels.append(cv2.countNonZero(roi))
-            respostas[q_idx] = ["A", "B", "C", "D"][np.argmax(pixels)] if max(pixels) > 120 else "."
-    return respostas
+                # Desenha um círculo para o PDF de conferência
+                cv2.circle(alinhada, (x+9, y+9), 8, (0, 255, 0), 1)
+            
+            if max(pixels) > 120:
+                resultados["respostas"][q_idx] = ["A", "B", "C", "D"][np.argmax(pixels)]
+            else:
+                resultados["respostas"][q_idx] = "."
+                
+    return resultados, alinhada
