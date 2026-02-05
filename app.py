@@ -3,17 +3,12 @@ import pandas as pd
 from pdf2image import convert_from_bytes
 from omr_engine import tratar_entrada, alinhar_gabarito, extrair_dados
 
-st.set_page_config(page_title="SAMAR OMR - SEMED Raposa", layout="wide")
-st.title("📊 SAMAR - Sistema de Auditoria de Gabaritos")
+st.set_page_config(page_title="SAMAR OMR", layout="wide")
+st.title("📊 Auditoria SAMAR - SEMED Raposa")
 
-# Configuração do Gabarito Raiz
 with st.sidebar:
     st.header("⚙️ Gabarito Oficial")
-    c1, c2 = st.columns(2)
-    gab_raiz = {}
-    for i in range(1, 53):
-        with (c1 if i <= 26 else c2):
-            gab_raiz[i] = st.selectbox(f"Q{i}", ["A","B","C","D"], key=f"r{i}")
+    gab_oficial = {i: st.selectbox(f"Q{i}", ["A","B","C","D"], key=f"q{i}") for i in range(1, 53)}
 
 upload = st.file_uploader("Upload TESTE OMR.pdf", type=["pdf"])
 
@@ -22,29 +17,26 @@ if upload:
     resultados = []
 
     for i, pag in enumerate(paginas):
-        img_orig = tratar_entrada(pag)
-        alinhada, img_diag = alinhar_gabarito(img_orig)
+        img = tratar_entrada(pag)
+        alinhada, img_diag = alinhar_gabarito(img)
         
         if alinhada is not None:
-            dados, img_vis = extrair_dados(alinhada, gab_raiz)
-            acertos = sum(1 for q, r in dados["respostas"].items() if r == gab_raiz.get(q))
+            dados, img_vis = extrair_dados(alinhada, gab_oficial)
+            acertos = sum(1 for q, r in dados["respostas"].items() if r == gab_oficial.get(q))
             
-            res_row = {"Página": i+1, "Frequência": dados["frequencia"], "Acertos": acertos, "Nota": f"{(acertos/52)*100:.1f}%"}
-            res_row.update(dados["respostas"])
-            resultados.append(res_row)
+            row = {"ID": i+1, "Freq": dados["frequencia"], "Acertos": acertos, "Nota": f"{(acertos/52)*100:.1f}%"}
+            row.update(dados["respostas"])
+            resultados.append(row)
             
-            # Layout de Auditoria
-            st.write(f"### Página {i+1} | Frequência Detectada: **{dados['frequencia']}**")
+            st.subheader(f"Página {i+1} | Frequência: {dados['frequencia']}")
             st.image(img_vis, use_container_width=True)
         else:
-            st.error(f"Página {i+1}: Erro de alinhamento. Mostrando diagnóstico:")
-            st.image(img_diag, width=500)
+            st.error(f"Erro no alinhamento da página {i+1}.")
+            st.image(img_diag, width=500, caption="Diagnóstico de Âncoras")
 
     if resultados:
         df = pd.DataFrame(resultados)
         st.subheader("📋 Relatório Consolidado")
         st.dataframe(df)
-
-        # Exportação para Excel (Configuração Brasil)
         csv = df.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
-        st.download_button("📥 Baixar Resultados para Excel", csv, "relatorio_samar.csv", "text/csv")
+        st.download_button("📥 Baixar Planilha para Excel", csv, "resultado_samar.csv", "text/csv")
