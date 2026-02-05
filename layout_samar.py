@@ -1,10 +1,9 @@
 from dataclasses import dataclass
 from typing import List
 
-# --- CORES OFICIAIS (Identidade Visual SEMED) ---
+# --- CORES OFICIAIS (Identidade Visual SEMED Raposa) ---
 COR_AZUL = "#2980b9"    # Azul Institucional
 COR_LARANJA = "#e67e22" # Laranja de Destaque
-COR_CINZA = "#34495e"   # Texto Secundário
 
 @dataclass
 class BlocoQuestao:
@@ -28,16 +27,13 @@ class ConfiguracaoProva:
     MARGIN = 25       # Margem externa
     ANCORA_SIZE = 25  # Tamanho dos quadrados pretos (âncoras)
     
-    # Cabeçalho expandido para caber todos os dados do aluno
-    HEADER_HEIGHT = 180 
-    
-    # Posição da Grade
-    FREQ_X = 40                 # Coluna da Frequência (Chamada)
-    GRID_START_Y = 630          # Onde começam as bolinhas (Y)
-    GRID_X_START = 110          # Onde começam os blocos de questões (X)
-    GRID_COL_W = 120            # Largura de cada coluna de questões
+    # Posições
+    FREQ_X = 40                 # Coluna da Frequência
+    GRID_START_Y = 630          # Altura onde começam as bolinhas
+    GRID_X_START = 110          # Margem esquerda dos blocos de questões
+    GRID_COL_W = 120            # Largura da coluna de cada bloco
 
-# --- DEFINIÇÃO DOS 3 MODELOS DE PROVA ---
+# --- DEFINIÇÃO DOS MODELOS DE PROVA ---
 TIPOS_PROVA = {
     "Padrao_52_Questoes": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM - SAMAR",
