@@ -1,167 +1,165 @@
 import cv2
 import numpy as np
-from PIL import Image, ImageOps
+from layout_samar import ConfiguracaoProva
 
-def tratar_entrada(img_pil):
-    img_pil = ImageOps.exif_transpose(img_pil)
-    return cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
-
-def order_points(pts):
-    # Ordena: Top-Esq, Top-Dir, Inf-Dir, Inf-Esq
-    rect = np.zeros((4, 2), dtype="float32")
-    s = pts.sum(axis=1)
-    rect[0] = pts[np.argmin(s)]
-    rect[2] = pts[np.argmax(s)]
-    diff = np.diff(pts, axis=1)
-    rect[1] = pts[np.argmin(diff)]
-    rect[3] = pts[np.argmax(diff)]
-    return rect
-
-def alinhar_gabarito(imagem):
-    # Redimensiona para largura padrão de 1000px para padronizar pixels
-    h_orig, w_orig = imagem.shape[:2]
-    ratio = 1000.0 / w_orig
-    img_resize = cv2.resize(imagem, (1000, int(h_orig * ratio)))
+def alinhar_imagem_pelas_ancoras(img, conf: ConfiguracaoProva):
+    # Lógica robusta de detecção de 4 cantos (a mesma que já funcionou antes)
+    # A diferença é que agora o DESTINO do warp é calculado dinamicamente
+    # baseado no conf.PAGE_W e conf.PAGE_H
     
-    # 1. DETECÇÃO DE ÂNCORAS (MODO SÓLIDO)
-    gray = cv2.cvtColor(img_resize, cv2.COLOR_BGR2GRAY)
-    
-    # Threshold simples (Binary Inv) pega melhor quadrados sólidos do que o adaptativo
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     _, thresh = cv2.threshold(gray, 80, 255, cv2.THRESH_BINARY_INV)
     
-    # Encontra contornos
     cnts, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    ancoras_candidatas = []
+    ancoras = []
     
-    img_debug = img_resize.copy() # Para diagnóstico visual
-
     for c in cnts:
         area = cv2.contourArea(c)
-        # Filtro de tamanho amplo (aceita de 800 a 50000 pixels) para pegar qualquer quadrado
-        if 800 < area < 50000:
+        if 200 < area < 10000:
             peri = cv2.arcLength(c, True)
             approx = cv2.approxPolyDP(c, 0.04 * peri, True)
-            
-            # Aceita se tiver 4 cantos (quadrado)
             if len(approx) == 4:
-                (x, y, w, h) = cv2.boundingRect(approx)
-                aspect_ratio = w / float(h)
-                # Verifica se é aproximadamente quadrado
-                if 0.7 <= aspect_ratio <= 1.3:
-                    M = cv2.moments(c)
-                    if M["m00"] != 0:
-                        cx = int(M["m10"] / M["m00"])
-                        cy = int(M["m01"] / M["m00"])
-                        ancoras_candidatas.append((cx, cy))
-                        # Desenha em AMARELO o que ele achou
-                        cv2.drawContours(img_debug, [approx], -1, (0, 255, 255), 3)
+                M = cv2.moments(c)
+                if M["m00"] != 0:
+                    cx = int(M["m10"] / M["m00"])
+                    cy = int(M["m01"] / M["m00"])
+                    ancoras.append([cx, cy])
 
-    # 2. SELEÇÃO DOS 4 CANTOS
-    if len(ancoras_candidatas) >= 4:
-        # Pega os 4 pontos mais extremos
-        pts = np.array(ancoras_candidatas, dtype="float32")
-        rect = order_points(pts)
+    if len(ancoras) >= 4:
+        # Ordenação Top-Left ... Bottom-Right
+        pts = np.array(ancoras, dtype="float32")
+        s = pts.sum(axis=1)
+        diff = np.diff(pts, axis=1)
+        rect = np.zeros((4, 2), dtype="float32")
+        rect[0] = pts[np.argmin(s)]
+        rect[2] = pts[np.argmax(s)]
+        rect[1] = pts[np.argmin(diff)]
+        rect[3] = pts[np.argmax(diff)]
         
-        # Marca em AZUL os escolhidos na imagem de debug
-        for p in rect:
-            cv2.circle(img_debug, (int(p[0]), int(p[1])), 15, (255, 0, 0), -1)
-
-        # WARP (Corte de Perspectiva) -> Padroniza para 1000 x 1400
+        # O PULO DO GATO: Mapear para coordenadas DO PDF (Upscaled x2 para qualidade)
+        scale = 2.0
+        w_pdf = conf.PAGE_W * scale
+        h_pdf = conf.PAGE_H * scale
+        m = conf.MARGIN * scale
+        sz = conf.ANCORA_SIZE * scale
+        
+        # Coordenadas esperadas dos centros das âncoras no PDF
+        # Lembre-se: PDF Y cresce pra cima, Imagem Y cresce pra baixo.
+        # Vamos usar geometria de imagem (Top=0)
         dst = np.array([
+            [m + sz/2, h_pdf - (m + sz/2)],      # TL (no PDF é embaixo, aqui invertemos logicamente ou usamos coordenadas visuais)
+            # ESPERA! Para simplificar: Vamos mapear visualmente onde desenhamos os quadrados.
+            # No gerador: TL é (MARGIN, H - MARGIN - SIZE).
+            # Em coordenadas de IMAGEM (Y=0 em cima):
+            # TL = MARGIN
+            # BL = H - MARGIN - SIZE
+            
+            # Vamos simplificar: Mapear para os cantos exatos da imagem de saída
             [0, 0],
-            [1000 - 1, 0],
-            [1000 - 1, 1400 - 1],
-            [0, 1400 - 1]], dtype="float32")
+            [w_pdf, 0],
+            [w_pdf, h_pdf],
+            [0, h_pdf]
+        ], dtype="float32")
+        
+        # Mas as âncoras detectadas não estão nos cantos 0,0, estão nas margens.
+        # Ajuste Correto:
+        dst = np.array([
+            [m, m],                     # TL (Visualmente em cima na folha impressa)
+            [w_pdf - m, m],             # TR
+            [w_pdf - m, h_pdf - m],     # BR
+            [m, h_pdf - m]              # BL
+        ], dtype="float32")
 
         M = cv2.getPerspectiveTransform(rect, dst)
-        warped = cv2.warpPerspective(img_resize, M, (1000, 1400))
-        return warped, img_debug
+        warped = cv2.warpPerspective(img, M, (int(w_pdf), int(h_pdf)))
+        return warped, scale
+    
+    return cv2.resize(img, (int(conf.PAGE_W*2), int(conf.PAGE_H*2))), 2.0
 
-    # FALLBACK (Se falhar, retorna imagem redimensionada e avisa)
-    print("ALERTA: Âncoras não encontradas. Usando imagem bruta.")
-    return cv2.resize(imagem, (1000, 1400)), img_debug
-
-def extrair_dados(img_warped, gab_oficial=None):
-    # Imagem PADRONIZADA 1000x1400
-    gray = cv2.cvtColor(img_warped, cv2.COLOR_BGR2GRAY)
+def processar_gabarito(img, conf: ConfiguracaoProva, gabarito_respostas=None):
+    warped, scale = alinhar_imagem_pelas_ancoras(img, conf)
+    
+    gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
     thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
     
     res = {"respostas": {}, "frequencia": ""}
-    img_mask = img_warped.copy()
-
-    # --- 1. FREQUÊNCIA ---
-    # Correção: Aumentei X (+20px) e Y (+50px) para sair das letras
-    cols_freq = [("D", 145), ("U", 192)] 
-    freq_final = ""
-
-    for nome, x in cols_freq:
-        votos = []
-        for i in range(10):
-            # Y inicial movido para 245 (estava em 195/140)
-            y = int(245 + (i * 35)) 
-            
-            roi = thresh[y-12:y+12, x-12:x+12]
-            votos.append(cv2.countNonZero(roi))
-            # Guia Azul Vazia (onde ele está olhando)
-            cv2.circle(img_mask, (x, y), 12, (255, 200, 0), 1)
-        
-        # Threshold de detecção
-        if max(votos) > 120:
-            idx = np.argmax(votos)
-            freq_final += str(idx)
-            # Marcação Azul Cheia
-            cv2.circle(img_mask, (x, int(245 + (idx * 35))), 13, (255, 0, 0), -1)
-        else:
-            freq_final += "0"
-            
-    res["frequencia"] = freq_final
-
-    # --- 2. QUESTÕES ---
-    # Correção: Blocos movidos para direita (+30px) e baixo (+10px)
-    blocos = [
-        (265, 460, 1),   # Bloco 1 (Esq)
-        (580, 460, 14),  # Bloco 2 (Dir)
-        (265, 990, 27),  # Bloco 3 (Esq Baixo)
-        (580, 990, 40)   # Bloco 4 (Dir Baixo)
-    ]
+    img_vis = warped.copy()
     
-    step_x = 50 
-    step_y = 36.5 
+    # Função auxiliar para converter coord PDF -> coord Imagem
+    h_pdf_pt = conf.PAGE_H
+    
+    def pt_to_px(x_pt, y_pt):
+        # ReportLab (0,0) é Bottom-Left. OpenCV é Top-Left.
+        # y_opencv = (Pagina_Altura - y_reportlab) * scale
+        return int(x_pt * scale), int((h_pdf_pt - y_pt) * scale)
 
-    for (bx, by, q_start) in blocos:
-        for i in range(13):
-            q_num = q_start + i
-            cy = int(by + (i * step_y))
+    # --- 1. LER FREQUÊNCIA ---
+    if conf.tem_frequencia:
+        val_freq = ""
+        for col_idx, label in enumerate(["D", "U"]):
+            votos = []
+            x_base = conf.FREQ_X + (col_idx * 25)
+            for i in range(10):
+                y_base = conf.FREQ_Y_START - 15 - (i * 18)
+                
+                cx, cy = pt_to_px(x_base + 10, y_base + 5) # +offsets do circulo
+                roi = thresh[cy-10:cy+10, cx-10:cx+10]
+                votos.append(cv2.countNonZero(roi))
+                cv2.circle(img_vis, (cx, cy), 10, (255, 200, 0), 1)
             
-            pixels_q = []
+            if max(votos) > 100:
+                idx = np.argmax(votos)
+                val_freq += str(idx)
+                # Marcação visual
+                y_hit = conf.FREQ_Y_START - 15 - (idx * 18)
+                cx, cy = pt_to_px(x_base + 10, y_hit + 5)
+                cv2.circle(img_vis, (cx, cy), 12, (255, 0, 0), -1)
+            else:
+                val_freq += "0"
+        res["frequencia"] = val_freq
+
+    # --- 2. LER QUESTÕES (Dinâmico pelos Blocos) ---
+    current_x = conf.GRID_X_START
+    
+    for bloco in conf.blocos:
+        for i in range(bloco.quantidade):
+            q_num = bloco.questao_inicial + i
+            y_base = conf.GRID_START_Y - 15 - (i * 20)
+            
+            pixels = []
+            coords = []
+            
             for j in range(4): # A, B, C, D
-                cx = int(bx + (j * step_x))
-                roi = thresh[cy-14:cy+14, cx-14:cx+14]
-                pixels_q.append(cv2.countNonZero(roi))
+                bx = current_x + 25 + (j * 18)
+                cx, cy = pt_to_px(bx, y_base + 3)
+                coords.append((cx, cy))
+                
+                roi = thresh[cy-10:cy+10, cx-10:cx+10]
+                pixels.append(cv2.countNonZero(roi))
             
-            marcou = max(pixels_q) > 120
-            idx_aluno = np.argmax(pixels_q)
-            letra_aluno = ["A", "B", "C", "D"][idx_aluno] if marcou else "."
-            res["respostas"][q_num] = letra_aluno
-
-            # MÁSCARA VISUAL
-            cx_aluno = int(bx + (idx_aluno * step_x))
-
-            if gab_oficial and q_num in gab_oficial:
-                correta = gab_oficial[q_num]
-                idx_correta = ["A", "B", "C", "D"].index(correta)
-                cx_correta = int(bx + (idx_correta * step_x))
-
+            marcou = max(pixels) > 100
+            idx = np.argmax(pixels)
+            letra = ["A", "B", "C", "D"][idx] if marcou else "."
+            res["respostas"][q_num] = letra
+            
+            # Desenha Máscara
+            cx, cy = coords[idx]
+            if gabarito_respostas and q_num in gabarito_respostas:
+                correta = gabarito_respostas[q_num]
+                idx_corr = ["A","B","C","D"].index(correta)
+                cx_corr, cy_corr = coords[idx_corr]
+                
                 if marcou:
-                    if letra_aluno == correta:
-                        cv2.circle(img_mask, (cx_aluno, cy), 15, (0, 255, 0), -1) # Verde = Acerto
+                    if letra == correta:
+                        cv2.circle(img_vis, (cx, cy), 14, (0, 255, 0), -1)
                     else:
-                        cv2.circle(img_mask, (cx_aluno, cy), 15, (0, 0, 255), -1) # Vermelho = Erro
-                        cv2.circle(img_mask, (cx_correta, cy), 15, (0, 255, 0), 3) # Anel Verde = Correta
+                        cv2.circle(img_vis, (cx, cy), 14, (0, 0, 255), -1)
+                        cv2.circle(img_vis, (cx_corr, cy_corr), 14, (0, 255, 0), 3)
                 else:
-                    cv2.circle(img_mask, (cx_correta, cy), 10, (0, 255, 255), 2) # Amarelo = Em branco
-            
+                    cv2.circle(img_vis, (cx_corr, cy_corr), 10, (0, 255, 255), 2)
             elif marcou:
-                 cv2.circle(img_mask, (cx_aluno, cy), 12, (100, 100, 100), -1) # Cinza = Leitura sem gabarito
+                cv2.circle(img_vis, (cx, cy), 10, (100, 100, 100), -1)
 
-    return res, img_mask
+        current_x += conf.GRID_COL_W
+
+    return res, img_vis
