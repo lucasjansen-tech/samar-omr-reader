@@ -4,3 +4,4 @@ numpy
 pandas
 pdf2image
 Pillow
+reportlab
