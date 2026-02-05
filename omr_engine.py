@@ -4,105 +4,127 @@ from PIL import Image, ImageOps
 
 def tratar_entrada(img_pil):
     img_pil = ImageOps.exif_transpose(img_pil)
-    # Converte para BGR (OpenCV)
     return cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
 
+def order_points(pts):
+    # Ordena: Top-Esq, Top-Dir, Inf-Dir, Inf-Esq
+    rect = np.zeros((4, 2), dtype="float32")
+    s = pts.sum(axis=1)
+    rect[0] = pts[np.argmin(s)]
+    rect[2] = pts[np.argmax(s)]
+    diff = np.diff(pts, axis=1)
+    rect[1] = pts[np.argmin(diff)]
+    rect[3] = pts[np.argmax(diff)]
+    return rect
+
 def alinhar_gabarito(imagem):
-    # Padronizamos a largura para 1000px para garantir que as coordenadas batam
-    altura_orig, largura_orig = imagem.shape[:2]
-    proporcao = 1000 / float(largura_orig)
-    novo_tamanho = (1000, int(altura_orig * proporcao))
-    imagem_resized = cv2.resize(imagem, novo_tamanho)
+    # Redimensiona apenas para a detecção (ganho de performance e padrão)
+    h_orig, w_orig = imagem.shape[:2]
+    ratio = 1000.0 / w_orig
+    img_resize = cv2.resize(imagem, (1000, int(h_orig * ratio)))
     
-    gray = cv2.cvtColor(imagem_resized, cv2.COLOR_BGR2GRAY)
-    _, thresh = cv2.threshold(gray, 80, 255, cv2.THRESH_BINARY_INV)
+    gray = cv2.cvtColor(img_resize, cv2.COLOR_BGR2GRAY)
+    # Blur para reduzir ruído do papel
+    blurred = cv2.GaussianBlur(gray, (7, 7), 0)
+    # Adaptive Threshold é melhor para iluminação irregular
+    thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
     
-    # 1. Tenta achar as 4 âncoras (Quadrados Pretos)
-    cnts, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    ancoras = []
-
-    for c in cnts:
-        area = cv2.contourArea(c)
-        if 400 < area < 10000: # Filtro de tamanho
-            peri = cv2.arcLength(c, True)
-            approx = cv2.approxPolyDP(c, 0.04 * peri, True)
-            if len(approx) == 4:
-                (x, y, w, h) = cv2.boundingRect(approx)
-                ar = w / float(h)
-                if 0.8 <= ar <= 1.2: # É quadrado?
-                    M = cv2.moments(c)
-                    if M["m00"] != 0:
-                        cx = int(M["m10"] / M["m00"])
-                        cy = int(M["m01"] / M["m00"])
-                        ancoras.append((cx, cy))
-
-    # Se achou as 4 âncoras, faz o corte de perspectiva
-    if len(ancoras) == 4:
-        pts = np.array(ancoras, dtype="float32")
-        s = pts.sum(axis=1)
-        diff = np.diff(pts, axis=1)
+    # Estratégia de Quadrantes: Divide a imagem em 4 setores
+    # e encontra o maior contorno (blob preto) em cada um.
+    h, w = img_resize.shape[:2]
+    centers = []
+    
+    # Definição dos setores (margens de segurança para não pegar sujeira da borda)
+    sectores = [
+        (0, 0, w//2, h//2),       # Top-Left
+        (w//2, 0, w, h//2),       # Top-Right
+        (w//2, h//2, w, h),       # Bottom-Right
+        (0, h//2, w//2, h)        # Bottom-Left
+    ]
+    
+    for (startX, startY, endX, endY) in sectores:
+        roi = thresh[startY:endY, startX:endX]
+        cnts, _ = cv2.findContours(roi, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        tl = pts[np.argmin(s)]
-        br = pts[np.argmax(s)]
-        tr = pts[np.argmin(diff)]
-        bl = pts[np.argmax(diff)]
+        # Pega o maior contorno da região (provavelmente a âncora)
+        if cnts:
+            c = max(cnts, key=cv2.contourArea)
+            area = cv2.contourArea(c)
+            
+            # Filtro de segurança: Âncora deve ter tamanho razoável
+            if area > 200: 
+                M = cv2.moments(c)
+                if M["m00"] != 0:
+                    cX = int((M["m10"] / M["m00"]) + startX)
+                    cY = int((M["m01"] / M["m00"]) + startY)
+                    centers.append([cX, cY])
+
+    # Se achou os 4 cantos, faz a mágica
+    if len(centers) == 4:
+        pts = np.array(centers, dtype="float32")
+        rect = order_points(pts)
         
-        rect = np.array([tl, tr, br, bl], dtype="float32")
-        # Warp para tamanho fixo de trabalho (1000x1400)
-        dst = np.array([[0, 0], [1000-1, 0], [1000-1, 1400-1], [0, 1400-1]], dtype="float32")
+        # Mapeia para 1000x1450 (Proporção A4 alongada para o SAMAR)
+        dst = np.array([
+            [0, 0],
+            [1000 - 1, 0],
+            [1000 - 1, 1450 - 1],
+            [0, 1450 - 1]], dtype="float32")
+
         M = cv2.getPerspectiveTransform(rect, dst)
-        return cv2.warpPerspective(imagem_resized, M, (1000, 1400))
-    
-    # 2. FALLBACK: Se não achou âncoras, assume que a imagem É a página
-    # Apenas redimensiona para 1000x1400 (Padrão de coordenadas)
-    # Isso resolve o erro "Falha ao reconhecer âncoras" em PDFs digitais
-    return cv2.resize(imagem, (1000, 1400))
+        # Aplica a transformação na imagem original redimensionada
+        warped = cv2.warpPerspective(img_resize, M, (1000, 1450))
+        return warped
+
+    # FALLBACK SEGURO: Se falhar, retorna a imagem resized centralizada
+    print("Falha na detecção de âncoras. Usando imagem bruta.")
+    return cv2.resize(imagem, (1000, 1450))
 
 def extrair_dados(img_warped, gab_oficial=None):
-    # Imagem deve ter 1000x1400 neste ponto
+    # Imagem PADRONIZADA em 1000 x 1450 px
     gray = cv2.cvtColor(img_warped, cv2.COLOR_BGR2GRAY)
     thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
     
     res = {"respostas": {}, "frequencia": ""}
-    # Cria a "Máscara" visual sobre a imagem original
     img_mask = img_warped.copy()
 
-    # --- FREQUÊNCIA ---
-    # Coordenadas baseadas na largura 1000px
-    # Ajuste aqui se a bolinha estiver desencontrada
-    cols_freq = [("D", 108), ("U", 155)] 
+    # --- 1. FREQUÊNCIA (Ajustado para a direita) ---
+    # Coordenadas X recalibradas com base no seu print (estavam muito à esquerda)
+    cols_freq = [("D", 125), ("U", 170)] 
+    
     freq_final = ""
-
     for nome, x in cols_freq:
         votos = []
         for i in range(10):
-            # y inicial + passo
-            y = int(180 + (i * 33)) 
-            roi = thresh[y-10:y+10, x-10:x+10]
+            # Y inicial = 195, Passo = 34
+            y = int(195 + (i * 34)) 
+            roi = thresh[y-12:y+12, x-12:x+12]
             votos.append(cv2.countNonZero(roi))
         
-        if max(votos) > 100:
+        # Sensibilidade ajustada
+        if max(votos) > 120:
             idx = np.argmax(votos)
             freq_final += str(idx)
-            # Desenha bolinha Azul na frequência detectada
-            cv2.circle(img_mask, (x, int(180 + (idx * 33))), 12, (255, 0, 0), -1)
+            # Bola Azul Cheia na Frequência Detectada
+            cv2.circle(img_mask, (x, int(195 + (idx * 34))), 13, (255, 0, 0), -1)
         else:
-            freq_final += "0"
+            freq_final += "0" # Assume 0 se vazio
+            # Marca visual vazia no 0 para indicar que assumiu zero
+            cv2.circle(img_mask, (x, 195), 13, (255, 100, 100), 2)
             
     res["frequencia"] = freq_final
 
-    # --- QUESTÕES ---
-    # Coordenadas dos blocos (X, Y, Questão Inicial)
-    # Calibrado para imagem 1000x1400
+    # --- 2. QUESTÕES (Grade Ajustada) ---
+    # Coordenadas X deslocadas +15px para a direita com base no erro anterior
     blocos = [
-        (220, 425, 1),   # Bloco 1
-        (535, 425, 14),  # Bloco 2
-        (220, 950, 27),  # Bloco 3
-        (535, 950, 40)   # Bloco 4
+        (235, 450, 1),   # Bloco 1 (Esq)
+        (550, 450, 14),  # Bloco 2 (Dir)
+        (235, 980, 27),  # Bloco 3 (Esq Baixo)
+        (550, 980, 40)   # Bloco 4 (Dir Baixo)
     ]
     
-    step_x = 48 # Distância entre A e B
-    step_y = 35 # Distância entre Q1 e Q2
+    step_x = 49 # Passo Horizontal
+    step_y = 36 # Passo Vertical
 
     for (bx, by, q_start) in blocos:
         for i in range(13):
@@ -112,17 +134,19 @@ def extrair_dados(img_warped, gab_oficial=None):
             pixels_q = []
             for j in range(4): # A, B, C, D
                 cx = int(bx + (j * step_x))
-                roi = thresh[cy-12:cy+12, cx-12:cx+12]
+                roi = thresh[cy-14:cy+14, cx-14:cx+14]
                 pixels_q.append(cv2.countNonZero(roi))
             
-            marcou = max(pixels_q) > 100
+            marcou = max(pixels_q) > 120
             idx_aluno = np.argmax(pixels_q)
             letra_aluno = ["A", "B", "C", "D"][idx_aluno] if marcou else "."
             res["respostas"][q_num] = letra_aluno
 
-            # --- DESENHO DA MÁSCARA ---
+            # --- VISUALIZAÇÃO DA MÁSCARA ---
+            # Coordenadas do aluno
             cx_aluno = int(bx + (idx_aluno * step_x))
-            
+
+            # Verifica Gabarito
             if gab_oficial and q_num in gab_oficial:
                 correta = gab_oficial[q_num]
                 idx_correta = ["A", "B", "C", "D"].index(correta)
@@ -130,19 +154,19 @@ def extrair_dados(img_warped, gab_oficial=None):
 
                 if marcou:
                     if letra_aluno == correta:
-                        # ACERTOU: Bola VERDE cheia
-                        cv2.circle(img_mask, (cx_aluno, cy), 14, (0, 255, 0), -1)
+                        # ACERTO (Verde Cheio)
+                        cv2.circle(img_mask, (cx_aluno, cy), 15, (0, 255, 0), -1)
                     else:
-                        # ERROU: Bola VERMELHA cheia (na marcação do aluno)
-                        cv2.circle(img_mask, (cx_aluno, cy), 14, (0, 0, 255), -1)
-                        # MOSTRA CORRETA: Anel VERDE (na resposta certa)
-                        cv2.circle(img_mask, (cx_correta, cy), 14, (0, 255, 0), 3)
+                        # ERRO (Vermelho Cheio no erro)
+                        cv2.circle(img_mask, (cx_aluno, cy), 15, (0, 0, 255), -1)
+                        # MOSTRA CORRETA (Anel Verde na certa)
+                        cv2.circle(img_mask, (cx_correta, cy), 15, (0, 255, 0), 3)
                 else:
-                    # EM BRANCO: Mostra qual era a correta com anel AMARELO
+                    # EM BRANCO (Amarelo na correta)
                     cv2.circle(img_mask, (cx_correta, cy), 10, (0, 255, 255), 2)
             
             elif marcou:
-                # Sem gabarito: Apenas marca o que foi lido em Cinza
-                cv2.circle(img_mask, (cx_aluno, cy), 10, (100, 100, 100), -1)
+                 # Sem gabarito: Marca Cinza Cheio
+                 cv2.circle(img_mask, (cx_aluno, cy), 12, (100, 100, 100), -1)
 
     return res, img_mask
