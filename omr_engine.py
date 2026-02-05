@@ -18,55 +18,55 @@ def order_points(pts):
     return rect
 
 def alinhar_gabarito(imagem):
-    # Redimensiona para largura padrão de 1000px
+    # Redimensiona para largura padrão de 1000px para padronizar pixels
     h_orig, w_orig = imagem.shape[:2]
     ratio = 1000.0 / w_orig
     img_resize = cv2.resize(imagem, (1000, int(h_orig * ratio)))
     
-    # 1. VISÃO DE CONTRASTE MÁXIMO
-    # Converte para cinza e aplica Threshold BRUTO (não adaptativo)
-    # Isso garante que o quadrado preto seja um "bloco maciço"
+    # 1. DETECÇÃO DE ÂNCORAS (MODO SÓLIDO)
     gray = cv2.cvtColor(img_resize, cv2.COLOR_BGR2GRAY)
-    _, thresh = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY_INV)
     
-    # 2. ENCONTRAR AS 4 ÂNCORAS
+    # Threshold simples (Binary Inv) pega melhor quadrados sólidos do que o adaptativo
+    _, thresh = cv2.threshold(gray, 80, 255, cv2.THRESH_BINARY_INV)
+    
+    # Encontra contornos
     cnts, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     ancoras_candidatas = []
     
-    img_debug = img_resize.copy() # Para você ver o que ele achou
+    img_debug = img_resize.copy() # Para diagnóstico visual
 
     for c in cnts:
         area = cv2.contourArea(c)
-        # Aumentei o range: 1000 a 60000 pixels (cobre baixa e alta resolução)
-        if 1000 < area < 60000:
+        # Filtro de tamanho amplo (aceita de 800 a 50000 pixels) para pegar qualquer quadrado
+        if 800 < area < 50000:
             peri = cv2.arcLength(c, True)
-            approx = cv2.approxPolyDP(c, 0.03 * peri, True)
+            approx = cv2.approxPolyDP(c, 0.04 * peri, True)
             
-            # Aceita quadriláteros (4 a 6 vértices para tolerar distorção)
-            if 4 <= len(approx) <= 6:
+            # Aceita se tiver 4 cantos (quadrado)
+            if len(approx) == 4:
                 (x, y, w, h) = cv2.boundingRect(approx)
-                ar = w / float(h)
-                # Verifica se é "quadrado" (tolerância de 0.6 a 1.4)
-                if 0.6 <= ar <= 1.4:
+                aspect_ratio = w / float(h)
+                # Verifica se é aproximadamente quadrado
+                if 0.7 <= aspect_ratio <= 1.3:
                     M = cv2.moments(c)
                     if M["m00"] != 0:
                         cx = int(M["m10"] / M["m00"])
                         cy = int(M["m01"] / M["m00"])
                         ancoras_candidatas.append((cx, cy))
                         # Desenha em AMARELO o que ele achou
-                        cv2.drawContours(img_debug, [approx], -1, (0, 255, 255), 4)
+                        cv2.drawContours(img_debug, [approx], -1, (0, 255, 255), 3)
 
-    # 3. FILTRAGEM ESPACIAL (Pega os 4 cantos mais extremos)
+    # 2. SELEÇÃO DOS 4 CANTOS
     if len(ancoras_candidatas) >= 4:
+        # Pega os 4 pontos mais extremos
         pts = np.array(ancoras_candidatas, dtype="float32")
         rect = order_points(pts)
         
-        # Desenha em AZUL as 4 escolhidas na imagem de debug
+        # Marca em AZUL os escolhidos na imagem de debug
         for p in rect:
-            cv2.circle(img_debug, (int(p[0]), int(p[1])), 20, (255, 0, 0), -1)
+            cv2.circle(img_debug, (int(p[0]), int(p[1])), 15, (255, 0, 0), -1)
 
-        # WARP (Corte de Perspectiva) - Remove cabeçalho e bordas
-        # Mapeia para 1000 x 1400 (Padrão SAMAR Interno)
+        # WARP (Corte de Perspectiva) -> Padroniza para 1000 x 1400
         dst = np.array([
             [0, 0],
             [1000 - 1, 0],
@@ -77,12 +77,12 @@ def alinhar_gabarito(imagem):
         warped = cv2.warpPerspective(img_resize, M, (1000, 1400))
         return warped, img_debug
 
-    # FALLBACK (Só redimensiona e avisa que falhou)
-    print("ALERTA: Âncoras não encontradas. Verifique a imagem de diagnóstico.")
+    # FALLBACK (Se falhar, retorna imagem redimensionada e avisa)
+    print("ALERTA: Âncoras não encontradas. Usando imagem bruta.")
     return cv2.resize(imagem, (1000, 1400)), img_debug
 
 def extrair_dados(img_warped, gab_oficial=None):
-    # Imagem PADRONIZADA 1000x1400 (Cortada nas âncoras)
+    # Imagem PADRONIZADA 1000x1400
     gray = cv2.cvtColor(img_warped, cv2.COLOR_BGR2GRAY)
     thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
     
@@ -90,32 +90,34 @@ def extrair_dados(img_warped, gab_oficial=None):
     img_mask = img_warped.copy()
 
     # --- 1. FREQUÊNCIA ---
-    # Coordenadas calibradas para imagem cortada (sem cabeçalho)
-    # X ajustado para direita
+    # Correção: Aumentei X (+20px) e Y (+50px) para sair das letras
     cols_freq = [("D", 145), ("U", 192)] 
     freq_final = ""
 
     for nome, x in cols_freq:
         votos = []
         for i in range(10):
-            # Y calibrado
-            y = int(245 + (i * 35))
-            roi = thresh[y-15:y+15, x-15:x+15]
+            # Y inicial movido para 245 (estava em 195/140)
+            y = int(245 + (i * 35)) 
+            
+            roi = thresh[y-12:y+12, x-12:x+12]
             votos.append(cv2.countNonZero(roi))
-            # Guia Azul Vazía
-            cv2.circle(img_mask, (x, y), 15, (255, 200, 0), 1)
+            # Guia Azul Vazia (onde ele está olhando)
+            cv2.circle(img_mask, (x, y), 12, (255, 200, 0), 1)
         
+        # Threshold de detecção
         if max(votos) > 120:
             idx = np.argmax(votos)
             freq_final += str(idx)
-            cv2.circle(img_mask, (x, int(245 + (idx * 35))), 15, (255, 0, 0), -1)
+            # Marcação Azul Cheia
+            cv2.circle(img_mask, (x, int(245 + (idx * 35))), 13, (255, 0, 0), -1)
         else:
             freq_final += "0"
             
     res["frequencia"] = freq_final
 
     # --- 2. QUESTÕES ---
-    # Coordenadas X, Y dos 4 blocos
+    # Correção: Blocos movidos para direita (+30px) e baixo (+10px)
     blocos = [
         (265, 460, 1),   # Bloco 1 (Esq)
         (580, 460, 14),  # Bloco 2 (Dir)
@@ -132,9 +134,9 @@ def extrair_dados(img_warped, gab_oficial=None):
             cy = int(by + (i * step_y))
             
             pixels_q = []
-            for j in range(4): 
+            for j in range(4): # A, B, C, D
                 cx = int(bx + (j * step_x))
-                roi = thresh[cy-15:cy+15, cx-15:cx+15]
+                roi = thresh[cy-14:cy+14, cx-14:cx+14]
                 pixels_q.append(cv2.countNonZero(roi))
             
             marcou = max(pixels_q) > 120
@@ -142,9 +144,9 @@ def extrair_dados(img_warped, gab_oficial=None):
             letra_aluno = ["A", "B", "C", "D"][idx_aluno] if marcou else "."
             res["respostas"][q_num] = letra_aluno
 
-            # DESENHO DA MÁSCARA
+            # MÁSCARA VISUAL
             cx_aluno = int(bx + (idx_aluno * step_x))
-            
+
             if gab_oficial and q_num in gab_oficial:
                 correta = gab_oficial[q_num]
                 idx_correta = ["A", "B", "C", "D"].index(correta)
@@ -152,13 +154,14 @@ def extrair_dados(img_warped, gab_oficial=None):
 
                 if marcou:
                     if letra_aluno == correta:
-                        cv2.circle(img_mask, (cx_aluno, cy), 15, (0, 255, 0), -1) # Verde
+                        cv2.circle(img_mask, (cx_aluno, cy), 15, (0, 255, 0), -1) # Verde = Acerto
                     else:
-                        cv2.circle(img_mask, (cx_aluno, cy), 15, (0, 0, 255), -1) # Vermelho
-                        cv2.circle(img_mask, (cx_correta, cy), 15, (0, 255, 0), 3) # Anel
+                        cv2.circle(img_mask, (cx_aluno, cy), 15, (0, 0, 255), -1) # Vermelho = Erro
+                        cv2.circle(img_mask, (cx_correta, cy), 15, (0, 255, 0), 3) # Anel Verde = Correta
                 else:
-                    cv2.circle(img_mask, (cx_correta, cy), 10, (0, 255, 255), 2)
+                    cv2.circle(img_mask, (cx_correta, cy), 10, (0, 255, 255), 2) # Amarelo = Em branco
+            
             elif marcou:
-                 cv2.circle(img_mask, (cx_aluno, cy), 12, (100, 100, 100), -1)
+                 cv2.circle(img_mask, (cx_aluno, cy), 12, (100, 100, 100), -1) # Cinza = Leitura sem gabarito
 
     return res, img_mask
