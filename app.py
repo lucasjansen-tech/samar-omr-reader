@@ -4,49 +4,65 @@ from pdf2image import convert_from_bytes
 from omr_engine import tratar_entrada, alinhar_gabarito, extrair_dados
 
 st.set_page_config(page_title="SAMAR OMR", layout="wide")
-st.title("📊 Auditoria SAMAR - Corte por Âncoras")
+st.title("📊 Correção SAMAR - SEMED Raposa")
 
+# Sidebar para Gabarito
 with st.sidebar:
-    st.header("⚙️ Gabarito Oficial")
+    st.header("📝 Gabarito Oficial")
     gab = {i: st.selectbox(f"Q{i}", ["A","B","C","D"], key=f"q{i}") for i in range(1, 53)}
 
-upload = st.file_uploader("Upload PDF (TesteOMR.pdf)", type=["pdf"])
+upload = st.file_uploader("Upload PDF (Provas)", type=["pdf"])
 
 if upload:
     paginas = convert_from_bytes(upload.read(), dpi=200)
-    resultados = []
+    resultados_finais = []
 
-    # Abas para organizar a tela
-    tab1, tab2 = st.tabs(["🔍 Diagnóstico Visual", "📋 Tabela de Notas"])
-
-    with tab1:
-        for i, pag in enumerate(paginas):
-            img_in = tratar_entrada(pag)
-            warped, debug_ancoras = alinhar_gabarito(img_in)
+    # Barra de progresso para arquivos grandes
+    progresso = st.progress(0)
+    
+    for i, pag in enumerate(paginas):
+        img_in = tratar_entrada(pag)
+        warped = alinhar_gabarito(img_in)
+        
+        if warped is not None:
+            dados, img_mask = extrair_dados(warped, gab)
             
-            if warped is not None:
-                dados, visual_final = extrair_dados(warped, gab)
-                
-                # Cálculos
-                acertos = sum(1 for q, r in dados["respostas"].items() if r == gab.get(q))
-                res_row = {"Pág": i+1, "Freq": dados["frequencia"], "Acertos": acertos}
-                res_row.update(dados["respostas"])
-                resultados.append(res_row)
+            # Contagem de Acertos
+            acertos = sum(1 for q, r in dados["respostas"].items() if r == gab.get(q))
+            
+            # Dados para a Planilha
+            linha_dados = {
+                "Página": i+1,
+                "Frequência": dados["frequencia"],
+                "Acertos": acertos,
+                "Nota Final": f"{(acertos/52)*100:.1f}%"
+            }
+            linha_dados.update(dados["respostas"]) # Adiciona colunas Q1, Q2...
+            resultados_finais.append(linha_dados)
+            
+            # Exibição Visual da "Máscara"
+            with st.expander(f"Aluno {i+1} - Frequência: {dados['frequencia']} | Acertos: {acertos}/52", expanded=True):
+                st.image(img_mask, caption="Máscara de Correção (Verde=Acerto, Vermelho=Erro)", use_container_width=True)
+        
+        else:
+            st.error(f"Página {i+1}: Falha no reconhecimento das âncoras (Quadrados Pretos).")
+        
+        # Atualiza barra
+        progresso.progress((i + 1) / len(paginas))
 
-                st.markdown(f"**Página {i+1}** | Frequência: `{dados['frequencia']}`")
-                
-                # Mostra o antes e depois lado a lado
-                c1, c2 = st.columns(2)
-                c1.image(debug_ancoras, caption="1. Detecção das 4 Âncoras (Vermelho)", use_container_width=True)
-                c2.image(visual_final, caption="2. Leitura Recortada (Verde=Aluno)", use_container_width=True)
-                st.divider()
-            else:
-                st.error(f"Falha na Pág {i+1}: Não encontrei os 4 quadrados pretos.")
-                st.image(debug_ancoras, width=400)
-
-    with tab2:
-        if resultados:
-            df = pd.DataFrame(resultados)
-            st.dataframe(df)
-            csv = df.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
-            st.download_button("📥 Baixar Relatório (Excel)", csv, "samar_notas.csv", "text/csv")
+    # --- ÁREA DE EXPORTAÇÃO ---
+    if resultados_finais:
+        st.success("Processamento concluído!")
+        df = pd.DataFrame(resultados_finais)
+        
+        st.subheader("📋 Relatório Geral da Turma")
+        st.dataframe(df)
+        
+        # Botão de Download (Recolocado conforme solicitado)
+        csv = df.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
+        st.download_button(
+            label="📥 Baixar Planilha Excel (.csv)",
+            data=csv,
+            file_name="resultado_samar_raposa.csv",
+            mime="text/csv"
+        )
