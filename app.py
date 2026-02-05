@@ -5,39 +5,34 @@ from omr_engine import tratar_entrada, alinhar_gabarito, extrair_respostas
 
 st.set_page_config(page_title="SAMAR OMR - Raposa", layout="wide")
 
-# Tenta carregar a logo do repositório
 try:
     st.image("Frame 18.png")
 except:
     st.title("SISTEMA SAMAR - SEMED RAPOSA")
 
-st.sidebar.header("Configurações de Correção")
-gabarito_oficial = st.text_input("Gabarito Oficial (ex: ABCD...)", "").upper()
+st.sidebar.header("Configuração de Correção")
+entrada_gab = st.text_input("Gabarito Oficial (ex: ABCD...)", "").upper()
 
-upload = st.file_uploader("Suba o arquivo PDF (com vários gabaritos)", type="pdf")
+upload = st.file_uploader("Suba o PDF com os gabaritos", type=["pdf", "jpg", "png"])
 
 if upload:
-    # Processa PDF em lote (lida com várias páginas/gabaritos)
-    paginas = convert_from_bytes(upload.read(), dpi=200)
+    if upload.type == "application/pdf":
+        paginas = convert_from_bytes(upload.read(), dpi=200)
+    else:
+        from PIL import Image
+        paginas = [Image.open(upload)]
+    
     resultados = []
-
-    for i, pagina_pil in enumerate(paginas):
-        img_cv = tratar_entrada(pagina_pil)
-        alinhada = alinhar_gabarito(img_cv)
-        
+    for i, pagina in enumerate(paginas):
+        img = tratar_entrada(pagina)
+        alinhada = alinhar_gabarito(img)
         if alinhada is not None:
-            respostas = extrair_respostas(alinhada)
-            respostas["Pagina"] = i + 1
-            
-            # Se houver gabarito oficial, calcula acertos
-            if gabarito_oficial and len(gabarito_oficial) >= 52:
-                acertos = sum(1 for q, r in respostas.items() if q != "Pagina" and r == gabarito_oficial[q-1])
-                respostas["Acertos"] = acertos
-            
-            resultados.append(respostas)
-
+            res = extrair_respostas(alinhada)
+            res["ID_Gabarito"] = i + 1
+            resultados.append(res)
+    
     if resultados:
         df = pd.DataFrame(resultados)
-        st.subheader("📊 Resultados Extraídos")
+        st.subheader("📋 Resultados Extraídos")
         st.dataframe(df)
-        st.download_button("Baixar Planilha (CSV)", df.to_csv(index=False).encode('utf-8'), "resultados_samar.csv")
+        st.download_button("Baixar CSV", df.to_csv(index=False).encode('utf-8'), "samar_resultados.csv")
