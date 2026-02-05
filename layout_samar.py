@@ -1,13 +1,11 @@
-# layout_samar.py
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List
 
 @dataclass
 class BlocoQuestao:
     titulo: str
     questao_inicial: int
     quantidade: int
-    colunas: int = 4 # A, B, C, D
 
 @dataclass
 class ConfiguracaoProva:
@@ -16,26 +14,22 @@ class ConfiguracaoProva:
     blocos: List[BlocoQuestao]
     tem_frequencia: bool = True
     
-    # --- CONSTANTES GEOMÉTRICAS (Ajuste Fino) ---
-    # Tamanho do PDF em pontos (A4)
+    # CONSTANTES GEOMÉTRICAS (A4 em Pontos: 595x842)
     PAGE_W = 595
     PAGE_H = 842
-    
-    # Margens e Âncoras
     ANCORA_SIZE = 20
     MARGIN = 30
-    HEADER_HEIGHT = 150 # Espaço reservado para cabeçalho/orientações
     
-    # Coordenadas do bloco de Frequência
+    # Coordenadas Frequência
     FREQ_X = 50
-    FREQ_Y_START = PAGE_H - 220
+    FREQ_Y_START = 622 # (842 - 220)
     
-    # Grid de Questões
-    GRID_START_Y = PAGE_H - 220
-    GRID_COL_W = 110 # Largura da coluna de um bloco
-    GRID_X_START = 140 # Onde começam os blocos (após a frequência)
+    # Coordenadas Questões
+    GRID_START_Y = 622
+    GRID_COL_W = 110
+    GRID_X_START = 140
 
-# DEFINIÇÃO DOS 3 TIPOS DE PROVA (Personalize aqui)
+# DEFINIÇÃO DOS MODELOS
 TIPOS_PROVA = {
     "Padrao_52": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO PADRÃO SAMAR",
@@ -47,21 +41,12 @@ TIPOS_PROVA = {
             BlocoQuestao("BLOCO 4", 40, 13)
         ]
     ),
-    "Reduzida_20": ConfiguracaoProva(
-        titulo_prova="AVALIAÇÃO PARCIAL",
-        subtitulo="Matemática e Português - 20 Questões",
+    "Simulado_20": ConfiguracaoProva(
+        titulo_prova="SIMULADO RÁPIDO",
+        subtitulo="Matemática e Português",
         blocos=[
             BlocoQuestao("MATEMÁTICA", 1, 10),
             BlocoQuestao("PORTUGUÊS", 11, 10)
-        ]
-    ),
-    "Simulado_Total": ConfiguracaoProva(
-        titulo_prova="SIMULADO GERAL",
-        subtitulo="Todas as matérias",
-        blocos=[
-            BlocoQuestao("LINGUAGENS", 1, 15),
-            BlocoQuestao("CIÊNCIAS", 16, 15),
-            BlocoQuestao("HUMANAS", 31, 15)
         ]
     )
 }
