@@ -2,55 +2,41 @@ import streamlit as st
 import pandas as pd
 from pdf2image import convert_from_bytes
 from omr_engine import tratar_entrada, alinhar_gabarito, extrair_dados
-import io
 
-st.set_page_config(page_title="SAMAR OMR - Raposa", layout="wide")
+st.set_page_config(page_title="SAMAR - SEMED Raposa", layout="wide")
+st.title("📊 SAMAR - Processamento e Conferência")
 
-st.title("📊 SAMAR - Teste Inicial de Leitura")
+# Gabarito Raiz
+with st.expander("⚙️ Configurar Gabarito Raiz"):
+    c = st.columns(4)
+    gab_raiz = {i: c[(i-1)//13].selectbox(f"Q{i}", ["A","B","C","D"], key=f"r{i}") for i in range(1, 53)}
 
-# Quadro de Seleção do Gabarito Raiz
-with st.expander("⚙️ Definir Gabarito Oficial", expanded=False):
-    cols = st.columns(4)
-    gabarito_raiz = {}
-    for i in range(1, 53):
-        with cols[(i-1)//13]:
-            gabarito_raiz[i] = st.selectbox(f"Q{i}", ["A", "B", "C", "D"], key=f"gr{i}")
-
-upload = st.file_uploader("Suba o arquivo TESTE OMR.pdf", type=["pdf"])
+upload = st.file_uploader("Upload TESTE OMR.pdf", type=["pdf"])
 
 if upload:
-    conteudo = upload.read()
-    paginas = convert_from_bytes(conteudo, dpi=200)
-    lista_final = []
+    paginas = convert_from_bytes(upload.read(), dpi=200)
+    resultados = []
 
     for i, pag in enumerate(paginas):
-        img_cv = tratar_entrada(pag)
-        alinhada = alinhar_gabarito(img_cv)
-        
+        alinhada = alinhar_gabarito(tratar_entrada(pag))
         if alinhada is not None:
-            dados, img_debug = extrair_dados(alinhada)
+            dados, img_vis = extrair_dados(alinhada)
+            acertos = sum(1 for q, r in dados["respostas"].items() if r == gab_raiz.get(q))
             
-            # Cálculo de Acertos
-            acertos = sum(1 for q, r in dados["respostas"].items() if r == gabarito_raiz.get(q))
+            res_row = {"Página": i+1, "Freq": dados["frequencia"], "Acertos": acertos}
+            res_row.update(dados["respostas"])
+            resultados.append(res_row)
             
-            info = {
-                "Página": i + 1,
-                "Frequência": dados["frequencia"],
-                "Acertos": acertos,
-                "Nota %": f"{(acertos/52)*100:.1f}%"
-            }
-            info.update(dados["respostas"])
-            lista_final.append(info)
-            
-            st.image(img_debug, caption=f"Conferência Página {i+1}", width=400)
+            # Mostra a imagem de conferência ampliada para validar os pontos
+            st.image(img_vis, caption=f"Verificação Visual - Página {i+1}", use_container_width=True)
         else:
-            st.error(f"Página {i+1}: Erro ao localizar âncoras.")
+            st.error(f"Página {i+1}: Erro de alinhamento das âncoras.")
 
-    if lista_final:
-        df = pd.DataFrame(lista_final)
-        st.subheader("📋 Resultados da Leitura")
+    if resultados:
+        df = pd.DataFrame(resultados)
+        st.subheader("📋 Tabela de Resultados")
         st.dataframe(df)
-        
-        # Exportação para CSV (Excel)
-        csv = df.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Baixar Planilha de Resultados", csv, "resultados_teste_samar.csv", "text/csv")
+
+        # EXPORTAÇÃO CORRIGIDA PARA EXCEL/CSV BRASIL
+        csv = df.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
+        st.download_button("📥 Baixar Planilha Corrigida (Excel)", csv, "resultados_samar.csv", "text/csv")
