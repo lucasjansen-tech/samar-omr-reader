@@ -1,38 +1,32 @@
 import streamlit as st
-import pandas as pd
-from pdf2image import convert_from_bytes
-from omr_engine import tratar_entrada, alinhar_gabarito, extrair_respostas
+import os
 
+# Configuração da página deve ser a PRIMEIRA linha de Streamlit
 st.set_page_config(page_title="SAMAR OMR - Raposa", layout="wide")
 
+st.title("📊 SISTEMA SAMAR - SEMED RAPOSA")
+
+# Diagnóstico de Arquivos
+st.sidebar.header("Status do Sistema")
+arquivos_presentes = os.listdir('.')
+if "omr_engine.py" in arquivos_presentes:
+    st.sidebar.success("✅ omr_engine.py encontrado")
+else:
+    st.sidebar.error("❌ omr_engine.py NÃO encontrado")
+
+# Tenta carregar as bibliotecas principais
 try:
-    st.image("Frame 18.png")
-except:
-    st.title("SISTEMA SAMAR - SEMED RAPOSA")
+    import cv2
+    import numpy as np
+    import pandas as pd
+    from pdf2image import convert_from_bytes
+    st.sidebar.success("✅ OpenCV e PDF2Image carregados")
+except Exception as e:
+    st.sidebar.error(f"❌ Erro de biblioteca: {e}")
 
-st.sidebar.header("Configuração de Correção")
-entrada_gab = st.text_input("Gabarito Oficial (ex: ABCD...)", "").upper()
-
-upload = st.file_uploader("Suba o PDF com os gabaritos", type=["pdf", "jpg", "png"])
+# Interface de Upload
+upload = st.file_uploader("Suba o PDF ou Imagem dos Gabaritos", type=["pdf", "jpg", "png"])
 
 if upload:
-    if upload.type == "application/pdf":
-        paginas = convert_from_bytes(upload.read(), dpi=200)
-    else:
-        from PIL import Image
-        paginas = [Image.open(upload)]
-    
-    resultados = []
-    for i, pagina in enumerate(paginas):
-        img = tratar_entrada(pagina)
-        alinhada = alinhar_gabarito(img)
-        if alinhada is not None:
-            res = extrair_respostas(alinhada)
-            res["ID_Gabarito"] = i + 1
-            resultados.append(res)
-    
-    if resultados:
-        df = pd.DataFrame(resultados)
-        st.subheader("📋 Resultados Extraídos")
-        st.dataframe(df)
-        st.download_button("Baixar CSV", df.to_csv(index=False).encode('utf-8'), "samar_resultados.csv")
+    st.write(f"Arquivo recebido: {upload.name}")
+    # O processamento virá aqui após a tela carregar
