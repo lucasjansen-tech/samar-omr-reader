@@ -1,29 +1,49 @@
 import streamlit as st
+import pandas as pd
+from pdf2image import convert_from_bytes
+from omr_engine import tratar_entrada, alinhar_gabarito, extrair_respostas
 
-# O comando set_page_config DEVE ser o primeiro
-st.set_page_config(page_title="SAMAR DEBUG", layout="centered")
+st.set_page_config(page_title="SAMAR - SEMED Raposa", layout="wide")
 
-st.title("🛠️ MODO DE DIAGNÓSTICO SAMAR")
-
-st.write("Se você está lendo isso, o Streamlit está funcionando!")
-
-# Tenta importar as bibliotecas e mostra o erro na tela se falhar
+# Tenta carregar a logo do repositório
 try:
-    import cv2
-    st.success("✅ OpenCV carregado com sucesso!")
-except Exception as e:
-    st.error(f"❌ Erro ao carregar OpenCV: {e}")
+    st.image("Frame 18.png")
+except:
+    st.title("SISTEMA SAMAR - RAPOSA")
 
-try:
-    import numpy as np
-    st.success("✅ Numpy carregado com sucesso!")
-except Exception as e:
-    st.error(f"❌ Erro ao carregar Numpy: {e}")
+st.sidebar.header("⚙️ Configurações")
+gab_oficial_input = st.sidebar.text_area("Insira o Gabarito Oficial (Separado por vírgula ou espaço)", height=150)
 
-try:
-    from pdf2image import convert_from_bytes
-    st.success("✅ PDF2Image carregado com sucesso!")
-except Exception as e:
-    st.error(f"❌ Erro ao carregar PDF2Image: {e}")
+upload = st.file_uploader("Suba o arquivo PDF com os gabaritos", type=["pdf", "png", "jpg"])
 
-st.info("Verifique se as mensagens acima estão em verde.")
+if upload:
+    # Converte PDF para imagens
+    if upload.type == "application/pdf":
+        paginas = convert_from_bytes(upload.read(), dpi=200)
+    else:
+        from PIL import Image
+        paginas = [Image.open(upload)]
+
+    resultados = []
+    
+    # Processa cada página/gabarito
+    for i, pagina_pil in enumerate(paginas):
+        img_cv = tratar_entrada(pagina_pil)
+        alinhada = alinhar_gabarito(img_cv)
+        
+        if alinhada is not None:
+            resp_aluno = extrair_respostas(alinhada)
+            resp_aluno["Gabarito_ID"] = i + 1
+            resultados.append(resp_aluno)
+            st.success(f"Gabarito {i+1} processado com sucesso!")
+        else:
+            st.error(f"Não foi possível localizar as âncoras na página {i+1}")
+
+    if resultados:
+        df = pd.DataFrame(resultados)
+        st.subheader("📊 Resultados Extraídos")
+        st.dataframe(df)
+        
+        # Exportação
+        csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Baixar Planilha de Resultados", csv, "resultados_samar.csv", "text/csv")
