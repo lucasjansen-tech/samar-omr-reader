@@ -1,32 +1,28 @@
 import streamlit as st
 import os
 
-# Configuração da página deve ser a PRIMEIRA linha de Streamlit
+# Configuração da página deve ser SEMPRE o primeiro comando Streamlit
 st.set_page_config(page_title="SAMAR OMR - Raposa", layout="wide")
 
 st.title("📊 SISTEMA SAMAR - SEMED RAPOSA")
 
-# Diagnóstico de Arquivos
-st.sidebar.header("Status do Sistema")
-arquivos_presentes = os.listdir('.')
-if "omr_engine.py" in arquivos_presentes:
-    st.sidebar.success("✅ omr_engine.py encontrado")
+# Verificação de arquivos no repositório
+st.sidebar.header("Status do Servidor")
+if os.path.exists("omr_engine.py"):
+    st.sidebar.success("✅ omr_engine.py carregado")
 else:
-    st.sidebar.error("❌ omr_engine.py NÃO encontrado")
+    st.sidebar.error("❌ omr_engine.py não encontrado no GitHub")
 
-# Tenta carregar as bibliotecas principais
-try:
-    import cv2
-    import numpy as np
-    import pandas as pd
-    from pdf2image import convert_from_bytes
-    st.sidebar.success("✅ OpenCV e PDF2Image carregados")
-except Exception as e:
-    st.sidebar.error(f"❌ Erro de biblioteca: {e}")
+# Tentativa de carregar a imagem da logo com segurança
+if os.path.exists("Frame 18.png"):
+    st.image("Frame 18.png")
+else:
+    st.warning("⚠️ Logo 'Frame 18.png' não encontrada. Verifique o nome do arquivo no GitHub.")
 
 # Interface de Upload
+st.write("### Envio de Gabaritos")
 upload = st.file_uploader("Suba o PDF ou Imagem dos Gabaritos", type=["pdf", "jpg", "png"])
 
 if upload:
-    st.write(f"Arquivo recebido: {upload.name}")
-    # O processamento virá aqui após a tela carregar
+    st.info(f"Arquivo recebido: {upload.name}. Iniciando processamento...")
+    # Aqui chamaremos a função do omr_engine.py após confirmarmos que a tela abriu.
