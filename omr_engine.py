@@ -7,17 +7,18 @@ def tratar_entrada(img_pil):
     return cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
 
 def alinhar_gabarito(imagem):
+    """Detecta as âncoras e corrige a perspectiva para um padrão fixo de 800x1100"""
     gray = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
-    
+    # Filtro focado em objetos muito pretos (âncoras digitais)
+    _, thresh = cv2.threshold(gray, 80, 255, cv2.THRESH_BINARY_INV)
     contornos, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
     centros = []
     img_diag = imagem.copy()
 
     for c in contornos:
         area = cv2.contourArea(c)
-        if 500 < area < 15000:
+        if 400 < area < 10000:
             peri = cv2.arcLength(c, True)
             approx = cv2.approxPolyDP(c, 0.02 * peri, True)
             if len(approx) == 4:
@@ -40,65 +41,56 @@ def alinhar_gabarito(imagem):
         return cv2.warpPerspective(imagem, M, (800, 1100)), img_diag
     return None, img_diag
 
-def extrair_dados(alinhada, gab_oficial=None):
+def extrair_dados(alinhada, gab_raiz=None):
     gray = cv2.cvtColor(alinhada, cv2.COLOR_BGR2GRAY)
     thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
     
     res = {"respostas": {}, "frequencia": ""}
     img_vis = alinhada.copy()
 
-    # --- LÓGICA DE FREQUÊNCIA (00-99) ---
-    # Coordenadas ajustadas para o padrão observado na imagem de auditoria
-    colunas_freq = [("D", 58), ("U", 95)]
-    resultado_freq = []
-
+    # --- FREQUÊNCIA (Padrão 00-99) ---
+    colunas_freq = [("D", 124), ("U", 157)] # Coordenadas X recalibradas
+    freq_lida = ""
     for nome, x_base in colunas_freq:
         votos = []
         for i in range(10):
-            y = 255 + (i * 24)
-            roi = thresh[y:y+18, x_base:x_base+18]
+            y = 285 + (i * 24.5)
+            roi = thresh[int(y):int(y+16), x_base:x_base+16]
             votos.append(cv2.countNonZero(roi))
-            # Círculos azuis para onde o sensor está "olhando" na frequência
-            cv2.circle(img_vis, (x_base+9, y+9), 4, (255, 0, 0), 1)
+            cv2.circle(img_vis, (x_base+8, int(y+8)), 4, (255, 0, 0), 1) # Pontos de busca
         
-        # Se o máximo de pixels for muito baixo, considera 0 (não marcado)
-        if max(votos) < 80:
-            resultado_freq.append("0")
+        idx = np.argmax(votos)
+        if votos[idx] > 70:
+            freq_lida += str(idx)
+            cv2.circle(img_vis, (x_base+8, int(285+(idx*24.5)+8)), 8, (255, 0, 0), -1)
         else:
-            idx = np.argmax(votos)
-            resultado_freq.append(str(idx))
-            # Feedback visual da marcação detectada na frequência
-            cv2.circle(img_vis, (x_base+9, 255+(idx*24)+9), 8, (255, 0, 0), -1)
+            freq_lida += "0" # Assume 0 se não houver marcação
+    res["frequencia"] = freq_lida
 
-    res["frequencia"] = "".join(resultado_freq)
-
-    # --- LÓGICA DE QUESTÕES ---
-    blocos = [{"x": 140, "y": 422, "s": 1}, {"x": 372, "y": 422, "s": 14}, 
-              {"x": 140, "y": 758, "s": 27}, {"x": 372, "y": 758, "s": 40}]
+    # --- QUESTÕES (52 Itens) ---
+    blocos = [
+        {"x": 208, "y": 454, "s": 1},  {"x": 421, "y": 454, "s": 14},
+        {"x": 208, "y": 794, "s": 27}, {"x": 421, "y": 794, "s": 40}
+    ]
     
     for b in blocos:
         for i in range(13):
             q_num = b["s"] + i
-            y = b["y"] + (i * 25)
+            y_q = int(b["y"] + (i * 24.8))
             pixels = []
             for j in range(4):
-                x = b["x"] + (j * 35)
-                pixels.append(cv2.countNonZero(thresh[y:y+18, x:x+18]))
+                x_q = b["x"] + (j * 33.2)
+                roi = thresh[y_q:y_q+16, int(x_q):int(x_q+16)]
+                pixels.append(cv2.countNonZero(roi))
             
-            idx_aluno = np.argmax(pixels)
-            marcou = max(pixels) > 80
-            letra_aluno = ["A", "B", "C", "D"][idx_aluno] if marcou else "N/A"
-            res["respostas"][q_num] = letra_aluno
+            idx_a = np.argmax(pixels)
+            marcou = max(pixels) > 75
+            res["respostas"][q_num] = ["A", "B", "C", "D"][idx_a] if marcou else "."
 
-            # FEEDBACK VISUAL SOBRE AS RESPOSTAS
-            for j in range(4):
-                x = b["x"] + (j * 35)
-                # Se for a resposta do aluno, desenha em VERDE
-                if marcou and j == idx_aluno:
-                    cv2.circle(img_vis, (x+9, y+9), 9, (0, 255, 0), 2)
-                
-                # Se tiver gabarito oficial e for a correta, desenha um ponto central
-                if gab_oficial and j == ["A","B","C","D"].index(gab_oficial[q_num]):
-                    cv2.circle(img_vis, (x+9, y+9), 4, (0, 0, 255), -1)
+            if marcou:
+                cv2.circle(img_vis, (int(b["x"]+(idx_a*33.2)+8), y_q+8), 10, (0, 255, 0), 2)
+            if gab_raiz and q_num in gab_raiz:
+                idx_c = ["A", "B", "C", "D"].index(gab_raiz[q_num])
+                cv2.circle(img_vis, (int(b["x"]+(idx_c*33.2)+8), y_q+8), 3, (0, 0, 255), -1)
 
     return res, img_vis
