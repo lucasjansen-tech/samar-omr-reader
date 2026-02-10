@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 
-# CORES OFICIAIS
+# Cores
 COR_AZUL = "#2980b9"
 COR_LARANJA = "#e67e22"
 
@@ -19,31 +19,28 @@ class ConfiguracaoProva:
     subtitulo: str
     blocos: List[BlocoQuestao]
     
-    # --- GEOMETRIA DA PÁGINA (A4: 595 x 842 pts) ---
+    # GEOMETRIA A4 (Padrão Rígido)
     PAGE_W = 595
     PAGE_H = 842
-    
-    # MARGEM SEGURA (40pts) - Âncoras ficam a 40pts da borda
-    MARGIN = 40       
+    MARGIN = 30       # Margem de 30px para as âncoras
     ANCORA_SIZE = 25  
     
-    # Layout Padrão
+    # Posições (Serão usadas tanto para DESENHAR quanto para LER)
     FREQ_X: int = 40
     GRID_START_Y: int = 580 
     GRID_X_START: int = 110
     GRID_COL_W: int = 120   
     tem_frequencia: bool = True
 
-# --- TIPOS DE PROVA ---
+# --- MODELOS DE PROVA ---
 TIPOS_PROVA = {
     "2_e_3_Ano_18Q": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental I - 2º e 3º Ano",
-        # CENTRALIZAÇÃO (Cálculo Visual)
-        GRID_START_Y=460, # Meio vertical
-        FREQ_X=130,       # Empurrado para a direita
-        GRID_X_START=200, # Blocos ao lado da frequência
-        
+        # Centralizado no meio da folha
+        GRID_START_Y=460, 
+        FREQ_X=130,       
+        GRID_X_START=200,
         blocos=[
             BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 9, COR_AZUL),
             BlocoQuestao("BLOCO 2", "MATEMÁTICA", 10, 9, COR_LARANJA)
