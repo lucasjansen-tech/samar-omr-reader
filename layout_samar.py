@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 
-# --- CORES OFICIAIS ---
+# Cores
 COR_AZUL = "#2980b9"
 COR_LARANJA = "#e67e22"
 
@@ -19,33 +19,34 @@ class ConfiguracaoProva:
     subtitulo: str
     blocos: List[BlocoQuestao]
     
-    # --- GEOMETRIA ---
+    # --- GEOMETRIA EXATA (A4: 595 x 842 pt) ---
     PAGE_W = 595
     PAGE_H = 842
-    MARGIN = 30       # Margem padrão (30px) para simetria visual
+    
+    # MARGEM DE 40px (Garante que a âncora inferior suba e fique igual a superior)
+    MARGIN = 40       
     ANCORA_SIZE = 25  
     
-    # Posições Padrão (Podem ser sobrescritas nos modelos)
-    FREQ_X = 40
-    
-    # Posição Vertical e Horizontal da Grade
-    GRID_START_Y: int = 580 
-    GRID_X_START: int = 110 # Padrão para 4 blocos
+    # Posições Padrão
+    FREQ_X: int = 40
+    GRID_X_START: int = 110
     GRID_COL_W: int = 120   
+    
+    # Posição Vertical (Onde começa o gabarito)
+    GRID_START_Y: int = 580 
     
     tem_frequencia: bool = True
 
-# --- DEFINIÇÃO DOS 3 PADRÕES ---
+# --- CONFIGURAÇÃO DOS 3 TIPOS ---
 TIPOS_PROVA = {
     "2_e_3_Ano_18Q": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental I - 2º e 3º Ano",
-        # CENTRALIZAÇÃO TOTAL PARA 18 QUESTÕES
-        # Baixa a grade para o meio da folha (Y=450)
-        GRID_START_Y=450, 
-        # Empurra para a direita para centralizar horizontalmente (2 blocos + freq)
-        GRID_X_START=160, 
-        FREQ_X=90, # Move a frequência junto
+        # CENTRALIZAÇÃO: Baixei o Y para 460 (meio da folha)
+        GRID_START_Y=460,
+        # Empurrei para direita para centralizar horizontalmente
+        FREQ_X=150,
+        GRID_X_START=210,
         
         blocos=[
             BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 9, COR_AZUL),
@@ -55,9 +56,9 @@ TIPOS_PROVA = {
     "4_ao_6_Ano_44Q": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental - 4º ao 6º Ano",
-        GRID_START_Y=580,
-        GRID_X_START=100, # Ajuste para caber 4 blocos
-        FREQ_X=35,
+        GRID_START_Y=580, # Mais alto para caber tudo
+        FREQ_X=40,
+        GRID_X_START=110,
         blocos=[
             BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 11, COR_AZUL),
             BlocoQuestao("BLOCO 2", "LÍNGUA PORTUGUESA", 12, 11, COR_AZUL),
@@ -69,8 +70,8 @@ TIPOS_PROVA = {
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental II - 7º ao 9º Ano",
         GRID_START_Y=580,
-        GRID_X_START=100,
-        FREQ_X=35,
+        FREQ_X=40,
+        GRID_X_START=110,
         blocos=[
             BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 13, COR_AZUL),
             BlocoQuestao("BLOCO 2", "LÍNGUA PORTUGUESA", 14, 13, COR_AZUL),
