@@ -19,31 +19,28 @@ class ConfiguracaoProva:
     subtitulo: str
     blocos: List[BlocoQuestao]
     
-    # GEOMETRIA A4
+    # GEOMETRIA A4 (Pontos)
     PAGE_W = 595
     PAGE_H = 842
-    MARGIN = 30       # Margem padrão segura
+    MARGIN = 30       # Margem segura
     ANCORA_SIZE = 25  
     
-    # Configurações Dinâmicas
+    # Layout Padrão
     FREQ_X: int = 40
     GRID_START_Y: int = 580 
     GRID_X_START: int = 110
     GRID_COL_W: int = 120   
-    
     tem_frequencia: bool = True
 
-# PADRÕES
+# --- DEFINIÇÃO DOS MODELOS ---
 TIPOS_PROVA = {
     "2_e_3_Ano_18Q": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental I - 2º e 3º Ano",
-        # CENTRALIZAÇÃO PERFEITA
-        # Y=420 coloca a prova no meio vertical
-        GRID_START_Y=420,
-        # X=165 centraliza os 2 blocos + freq horizontalmente
-        FREQ_X=165,
-        GRID_X_START=225,
+        # AJUSTES DE POSIÇÃO:
+        GRID_START_Y=480, # Centralizado verticalmente
+        FREQ_X=120,       # Frequência mais à direita
+        GRID_X_START=200, # AFASTADO DA FREQUÊNCIA (Era muito perto)
         
         blocos=[
             BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 9, COR_AZUL),
