@@ -27,11 +27,15 @@ class ConfiguracaoProva:
     MARGIN = 35       
     ANCORA_SIZE = 30  
     
-    # Posições Padrão
-    FREQ_X: int = 40
-    GRID_START_Y: int = 580 
-    GRID_X_START: int = 110
-    GRID_COL_W: int = 120   
+    # --- AJUSTES FINOS (Baseado no print image_2baf9f) ---
+    # Empurrei a frequência para a direita (estava cortando a borda esquerda)
+    FREQ_X: int = 42  
+    
+    # Baixei levemente a altura inicial (de 580 para 572) para centralizar na bolinha
+    GRID_START_Y: int = 572 
+    
+    GRID_X_START: int = 115
+    GRID_COL_W: int = 118   
     tem_frequencia: bool = True
 
 # --- MODELOS ---
@@ -39,9 +43,11 @@ TIPOS_PROVA = {
     "2_e_3_Ano_18Q": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental I - 2º e 3º Ano",
-        GRID_START_Y=460, 
-        FREQ_X=130,       
-        GRID_X_START=200,
+        # Centralizado Verticalmente
+        GRID_START_Y=450, 
+        # Frequência centralizada
+        FREQ_X=135,       
+        GRID_X_START=210,
         blocos=[
             BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 9, COR_AZUL),
             BlocoQuestao("BLOCO 2", "MATEMÁTICA", 10, 9, COR_LARANJA)
@@ -50,9 +56,9 @@ TIPOS_PROVA = {
     "4_ao_6_Ano_44Q": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental - 4º ao 6º Ano",
-        GRID_START_Y=580,
-        FREQ_X=35,
-        GRID_X_START=100,
+        GRID_START_Y=572,
+        FREQ_X=42, # Ajustado
+        GRID_X_START=115,
         blocos=[
             BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 11, COR_AZUL),
             BlocoQuestao("BLOCO 2", "LÍNGUA PORTUGUESA", 12, 11, COR_AZUL),
@@ -63,9 +69,9 @@ TIPOS_PROVA = {
     "7_ao_9_Ano_52Q": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental II - 7º ao 9º Ano",
-        GRID_START_Y=580,
-        FREQ_X=35,
-        GRID_X_START=100,
+        GRID_START_Y=572,
+        FREQ_X=42, # Ajustado
+        GRID_X_START=115,
         blocos=[
             BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 13, COR_AZUL),
             BlocoQuestao("BLOCO 2", "LÍNGUA PORTUGUESA", 14, 13, COR_AZUL),
