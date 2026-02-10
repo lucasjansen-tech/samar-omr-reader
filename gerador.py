@@ -5,7 +5,6 @@ from reportlab.lib.colors import HexColor
 from layout_samar import ConfiguracaoProva
 
 def desenhar_ancoras(c, conf: ConfiguracaoProva):
-    """Âncoras simétricas nas margens"""
     c.setFillColor(colors.black)
     s = conf.ANCORA_SIZE
     w, h = conf.PAGE_W, conf.PAGE_H
@@ -15,16 +14,15 @@ def desenhar_ancoras(c, conf: ConfiguracaoProva):
     c.rect(m, h - m - s, s, s, fill=1, stroke=0)
     c.rect(w - m - s, h - m - s, s, s, fill=1, stroke=0)
     
-    # Base (Na mesma distância 'm' da borda inferior que o topo)
+    # Base (Simetria exata com o topo)
     c.rect(m, m, s, s, fill=1, stroke=0)
     c.rect(w - m - s, m, s, s, fill=1, stroke=0)
 
 def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     w, h = conf.PAGE_W, conf.PAGE_H
-    # Área útil começa abaixo da âncora
     top_y = h - conf.MARGIN - conf.ANCORA_SIZE - 20
     
-    # Títulos Editáveis
+    # Títulos Dinâmicos
     c.setFillColor(HexColor("#2980b9")) 
     c.setFont("Helvetica-Bold", 16)
     c.drawCentredString(w/2, top_y, conf.titulo_prova.upper())
@@ -33,53 +31,46 @@ def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     c.setFont("Helvetica", 11)
     c.drawCentredString(w/2, top_y - 18, conf.subtitulo)
     
-    # --- NOVO LAYOUT DE CAMPOS (Solicitado) ---
+    # --- NOVO CABEÇALHO ---
     box_y = top_y - 50
-    line_h = 30 # Altura da linha
+    line_h = 28
     
     c.setStrokeColor(colors.black)
     c.setLineWidth(0.5)
     c.setFont("Helvetica-Bold", 9)
     
-    # LINHA 1: UNIDADE DE ENSINO (Largura Total)
+    # Linha 1: UNIDADE DE ENSINO
     y = box_y
     c.drawString(conf.MARGIN + 30, y, "UNIDADE DE ENSINO:")
     c.line(conf.MARGIN + 135, y-2, w - conf.MARGIN - 30, y-2)
     
-    # LINHA 2: ANO | TURMA | TURNO
+    # Linha 2: ANO | TURMA | TURNO
     y -= line_h
-    # Ano de Ensino
     c.drawString(conf.MARGIN + 30, y, "ANO DE ENSINO:")
     c.line(conf.MARGIN + 115, y-2, conf.MARGIN + 200, y-2)
     
-    # Turma
     c.drawString(conf.MARGIN + 220, y, "TURMA:")
     c.line(conf.MARGIN + 260, y-2, conf.MARGIN + 340, y-2)
     
-    # Turno
     c.drawString(w - 150, y, "TURNO:")
     c.line(w - 110, y-2, w - conf.MARGIN - 30, y-2)
     
-    # LINHA 3: NOME DO ALUNO (Largura Total)
+    # Linha 3: NOME DO ALUNO
     y -= line_h
     c.drawString(conf.MARGIN + 30, y, "NOME DO ALUNO:")
     c.line(conf.MARGIN + 120, y-2, w - conf.MARGIN - 30, y-2)
 
 def desenhar_grade(c, conf: ConfiguracaoProva):
-    # Usa o Y personalizado do layout (Centralizado ou Topo)
     start_y = conf.GRID_START_Y
     
-    # --- FREQUÊNCIA ---
     if conf.tem_frequencia:
         box_w = 54
         box_x = conf.FREQ_X
-        # Altura da caixa da frequência fixa
-        box_h = 235 
-        
-        # Desenha caixa alinhada pelo topo do gabarito
+        # Centraliza o retângulo da frequência verticalmente em relação ao bloco de questões
+        # Altura média estimada
         c.setStrokeColor(HexColor("#2980b9"))
         c.setLineWidth(1)
-        c.rect(box_x, start_y - 215, box_w, box_h, stroke=1, fill=0)
+        c.rect(box_x, start_y - 215, box_w, 235, stroke=1, fill=0)
         
         center_x = box_x + (box_w / 2)
         
@@ -101,15 +92,12 @@ def desenhar_grade(c, conf: ConfiguracaoProva):
                 c.setFont("Helvetica", 8)
                 c.drawCentredString(col_center_x, y + 0.5, str(i))
 
-    # --- QUESTÕES ---
-    # Usa o X personalizado do layout (Centralizado)
     current_x = conf.GRID_X_START
     
     for bloco in conf.blocos:
         c.setFillColor(HexColor(bloco.cor_hex))
         c.setStrokeColor(HexColor(bloco.cor_hex))
         
-        # Cabeçalho do Bloco
         c.roundRect(current_x, start_y + 5, 105, 22, 4, fill=1, stroke=0)
         
         c.setFillColor(colors.white)
