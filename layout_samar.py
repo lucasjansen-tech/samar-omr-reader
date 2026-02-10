@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 
-# Official Colors
+# Cores Oficiais
 COR_AZUL = "#2980b9"
 COR_LARANJA = "#e67e22"
 
@@ -19,33 +19,34 @@ class ConfiguracaoProva:
     subtitulo: str
     blocos: List[BlocoQuestao]
     
-    # GEOMETRY A4
+    # GEOMETRIA A4
     PAGE_W = 595
     PAGE_H = 842
     
-    # Anchor Margin and Size
+    # Margem e Tamanho da Âncora
     MARGIN = 35       
     ANCORA_SIZE = 30  
     
-    # --- FINE TUNING (Calibrated based on image_2c0694.png) ---
-    # Shifted FREQ_X from 42 to 47 (Moves Frequency Right)
+    # Posições Calibradas (Fino Ajuste)
+    # FREQ_X ajustado para centralizar na coluna de frequência
     FREQ_X: int = 47
     
-    # Lowered GRID_START_Y from 572 to 568 (Moves Grid Down)
+    # GRID_START_Y alinhado para o topo da primeira bolinha
     GRID_START_Y: int = 568 
     
-    # Shifted GRID_X_START from 115 to 118 (Moves Questions Right)
     GRID_X_START: int = 118
-    
     GRID_COL_W: int = 118   
+    
+    # Espaçamento Vertical Padrão (IMPORTANTE: Igual para Freq e Questões)
+    V_SPACING: int = 20 
+    
     tem_frequencia: bool = True
 
-# --- EXAM MODELS ---
+# --- MODELOS ---
 TIPOS_PROVA = {
     "2_e_3_Ano_18Q": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental I - 2º e 3º Ano",
-        # Centered Vertical/Horizontal
         GRID_START_Y=450, 
         FREQ_X=135,       
         GRID_X_START=210,
@@ -57,9 +58,9 @@ TIPOS_PROVA = {
     "4_ao_6_Ano_44Q": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental - 4º ao 6º Ano",
-        GRID_START_Y=568, # Calibrated
-        FREQ_X=47,        # Calibrated
-        GRID_X_START=118, # Calibrated
+        GRID_START_Y=568,
+        FREQ_X=47,
+        GRID_X_START=118,
         blocos=[
             BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 11, COR_AZUL),
             BlocoQuestao("BLOCO 2", "LÍNGUA PORTUGUESA", 12, 11, COR_AZUL),
@@ -70,9 +71,9 @@ TIPOS_PROVA = {
     "7_ao_9_Ano_52Q": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental II - 7º ao 9º Ano",
-        GRID_START_Y=568, # Calibrated
-        FREQ_X=47,        # Calibrated
-        GRID_X_START=118, # Calibrated
+        GRID_START_Y=568,
+        FREQ_X=47,
+        GRID_X_START=118,
         blocos=[
             BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 13, COR_AZUL),
             BlocoQuestao("BLOCO 2", "LÍNGUA PORTUGUESA", 14, 13, COR_AZUL),
