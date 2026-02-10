@@ -4,10 +4,11 @@ from layout_samar import ConfiguracaoProva
 
 def alinhar_imagem(img, conf: ConfiguracaoProva):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    _, thresh = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY_INV)
+    _, thresh = cv2.threshold(gray, 80, 255, cv2.THRESH_BINARY_INV)
     cnts, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     ancoras = []
     
+    # Procura as 4 âncoras (Quadrados pretos)
     for c in cnts:
         area = cv2.contourArea(c)
         if 200 < area < 15000:
@@ -20,6 +21,7 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
                     ancoras.append([cx, cy])
     
     if len(ancoras) >= 4:
+        # Ordena: Top-Left, Top-Right, Bottom-Right, Bottom-Left
         pts = np.array(ancoras, dtype="float32")
         s = pts.sum(axis=1)
         diff = np.diff(pts, axis=1)
@@ -29,18 +31,18 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
         rect[1] = pts[np.argmin(diff)] 
         rect[3] = pts[np.argmax(diff)] 
         
+        # Define escala para melhor resolução (2x)
         scale = 2.0
         w_target = int(conf.PAGE_W * scale)
         h_target = int(conf.PAGE_H * scale)
-        
-        # MARGEM 30px
         m = conf.MARGIN * scale
         
+        # Mapeia para os cantos EXATOS definidos no layout
         dst = np.array([
-            [m, m],                     
-            [w_target - m, m],          
-            [w_target - m, h_target - m], 
-            [m, h_target - m]           
+            [m, m],                     # Top-Left
+            [w_target - m, m],          # Top-Right
+            [w_target - m, h_target - m], # Bottom-Right (Simétrico)
+            [m, h_target - m]           # Bottom-Left (Simétrico)
         ], dtype="float32")
         
         M = cv2.getPerspectiveTransform(rect, dst)
@@ -56,10 +58,12 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None):
     res = {"respostas": {}, "frequencia": ""}
     img_vis = warped.copy()
     
-    def pt_to_px(x, y_pdf):
+    # Função que converte (X,Y) do PDF para Pixel da Imagem
+    def pdf_to_pixel(x, y_pdf):
+        # Inverte Y porque PDF conta de baixo pra cima, Imagem de cima pra baixo
         return int(x * scale), int((conf.PAGE_H - y_pdf) * scale)
     
-    # Usa variáveis do Layout (Dinâmico)
+    # Pega o Y inicial definido no layout (Centralizado ou Padrão)
     start_y = conf.GRID_START_Y
     
     # 1. FREQUÊNCIA
@@ -75,8 +79,10 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None):
             col_center_x = center_x - offset_x if col_idx == 0 else center_x + offset_x
             
             for i in range(10):
+                # Mesma fórmula matemática do gerador
                 y_base = start_y - 25 - (i * 18)
-                cx, cy = pt_to_px(col_center_x, y_base + 3)
+                cx, cy = pdf_to_pixel(col_center_x, y_base + 3)
+                
                 roi = thresh[cy-10:cy+10, cx-10:cx+10]
                 votos.append(cv2.countNonZero(roi))
                 cv2.circle(img_vis, (cx, cy), 10, (200,200,200), 1)
@@ -85,7 +91,7 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None):
                 idx = np.argmax(votos)
                 val_freq += str(idx)
                 y_hit = start_y - 25 - (idx * 18)
-                cx, cy = pt_to_px(col_center_x, y_hit + 3)
+                cx, cy = pdf_to_pixel(col_center_x, y_hit + 3)
                 cv2.circle(img_vis, (cx, cy), 13, (255, 0, 0), -1)
             else:
                 val_freq += "0"
@@ -102,7 +108,7 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None):
             coords = []
             for j in range(4):
                 bx = current_x + 20 + (j * 20)
-                cx, cy = pt_to_px(bx, y_base + 3)
+                cx, cy = pdf_to_pixel(bx, y_base + 3)
                 coords.append((cx, cy))
                 roi = thresh[cy-10:cy+10, cx-10:cx+10]
                 pixels.append(cv2.countNonZero(roi))
