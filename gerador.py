@@ -12,7 +12,6 @@ def desenhar_ancoras(c, conf: ConfiguracaoProva):
     w, h = conf.PAGE_W, conf.PAGE_H
     m = conf.MARGIN
     
-    # 4 Quadrados Sólidos
     c.rect(m, h - m - s, s, s, fill=1, stroke=0)
     c.rect(w - m - s, h - m - s, s, s, fill=1, stroke=0)
     c.rect(m, m, s, s, fill=1, stroke=0)
@@ -39,7 +38,6 @@ def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     y = box_y
     c.drawString(conf.MARGIN + 20, y, "UNIDADE DE ENSINO:")
     c.line(conf.MARGIN + 125, y-2, w - conf.MARGIN - 20, y-2)
-    
     y -= lh
     c.drawString(conf.MARGIN + 20, y, "ANO DE ENSINO:")
     c.line(conf.MARGIN + 105, y-2, conf.MARGIN + 200, y-2)
@@ -47,13 +45,13 @@ def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     c.line(conf.MARGIN + 260, y-2, conf.MARGIN + 340, y-2)
     c.drawString(w - 150, y, "TURNO:")
     c.line(w - 110, y-2, w - conf.MARGIN - 20, y-2)
-    
     y -= lh
     c.drawString(conf.MARGIN + 20, y, "NOME DO ALUNO:")
     c.line(conf.MARGIN + 110, y-2, w - conf.MARGIN - 20, y-2)
 
 def desenhar_grade(c, conf: ConfiguracaoProva):
     start_y = conf.GRID_START_Y
+    spacing = conf.V_SPACING # Espaçamento unificado
     
     if conf.tem_frequencia:
         box_w = 54
@@ -74,7 +72,8 @@ def desenhar_grade(c, conf: ConfiguracaoProva):
             c.setFont("Helvetica-Bold", 11)
             c.drawCentredString(col_center_x, start_y - 5, label)
             for i in range(10):
-                y = start_y - 25 - (i * 18)
+                # CORREÇÃO: Usa o mesmo espaçamento das questões (20)
+                y = start_y - 25 - (i * spacing)
                 c.setStrokeColor(colors.black)
                 c.circle(col_center_x, y + 3, 7, stroke=1, fill=0)
                 c.setFont("Helvetica", 8)
@@ -85,21 +84,18 @@ def desenhar_grade(c, conf: ConfiguracaoProva):
         c.setFillColor(HexColor(bloco.cor_hex))
         c.setStrokeColor(HexColor(bloco.cor_hex))
         c.roundRect(current_x, start_y + 5, 105, 22, 4, fill=1, stroke=0)
-        
         c.setFillColor(colors.white)
         c.setFont("Helvetica-Bold", 10)
         c.drawCentredString(current_x + 52, start_y + 12, bloco.titulo)
-        
         c.setFillColor(HexColor(bloco.cor_hex))
         c.setFont("Helvetica-Bold", 7)
         c.drawCentredString(current_x + 52, start_y - 6, bloco.componente.upper())
-        
         c.setFillColor(colors.black)
         c.setStrokeColor(colors.black)
         
         for i in range(bloco.quantidade):
             q_num = bloco.questao_inicial + i
-            y = start_y - 25 - (i * 20)
+            y = start_y - 25 - (i * spacing) # Usa o mesmo espaçamento
             c.setFont("Helvetica-Bold", 9)
             c.drawString(current_x - 5, y, f"{q_num:02d}")
             for j, letra in enumerate(["A", "B", "C", "D"]):
