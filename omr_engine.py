@@ -33,15 +33,14 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
         w_target = int(conf.PAGE_W * scale)
         h_target = int(conf.PAGE_H * scale)
         
-        # AQUI ESTÁ A CORREÇÃO DE SIMETRIA NO ALINHAMENTO
-        # Usamos conf.MARGIN para todos os cantos
+        # USA A MARGEM SEGURA (45) DO LAYOUT
         m = conf.MARGIN * scale
         
         dst = np.array([
             [m, m],                     # Top-Left
             [w_target - m, m],          # Top-Right
-            [w_target - m, h_target - m], # Bottom-Right (subiu conforme MARGIN)
-            [m, h_target - m]           # Bottom-Left  (subiu conforme MARGIN)
+            [w_target - m, h_target - m], # Bottom-Right (SUBIU)
+            [m, h_target - m]           # Bottom-Left (SUBIU)
         ], dtype="float32")
         
         M = cv2.getPerspectiveTransform(rect, dst)
