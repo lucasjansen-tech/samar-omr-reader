@@ -27,7 +27,8 @@ def encontrar_ancoras_quadradas(thresh_img):
         if len(approx) == 4:
             (x, y, w, h) = cv2.boundingRect(approx)
             ar = w / float(h)
-            if 0.7 <= ar <= 1.3: # slightly more tolerant
+            # Filtro para pegar apenas quadrados (âncoras) e ignorar retângulos (títulos)
+            if 0.7 <= ar <= 1.3:
                 M = cv2.moments(c)
                 if M["m00"] != 0:
                     cx = int(M["m10"] / M["m00"])
@@ -69,12 +70,11 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
     return cv2.resize(img, (int(conf.PAGE_W*2), int(conf.PAGE_H*2))), 2.0, thresh
 
 def get_coords_magnetic(x_pdf, y_pdf, off_x, off_y, scale, page_h, img_thresh):
-    # Theoretical position (plus offset)
     px = int(x_pdf * scale) + off_x
-    py = int((page_h - y_pdf) * scale) + off_y + 4 # +4 visual offset
+    py = int((page_h - y_pdf) * scale) + off_y + 4 # Offset visual (+4px para baixo)
     
-    # SEARCH RADIUS INCREASED TO 22 PIXELS (Stronger Magnet)
-    search_radius = 22
+    # Raio reduzido para 14px para evitar pular para a bolinha errada
+    search_radius = 14
     y_min = max(0, py - search_radius)
     y_max = min(img_thresh.shape[0], py + search_radius)
     x_min = max(0, px - search_radius)
@@ -82,13 +82,11 @@ def get_coords_magnetic(x_pdf, y_pdf, off_x, off_y, scale, page_h, img_thresh):
     
     roi = img_thresh[y_min:y_max, x_min:x_max]
     
-    # If substantial ink is found
-    if cv2.countNonZero(roi) > 30:
+    if cv2.countNonZero(roi) > 20:
         M = cv2.moments(roi)
         if M["m00"] != 0:
             dx = int(M["m10"] / M["m00"])
             dy = int(M["m01"] / M["m00"])
-            # Returns center of the ink blob
             return x_min + dx, y_min + dy
             
     return px, py
@@ -101,8 +99,9 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None, offset_x=0, 
     res = {"respostas": {}, "frequencia": ""}
     img_vis = warped.copy()
     start_y = conf.GRID_START_Y
+    spacing = conf.V_SPACING # Usa o espaçamento unificado (20)
     
-    # 1. FREQUENCY
+    # 1. FREQUÊNCIA
     if conf.tem_frequencia:
         val_freq = ""
         center_x = conf.FREQ_X + 27 
@@ -111,30 +110,30 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None, offset_x=0, 
             votos = []
             col_cx = center_x - offset_col if col_idx == 0 else center_x + offset_col
             for i in range(10):
-                y_pos = start_y - 25 - (i * 18)
+                # CORREÇÃO CRÍTICA: Usa 'spacing' (20) ao invés de 18
+                y_pos = start_y - 25 - (i * spacing)
                 cx, cy = get_coords_magnetic(col_cx, y_pos, offset_x, offset_y, scale, conf.PAGE_H, thresh)
                 
-                # Reading zone
-                roi = thresh[cy-10:cy+10, cx-10:cx+10]
+                roi = thresh[cy-9:cy+9, cx-9:cx+9]
                 votos.append(cv2.countNonZero(roi))
-                cv2.circle(img_vis, (cx, cy), 10, (200, 200, 200), 1)
+                cv2.circle(img_vis, (cx, cy), 9, (200, 200, 200), 1)
             
             if max(votos) > (50 * scale):
                 idx = np.argmax(votos)
                 val_freq += str(idx)
-                y_hit = start_y - 25 - (idx * 18)
+                y_hit = start_y - 25 - (idx * spacing)
                 cx, cy = get_coords_magnetic(col_cx, y_hit, offset_x, offset_y, scale, conf.PAGE_H, thresh)
-                cv2.circle(img_vis, (cx, cy), 12, (255, 0, 0), -1)
+                cv2.circle(img_vis, (cx, cy), 11, (255, 0, 0), -1)
             else:
                 val_freq += "0"
         res["frequencia"] = val_freq
         
-    # 2. QUESTIONS
+    # 2. QUESTÕES
     current_x = conf.GRID_X_START
     for bloco in conf.blocos:
         for i in range(bloco.quantidade):
             q_num = bloco.questao_inicial + i
-            y_pos = start_y - 25 - (i * 20)
+            y_pos = start_y - 25 - (i * spacing) # Usa mesmo espaçamento
             densidade = []
             coords = []
             
@@ -142,14 +141,16 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None, offset_x=0, 
                 bx = current_x + 20 + (j * 20)
                 cx, cy = get_coords_magnetic(bx, y_pos, offset_x, offset_y, scale, conf.PAGE_H, thresh)
                 coords.append((cx, cy))
-                roi = thresh[cy-10:cy+10, cx-10:cx+10]
+                roi = thresh[cy-9:cy+9, cx-9:cx+9]
                 densidade.append(cv2.countNonZero(roi))
             
+            # Winner Takes All (Refinado)
             max_val = max(densidade)
             avg_val = sum(densidade) / 4
             idx_max = np.argmax(densidade)
             
-            if max_val > 80 and max_val > (avg_val * 1.3):
+            # Precisa ter tinta suficiente E ser destaque
+            if max_val > 80 and max_val > (avg_val * 1.4):
                 marcou = True
                 letra = ["A", "B", "C", "D"][idx_max]
                 res["respostas"][q_num] = letra
@@ -164,10 +165,10 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None, offset_x=0, 
                 idx_c = ["A","B","C","D"].index(correta)
                 cx_c, cy_c = coords[idx_c]
                 if marcou:
-                    if letra == correta: cv2.circle(img_vis, (cx, cy), 13, (0, 255, 0), -1)
+                    if letra == correta: cv2.circle(img_vis, (cx, cy), 12, (0, 255, 0), -1)
                     else:
-                        cv2.circle(img_vis, (cx, cy), 13, (0, 0, 255), -1)
-                        cv2.circle(img_vis, (cx_c, cy_c), 13, (0, 255, 0), 3)
+                        cv2.circle(img_vis, (cx, cy), 12, (0, 0, 255), -1)
+                        cv2.circle(img_vis, (cx_c, cy_c), 12, (0, 255, 0), 3)
                 else: cv2.circle(img_vis, (cx_c, cy_c), 10, (0, 255, 255), 2)
             elif marcou: cv2.circle(img_vis, (cx, cy), 10, (100, 100, 100), -1)
 
