@@ -36,7 +36,6 @@ def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     c.setLineWidth(0.5)
     c.setFont("Helvetica-Bold", 9)
     
-    # Campos
     y = box_y
     c.drawString(conf.MARGIN + 20, y, "UNIDADE DE ENSINO:")
     c.line(conf.MARGIN + 125, y-2, w - conf.MARGIN - 20, y-2)
