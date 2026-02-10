@@ -101,8 +101,7 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
     # Fallback (Retorna imagem crua se falhar)
     return cv2.resize(img, (int(conf.PAGE_W*2), int(conf.PAGE_H*2))), 2.0, thresh
 
-# --- CORREÇÃO DO NameError ---
-# Função auxiliar fora para evitar problemas de escopo
+# --- FUNÇÃO AUXILIAR PARA CORRIGIR NAME ERROR ---
 def get_coords(x_pdf, y_pdf, off_x, off_y, scale, page_h):
     """Converte coordenadas do PDF (ponto) para Imagem (pixel)"""
     px = int(x_pdf * scale) + off_x
@@ -134,7 +133,7 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None, offset_x=0, 
             
             for i in range(10):
                 y_pos = start_y - 25 - (i * 18)
-                # Chamada corrigida da função de coordenadas
+                # Chamada corrigida passando todos os argumentos
                 cx, cy = get_coords(col_cx, y_pos + 3, offset_x, offset_y, scale, conf.PAGE_H)
                 
                 roi = thresh[cy-10:cy+10, cx-10:cx+10]
@@ -204,4 +203,5 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None, offset_x=0, 
 
         current_x += conf.GRID_COL_W
         
+    # Retorna 3 valores (Resultado, Imagem Final, Imagem Debug - que aqui é None para simplificar)
     return res, img_vis, None
