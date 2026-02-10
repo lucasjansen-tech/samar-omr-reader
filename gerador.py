@@ -5,12 +5,13 @@ from reportlab.lib.colors import HexColor
 from layout_samar import ConfiguracaoProva
 
 def desenhar_ancoras(c, conf: ConfiguracaoProva):
+    """Desenha âncoras quadradas nos cantos da margem segura"""
     c.setFillColor(colors.black)
     s = conf.ANCORA_SIZE
     w, h = conf.PAGE_W, conf.PAGE_H
     m = conf.MARGIN
     
-    # Âncoras agora desenhadas na nova margem segura (mais longe da borda)
+    # Top-Left, Top-Right, Bottom-Left, Bottom-Right
     c.rect(m, h - m - s, s, s, fill=1, stroke=0)
     c.rect(w - m - s, h - m - s, s, s, fill=1, stroke=0)
     c.rect(m, m, s, s, fill=1, stroke=0)
@@ -18,12 +19,12 @@ def desenhar_ancoras(c, conf: ConfiguracaoProva):
 
 def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     w, h = conf.PAGE_W, conf.PAGE_H
-    # Topo relativo à nova margem
+    # Começa logo abaixo da âncora superior
     top_y = h - conf.MARGIN - conf.ANCORA_SIZE - 20
     
-    # Títulos (Configuráveis no layout_samar.py)
-    c.setFillColor(HexColor("#2980b9"))
-    c.setFont("Helvetica-Bold", 14) # Ajustei fonte para caber títulos longos
+    # Títulos
+    c.setFillColor(HexColor("#2980b9")) # Azul Institucional
+    c.setFont("Helvetica-Bold", 16)
     c.drawCentredString(w/2, top_y, conf.titulo_prova.upper())
     
     c.setFillColor(colors.black)
@@ -38,55 +39,50 @@ def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     c.setLineWidth(0.5)
     c.setFont("Helvetica-Bold", 9)
     
-    # Linhas de dados
+    # Linha 1: ESCOLA e TURNO
     y = box_y
     c.drawString(conf.MARGIN + 30, y, "ESCOLA:")
     c.line(conf.MARGIN + 80, y-2, w - 160, y-2)
+    
     c.drawString(w - 150, y, "TURNO:")
     c.line(w - 110, y-2, w - conf.MARGIN - 30, y-2)
     
+    # Linha 2: ALUNO e TURMA
     y -= line_h
     c.drawString(conf.MARGIN + 30, y, "ALUNO:")
     c.line(conf.MARGIN + 80, y-2, w - 160, y-2)
+    
     c.drawString(w - 150, y, "TURMA:")
     c.line(w - 110, y-2, w - conf.MARGIN - 30, y-2)
     
+    # Linha 3: PROFESSOR e DATA
     y -= line_h
     c.drawString(conf.MARGIN + 30, y, "PROF.:")
     c.line(conf.MARGIN + 80, y-2, w - 160, y-2)
+    
     c.drawString(w - 150, y, "DATA:")
     c.drawString(w - 110, y, "___/___/______")
 
 def desenhar_grade(c, conf: ConfiguracaoProva):
-    # --- FREQUÊNCIA (CENTRALIZADA) ---
+    # --- FREQUÊNCIA ---
     if conf.tem_frequencia:
-        # Dimensões da Caixa
+        # Caixa Centralizada
         box_w = 54
-        box_h = 230
         box_x = conf.FREQ_X
-        box_y = conf.GRID_START_Y - 210
-        
-        # Borda da caixa
-        c.setStrokeColor(HexColor("#2980b9"))
-        c.setLineWidth(1)
-        c.rect(box_x, box_y, box_w, box_h, stroke=1, fill=0)
-        
-        # Centro da caixa para alinhar tudo
         center_x = box_x + (box_w / 2)
         
-        # Título FREQ
-        c.setFillColor(HexColor("#e67e22"))
+        c.setStrokeColor(HexColor("#2980b9"))
+        c.setLineWidth(1)
+        c.rect(box_x, conf.GRID_START_Y - 210, box_w, 230, stroke=1, fill=0)
+        
+        c.setFillColor(HexColor("#e67e22")) # Laranja
         c.setFont("Helvetica-Bold", 10)
         c.drawCentredString(center_x, conf.GRID_START_Y + 10, "FREQ.")
         
         c.setFillColor(colors.black)
-        
-        # Desenha Colunas (Centralizadas em relação ao meio da caixa)
-        # Offset para esquerda e direita do centro
-        offset_x = 12 
+        offset_x = 12
         
         for col_idx, label in enumerate(["D", "U"]):
-            # Se for D (idx 0), subtrai offset. Se for U (idx 1), soma offset.
             col_center_x = center_x - offset_x if col_idx == 0 else center_x + offset_x
             
             c.setFont("Helvetica-Bold", 11)
@@ -95,9 +91,8 @@ def desenhar_grade(c, conf: ConfiguracaoProva):
             for i in range(10):
                 y = conf.GRID_START_Y - 25 - (i * 18)
                 c.setStrokeColor(colors.black)
-                # Círculo centralizado na coluna
                 c.circle(col_center_x, y + 3, 7, stroke=1, fill=0)
-                c.setFont("Helvetica", 7)
+                c.setFont("Helvetica", 8)
                 c.drawCentredString(col_center_x, y + 0.5, str(i))
 
     # --- QUESTÕES ---
@@ -107,6 +102,7 @@ def desenhar_grade(c, conf: ConfiguracaoProva):
         c.setFillColor(HexColor(bloco.cor_hex))
         c.setStrokeColor(HexColor(bloco.cor_hex))
         
+        # Header do Bloco
         c.roundRect(current_x, conf.GRID_START_Y + 5, 105, 22, 4, fill=1, stroke=0)
         
         c.setFillColor(colors.white)
@@ -135,5 +131,10 @@ def desenhar_grade(c, conf: ConfiguracaoProva):
                 
         current_x += conf.GRID_COL_W
 
+def gerar_pdf(conf: ConfiguracaoProva, filename):
+    c = canvas.Canvas(filename, pagesize=A4)
+    desenhar_ancoras(c, conf)
+    desenhar_cabecalho(c, conf)
+    desenhar_grade(c, conf)
     c.save()
     return filename
