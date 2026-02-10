@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 
-# Cores Oficiais
+# Cores
 COR_AZUL = "#2980b9"
 COR_LARANJA = "#e67e22"
 
@@ -22,23 +22,19 @@ class ConfiguracaoProva:
     # GEOMETRIA A4
     PAGE_W = 595
     PAGE_H = 842
-    
-    # Margem e Tamanho da Âncora
     MARGIN = 35       
     ANCORA_SIZE = 30  
     
-    # Posições Calibradas (Fino Ajuste)
-    # FREQ_X ajustado para centralizar na coluna de frequência
+    # --- POSIÇÕES AJUSTADAS ---
     FREQ_X: int = 47
     
-    # GRID_START_Y alinhado para o topo da primeira bolinha
-    GRID_START_Y: int = 568 
-    
+    # Baixei mais o início para compensar o deslocamento para cima
+    GRID_START_Y: int = 560 
     GRID_X_START: int = 118
     GRID_COL_W: int = 118   
     
-    # Espaçamento Vertical Padrão (IMPORTANTE: Igual para Freq e Questões)
-    V_SPACING: int = 20 
+    # Espaçamento base (A lógica elástica usará isso apenas como referência inicial)
+    V_SPACING: int = 23
     
     tem_frequencia: bool = True
 
@@ -58,7 +54,7 @@ TIPOS_PROVA = {
     "4_ao_6_Ano_44Q": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental - 4º ao 6º Ano",
-        GRID_START_Y=568,
+        GRID_START_Y=560,
         FREQ_X=47,
         GRID_X_START=118,
         blocos=[
@@ -71,7 +67,7 @@ TIPOS_PROVA = {
     "7_ao_9_Ano_52Q": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental II - 7º ao 9º Ano",
-        GRID_START_Y=568,
+        GRID_START_Y=560,
         FREQ_X=47,
         GRID_X_START=118,
         blocos=[
