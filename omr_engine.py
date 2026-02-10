@@ -33,14 +33,14 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
         w_target = int(conf.PAGE_W * scale)
         h_target = int(conf.PAGE_H * scale)
         
-        # USA A MARGEM SEGURA (45) DO LAYOUT
+        # MARGEM 30px
         m = conf.MARGIN * scale
         
         dst = np.array([
-            [m, m],                     # Top-Left
-            [w_target - m, m],          # Top-Right
-            [w_target - m, h_target - m], # Bottom-Right (SUBIU)
-            [m, h_target - m]           # Bottom-Left (SUBIU)
+            [m, m],                     
+            [w_target - m, m],          
+            [w_target - m, h_target - m], 
+            [m, h_target - m]           
         ], dtype="float32")
         
         M = cv2.getPerspectiveTransform(rect, dst)
@@ -59,6 +59,9 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None):
     def pt_to_px(x, y_pdf):
         return int(x * scale), int((conf.PAGE_H - y_pdf) * scale)
     
+    # Usa variáveis do Layout (Dinâmico)
+    start_y = conf.GRID_START_Y
+    
     # 1. FREQUÊNCIA
     if conf.tem_frequencia:
         val_freq = ""
@@ -72,7 +75,7 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None):
             col_center_x = center_x - offset_x if col_idx == 0 else center_x + offset_x
             
             for i in range(10):
-                y_base = conf.GRID_START_Y - 25 - (i * 18)
+                y_base = start_y - 25 - (i * 18)
                 cx, cy = pt_to_px(col_center_x, y_base + 3)
                 roi = thresh[cy-10:cy+10, cx-10:cx+10]
                 votos.append(cv2.countNonZero(roi))
@@ -81,7 +84,7 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None):
             if max(votos) > 100:
                 idx = np.argmax(votos)
                 val_freq += str(idx)
-                y_hit = conf.GRID_START_Y - 25 - (idx * 18)
+                y_hit = start_y - 25 - (idx * 18)
                 cx, cy = pt_to_px(col_center_x, y_hit + 3)
                 cv2.circle(img_vis, (cx, cy), 13, (255, 0, 0), -1)
             else:
@@ -93,7 +96,7 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None):
     for bloco in conf.blocos:
         for i in range(bloco.quantidade):
             q_num = bloco.questao_inicial + i
-            y_base = conf.GRID_START_Y - 25 - (i * 20)
+            y_base = start_y - 25 - (i * 20)
             
             pixels = []
             coords = []
