@@ -23,8 +23,8 @@ class ConfiguracaoProva:
     PAGE_W = 595
     PAGE_H = 842
     
-    # Margem das Âncoras
-    # Mantive 35px, é um bom equilíbrio
+    # Margem e Tamanho da Âncora
+    # Aumentado para facilitar detecção
     MARGIN = 35       
     ANCORA_SIZE = 30  
     
@@ -35,12 +35,11 @@ class ConfiguracaoProva:
     GRID_COL_W: int = 120   
     tem_frequencia: bool = True
 
-# --- DEFINIÇÃO DOS MODELOS ---
+# --- MODELOS ---
 TIPOS_PROVA = {
     "2_e_3_Ano_18Q": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental I - 2º e 3º Ano",
-        # Centralizado:
         GRID_START_Y=460, 
         FREQ_X=130,       
         GRID_X_START=200,
