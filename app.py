@@ -59,9 +59,7 @@ with tab2:
                 if img.ndim == 2: img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
                 else: img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
                 
-                # AQUI ESTAVA O ERRO DE UNPACKING. AGORA RECEBE 3 VALORES:
                 res, proc, _ = processar_gabarito(img, conf_atual, gab, off_x, off_y)
-                
                 total = sum(b.quantidade for b in conf_atual.blocos)
                 acertos = sum(1 for q, r in res["respostas"].items() if r == gab.get(q))
                 
