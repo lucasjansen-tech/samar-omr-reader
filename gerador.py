@@ -10,11 +10,9 @@ def desenhar_ancoras(c, conf: ConfiguracaoProva):
     w, h = conf.PAGE_W, conf.PAGE_H
     m = conf.MARGIN
     
-    # Desenha as 4 âncoras
-    # Top-Left, Top-Right
+    # Desenha âncoras exatas
     c.rect(m, h - m - s, s, s, fill=1, stroke=0)
     c.rect(w - m - s, h - m - s, s, s, fill=1, stroke=0)
-    # Bottom-Left, Bottom-Right
     c.rect(m, m, s, s, fill=1, stroke=0)
     c.rect(w - m - s, m, s, s, fill=1, stroke=0)
 
@@ -22,7 +20,6 @@ def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     w, h = conf.PAGE_W, conf.PAGE_H
     top_y = h - conf.MARGIN - conf.ANCORA_SIZE - 20
     
-    # Títulos
     c.setFillColor(HexColor("#2980b9"))
     c.setFont("Helvetica-Bold", 16)
     c.drawCentredString(w/2, top_y, conf.titulo_prova.upper())
@@ -31,31 +28,26 @@ def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     c.setFont("Helvetica", 11)
     c.drawCentredString(w/2, top_y - 18, conf.subtitulo)
     
-    # --- NOVO CABEÇALHO COMPLETO ---
+    # Campos
     box_y = top_y - 50
-    lh = 28 
-    
+    lh = 28
     c.setStrokeColor(colors.black)
     c.setLineWidth(0.5)
     c.setFont("Helvetica-Bold", 9)
     
-    # L1: UNIDADE DE ENSINO
+    # Linhas
     y = box_y
     c.drawString(conf.MARGIN + 20, y, "UNIDADE DE ENSINO:")
     c.line(conf.MARGIN + 125, y-2, w - conf.MARGIN - 20, y-2)
     
-    # L2: ANO | TURMA | TURNO
     y -= lh
     c.drawString(conf.MARGIN + 20, y, "ANO DE ENSINO:")
     c.line(conf.MARGIN + 105, y-2, conf.MARGIN + 200, y-2)
-    
     c.drawString(conf.MARGIN + 220, y, "TURMA:")
     c.line(conf.MARGIN + 260, y-2, conf.MARGIN + 340, y-2)
-    
     c.drawString(w - 150, y, "TURNO:")
     c.line(w - 110, y-2, w - conf.MARGIN - 20, y-2)
     
-    # L3: NOME
     y -= lh
     c.drawString(conf.MARGIN + 20, y, "NOME DO ALUNO:")
     c.line(conf.MARGIN + 110, y-2, w - conf.MARGIN - 20, y-2)
@@ -67,7 +59,6 @@ def desenhar_grade(c, conf: ConfiguracaoProva):
     if conf.tem_frequencia:
         box_w = 54
         box_x = conf.FREQ_X
-        
         c.setStrokeColor(HexColor("#2980b9"))
         c.setLineWidth(1)
         c.rect(box_x, start_y - 215, box_w, 235, stroke=1, fill=0)
@@ -85,17 +76,15 @@ def desenhar_grade(c, conf: ConfiguracaoProva):
             c.drawCentredString(col_center_x, start_y - 5, label)
             for i in range(10):
                 y = start_y - 25 - (i * 18)
-                c.setStrokeColor(colors.black)
                 c.circle(col_center_x, y + 3, 7, stroke=1, fill=0)
                 c.setFont("Helvetica", 8)
                 c.drawCentredString(col_center_x, y + 0.5, str(i))
 
-    # Questões
+    # Blocos
     current_x = conf.GRID_X_START
     for bloco in conf.blocos:
         c.setFillColor(HexColor(bloco.cor_hex))
         c.setStrokeColor(HexColor(bloco.cor_hex))
-        
         c.roundRect(current_x, start_y + 5, 105, 22, 4, fill=1, stroke=0)
         
         c.setFillColor(colors.white)
