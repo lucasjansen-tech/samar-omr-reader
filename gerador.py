@@ -5,92 +5,97 @@ from reportlab.lib.colors import HexColor
 from layout_samar import ConfiguracaoProva
 
 def desenhar_ancoras(c, conf: ConfiguracaoProva):
-    """Desenha âncoras simétricas (Margem Superior = Margem Inferior)"""
+    """Âncoras simétricas nas margens"""
     c.setFillColor(colors.black)
     s = conf.ANCORA_SIZE
     w, h = conf.PAGE_W, conf.PAGE_H
     m = conf.MARGIN
     
-    # Superior Esquerdo / Direito
+    # Topo
     c.rect(m, h - m - s, s, s, fill=1, stroke=0)
     c.rect(w - m - s, h - m - s, s, s, fill=1, stroke=0)
     
-    # Inferior Esquerdo / Direito (SIMETRIA CORRIGIDA)
-    # Agora desenha na coordenada 'm', bem acima da borda física
+    # Base (Na mesma distância 'm' da borda inferior que o topo)
     c.rect(m, m, s, s, fill=1, stroke=0)
     c.rect(w - m - s, m, s, s, fill=1, stroke=0)
 
 def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     w, h = conf.PAGE_W, conf.PAGE_H
-    # Área segura abaixo das âncoras superiores
-    top_y = h - conf.MARGIN - conf.ANCORA_SIZE - 25
+    # Área útil começa abaixo da âncora
+    top_y = h - conf.MARGIN - conf.ANCORA_SIZE - 20
     
-    # Títulos
+    # Títulos Editáveis
     c.setFillColor(HexColor("#2980b9")) 
-    c.setFont("Helvetica-Bold", 15)
+    c.setFont("Helvetica-Bold", 16)
     c.drawCentredString(w/2, top_y, conf.titulo_prova.upper())
     
     c.setFillColor(colors.black)
-    c.setFont("Helvetica", 10)
-    c.drawCentredString(w/2, top_y - 15, conf.subtitulo)
+    c.setFont("Helvetica", 11)
+    c.drawCentredString(w/2, top_y - 18, conf.subtitulo)
     
-    # Caixa de Dados
-    box_y = top_y - 50 
-    line_h = 28        
+    # --- NOVO LAYOUT DE CAMPOS ---
+    box_y = top_y - 50
+    line_h = 28 # Altura da linha para escrever
     
     c.setStrokeColor(colors.black)
     c.setLineWidth(0.5)
     c.setFont("Helvetica-Bold", 9)
     
-    # Linha 1
+    # LINHA 1: UNIDADE DE ENSINO (Largura Total)
     y = box_y
-    c.drawString(conf.MARGIN + 30, y, "ESCOLA:")
-    c.line(conf.MARGIN + 80, y-2, w - 160, y-2)
+    c.drawString(conf.MARGIN + 30, y, "UNIDADE DE ENSINO:")
+    c.line(conf.MARGIN + 135, y-2, w - conf.MARGIN - 30, y-2)
+    
+    # LINHA 2: ANO | TURMA | TURNO
+    y -= line_h
+    # Ano de Ensino
+    c.drawString(conf.MARGIN + 30, y, "ANO DE ENSINO:")
+    c.line(conf.MARGIN + 115, y-2, conf.MARGIN + 200, y-2)
+    
+    # Turma
+    c.drawString(conf.MARGIN + 220, y, "TURMA:")
+    c.line(conf.MARGIN + 260, y-2, conf.MARGIN + 340, y-2)
+    
+    # Turno
     c.drawString(w - 150, y, "TURNO:")
     c.line(w - 110, y-2, w - conf.MARGIN - 30, y-2)
     
-    # Linha 2
+    # LINHA 3: NOME DO ALUNO (Largura Total)
     y -= line_h
-    c.drawString(conf.MARGIN + 30, y, "ALUNO:")
-    c.line(conf.MARGIN + 80, y-2, w - 160, y-2)
-    c.drawString(w - 150, y, "TURMA:")
-    c.line(w - 110, y-2, w - conf.MARGIN - 30, y-2)
-    
-    # Linha 3
-    y -= line_h
-    c.drawString(conf.MARGIN + 30, y, "PROF.:")
-    c.line(conf.MARGIN + 80, y-2, w - 160, y-2)
-    c.drawString(w - 150, y, "DATA:")
-    c.drawString(w - 110, y, "___/___/______")
+    c.drawString(conf.MARGIN + 30, y, "NOME DO ALUNO:")
+    c.line(conf.MARGIN + 120, y-2, w - conf.MARGIN - 30, y-2)
 
 def desenhar_grade(c, conf: ConfiguracaoProva):
+    # Usa o Y personalizado (centralizado ou topo)
+    start_y = conf.GRID_START_Y
+    
     # --- FREQUÊNCIA ---
     if conf.tem_frequencia:
         box_w = 54
         box_x = conf.FREQ_X
+        # Altura da caixa da frequência fixa
+        box_h = 235 
         
-        # Borda da caixa
+        # Desenha caixa alinhada pelo topo do gabarito
         c.setStrokeColor(HexColor("#2980b9"))
         c.setLineWidth(1)
-        # Altura ajustada
-        c.rect(box_x, conf.GRID_START_Y - 215, box_w, 235, stroke=1, fill=0)
+        c.rect(box_x, start_y - 215, box_w, box_h, stroke=1, fill=0)
         
         center_x = box_x + (box_w / 2)
         
         c.setFillColor(HexColor("#e67e22"))
         c.setFont("Helvetica-Bold", 10)
-        c.drawCentredString(center_x, conf.GRID_START_Y + 10, "FREQ.")
+        c.drawCentredString(center_x, start_y + 10, "FREQ.")
         
         c.setFillColor(colors.black)
         offset_x = 12
-        
         for col_idx, label in enumerate(["D", "U"]):
             col_center_x = center_x - offset_x if col_idx == 0 else center_x + offset_x
             c.setFont("Helvetica-Bold", 11)
-            c.drawCentredString(col_center_x, conf.GRID_START_Y - 5, label)
+            c.drawCentredString(col_center_x, start_y - 5, label)
             
             for i in range(10):
-                y = conf.GRID_START_Y - 25 - (i * 18)
+                y = start_y - 25 - (i * 18)
                 c.setStrokeColor(colors.black)
                 c.circle(col_center_x, y + 3, 7, stroke=1, fill=0)
                 c.setFont("Helvetica", 8)
@@ -103,23 +108,23 @@ def desenhar_grade(c, conf: ConfiguracaoProva):
         c.setFillColor(HexColor(bloco.cor_hex))
         c.setStrokeColor(HexColor(bloco.cor_hex))
         
-        # Header do Bloco
-        c.roundRect(current_x, conf.GRID_START_Y + 5, 105, 22, 4, fill=1, stroke=0)
+        # Cabeçalho do Bloco
+        c.roundRect(current_x, start_y + 5, 105, 22, 4, fill=1, stroke=0)
         
         c.setFillColor(colors.white)
         c.setFont("Helvetica-Bold", 10)
-        c.drawCentredString(current_x + 52, conf.GRID_START_Y + 12, bloco.titulo)
+        c.drawCentredString(current_x + 52, start_y + 12, bloco.titulo)
         
         c.setFillColor(HexColor(bloco.cor_hex))
         c.setFont("Helvetica-Bold", 7)
-        c.drawCentredString(current_x + 52, conf.GRID_START_Y - 6, bloco.componente.upper())
+        c.drawCentredString(current_x + 52, start_y - 6, bloco.componente.upper())
         
         c.setFillColor(colors.black)
         c.setStrokeColor(colors.black)
         
         for i in range(bloco.quantidade):
             q_num = bloco.questao_inicial + i
-            y = conf.GRID_START_Y - 25 - (i * 20)
+            y = start_y - 25 - (i * 20)
             
             c.setFont("Helvetica-Bold", 9)
             c.drawString(current_x - 5, y, f"{q_num:02d}")
