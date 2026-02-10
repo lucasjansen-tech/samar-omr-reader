@@ -3,8 +3,6 @@ import numpy as np
 from layout_samar import ConfiguracaoProva
 
 def alinhar_imagem(img, conf: ConfiguracaoProva):
-    # A lógica de alinhamento continua a mesma, mas agora usa o novo MARGIN (45)
-    # que está dentro de 'conf'.
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     _, thresh = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY_INV)
     cnts, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -34,6 +32,7 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
         scale = 2.0
         w_target = int(conf.PAGE_W * scale)
         h_target = int(conf.PAGE_H * scale)
+        # Importante: Usa a margem definida no layout (45)
         m = conf.MARGIN * scale
         
         dst = np.array([
@@ -59,26 +58,21 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None):
     def pt_to_px(x, y_pdf):
         return int(x * scale), int((conf.PAGE_H - y_pdf) * scale)
     
-    # 1. FREQUÊNCIA (Lógica atualizada para centralização)
+    # FREQUÊNCIA (Centralizada)
     if conf.tem_frequencia:
         val_freq = ""
-        
-        # Recalcula geometria da caixa para achar os centros das colunas
         box_w = 54
         box_x = conf.FREQ_X
         center_x = box_x + (box_w / 2)
         offset_x = 12
         
-        for col_idx in range(2): # 0=D, 1=U
+        for col_idx in range(2): 
             votos = []
-            
-            # Mesma lógica do gerador: Esquerda ou Direita do centro
             col_center_x = center_x - offset_x if col_idx == 0 else center_x + offset_x
             
             for i in range(10):
                 y_base = conf.GRID_START_Y - 25 - (i * 18)
                 cx, cy = pt_to_px(col_center_x, y_base + 3)
-                
                 roi = thresh[cy-10:cy+10, cx-10:cx+10]
                 votos.append(cv2.countNonZero(roi))
                 cv2.circle(img_vis, (cx, cy), 10, (200,200,200), 1)
@@ -93,7 +87,7 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None):
                 val_freq += "0"
         res["frequencia"] = val_freq
         
-    # 2. QUESTÕES (Segue padrão normal)
+    # QUESTÕES
     current_x = conf.GRID_X_START
     for bloco in conf.blocos:
         for i in range(bloco.quantidade):
