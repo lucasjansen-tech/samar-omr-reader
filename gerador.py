@@ -5,25 +5,28 @@ from reportlab.lib.colors import HexColor
 from layout_samar import ConfiguracaoProva
 
 def desenhar_ancoras(c, conf: ConfiguracaoProva):
-    """Desenha âncoras quadradas nos cantos da margem segura"""
+    """Desenha âncoras simétricas (Margem Superior = Margem Inferior)"""
     c.setFillColor(colors.black)
     s = conf.ANCORA_SIZE
     w, h = conf.PAGE_W, conf.PAGE_H
     m = conf.MARGIN
     
-    # Top-Left, Top-Right, Bottom-Left, Bottom-Right
+    # Superior Esquerdo / Direito
     c.rect(m, h - m - s, s, s, fill=1, stroke=0)
     c.rect(w - m - s, h - m - s, s, s, fill=1, stroke=0)
+    
+    # Inferior Esquerdo / Direito (CORRIGIDO PARA SIMETRIA)
+    # Antes estava muito baixo. Agora respeita a margem 'm' igual ao topo.
     c.rect(m, m, s, s, fill=1, stroke=0)
     c.rect(w - m - s, m, s, s, fill=1, stroke=0)
 
 def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     w, h = conf.PAGE_W, conf.PAGE_H
-    # Começa logo abaixo da âncora superior
-    top_y = h - conf.MARGIN - conf.ANCORA_SIZE - 20
+    # Área segura abaixo das âncoras superiores
+    top_y = h - conf.MARGIN - conf.ANCORA_SIZE - 25
     
     # Títulos
-    c.setFillColor(HexColor("#2980b9")) # Azul Institucional
+    c.setFillColor(HexColor("#2980b9")) 
     c.setFont("Helvetica-Bold", 16)
     c.drawCentredString(w/2, top_y, conf.titulo_prova.upper())
     
@@ -31,51 +34,49 @@ def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     c.setFont("Helvetica", 10)
     c.drawCentredString(w/2, top_y - 15, conf.subtitulo)
     
-    # Dados do Aluno
-    box_y = top_y - 45
-    line_h = 25
+    # Caixa de Dados
+    box_y = top_y - 50 # Começa um pouco mais abaixo do título
+    line_h = 28        # Espaçamento entre linhas
     
     c.setStrokeColor(colors.black)
     c.setLineWidth(0.5)
     c.setFont("Helvetica-Bold", 9)
     
-    # Linha 1: ESCOLA e TURNO
+    # Linha 1
     y = box_y
     c.drawString(conf.MARGIN + 30, y, "ESCOLA:")
     c.line(conf.MARGIN + 80, y-2, w - 160, y-2)
-    
     c.drawString(w - 150, y, "TURNO:")
     c.line(w - 110, y-2, w - conf.MARGIN - 30, y-2)
     
-    # Linha 2: ALUNO e TURMA
+    # Linha 2
     y -= line_h
     c.drawString(conf.MARGIN + 30, y, "ALUNO:")
     c.line(conf.MARGIN + 80, y-2, w - 160, y-2)
-    
     c.drawString(w - 150, y, "TURMA:")
     c.line(w - 110, y-2, w - conf.MARGIN - 30, y-2)
     
-    # Linha 3: PROFESSOR e DATA
+    # Linha 3
     y -= line_h
     c.drawString(conf.MARGIN + 30, y, "PROF.:")
     c.line(conf.MARGIN + 80, y-2, w - 160, y-2)
-    
     c.drawString(w - 150, y, "DATA:")
     c.drawString(w - 110, y, "___/___/______")
 
 def desenhar_grade(c, conf: ConfiguracaoProva):
     # --- FREQUÊNCIA ---
     if conf.tem_frequencia:
-        # Caixa Centralizada
         box_w = 54
         box_x = conf.FREQ_X
         center_x = box_x + (box_w / 2)
         
+        # Borda da caixa
         c.setStrokeColor(HexColor("#2980b9"))
         c.setLineWidth(1)
-        c.rect(box_x, conf.GRID_START_Y - 210, box_w, 230, stroke=1, fill=0)
+        # Ajustei a altura da caixa para não ficar gigante
+        c.rect(box_x, conf.GRID_START_Y - 215, box_w, 235, stroke=1, fill=0)
         
-        c.setFillColor(HexColor("#e67e22")) # Laranja
+        c.setFillColor(HexColor("#e67e22"))
         c.setFont("Helvetica-Bold", 10)
         c.drawCentredString(center_x, conf.GRID_START_Y + 10, "FREQ.")
         
@@ -84,7 +85,6 @@ def desenhar_grade(c, conf: ConfiguracaoProva):
         
         for col_idx, label in enumerate(["D", "U"]):
             col_center_x = center_x - offset_x if col_idx == 0 else center_x + offset_x
-            
             c.setFont("Helvetica-Bold", 11)
             c.drawCentredString(col_center_x, conf.GRID_START_Y - 5, label)
             
@@ -131,10 +131,5 @@ def desenhar_grade(c, conf: ConfiguracaoProva):
                 
         current_x += conf.GRID_COL_W
 
-def gerar_pdf(conf: ConfiguracaoProva, filename):
-    c = canvas.Canvas(filename, pagesize=A4)
-    desenhar_ancoras(c, conf)
-    desenhar_cabecalho(c, conf)
-    desenhar_grade(c, conf)
     c.save()
     return filename
