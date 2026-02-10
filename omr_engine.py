@@ -32,14 +32,16 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
         scale = 2.0
         w_target = int(conf.PAGE_W * scale)
         h_target = int(conf.PAGE_H * scale)
-        # Importante: Usa a margem definida no layout (45)
+        
+        # AQUI ESTÁ A CORREÇÃO DE SIMETRIA NO ALINHAMENTO
+        # Usamos conf.MARGIN para todos os cantos
         m = conf.MARGIN * scale
         
         dst = np.array([
-            [m, m],
-            [w_target - m, m],
-            [w_target - m, h_target - m],
-            [m, h_target - m]
+            [m, m],                     # Top-Left
+            [w_target - m, m],          # Top-Right
+            [w_target - m, h_target - m], # Bottom-Right (subiu conforme MARGIN)
+            [m, h_target - m]           # Bottom-Left  (subiu conforme MARGIN)
         ], dtype="float32")
         
         M = cv2.getPerspectiveTransform(rect, dst)
@@ -58,7 +60,7 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None):
     def pt_to_px(x, y_pdf):
         return int(x * scale), int((conf.PAGE_H - y_pdf) * scale)
     
-    # FREQUÊNCIA (Centralizada)
+    # 1. FREQUÊNCIA
     if conf.tem_frequencia:
         val_freq = ""
         box_w = 54
@@ -87,7 +89,7 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None):
                 val_freq += "0"
         res["frequencia"] = val_freq
         
-    # QUESTÕES
+    # 2. QUESTÕES
     current_x = conf.GRID_X_START
     for bloco in conf.blocos:
         for i in range(bloco.quantidade):
