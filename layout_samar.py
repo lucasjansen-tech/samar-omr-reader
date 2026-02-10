@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 
-# Cores da Identidade Visual
+# Cores
 COR_AZUL = "#2980b9"
 COR_LARANJA = "#e67e22"
 
@@ -19,30 +19,29 @@ class ConfiguracaoProva:
     subtitulo: str
     blocos: List[BlocoQuestao]
     
-    # --- GEOMETRIA DA FOLHA (Sistema de Coordenadas Universal) ---
-    # Baseado em A4 a 72dpi (padrão PDF): 595 x 842 pontos
+    # GEOMETRIA A4 (Pontos)
     PAGE_W = 595
     PAGE_H = 842
     
-    # Margem das Âncoras (Essencial para o alinhamento)
-    # Aumentado para 35 para afastar da borda física do papel
+    # Margem das Âncoras
+    # Mantive 35px, é um bom equilíbrio
     MARGIN = 35       
     ANCORA_SIZE = 30  
     
-    # Posições Padrão (Podem ser sobrescritas por modelo)
+    # Posições Padrão
     FREQ_X: int = 40
     GRID_START_Y: int = 580 
     GRID_X_START: int = 110
     GRID_COL_W: int = 120   
     tem_frequencia: bool = True
 
-# --- DEFINIÇÃO DOS 3 PADRÕES DE PROVA ---
+# --- DEFINIÇÃO DOS MODELOS ---
 TIPOS_PROVA = {
     "2_e_3_Ano_18Q": ConfiguracaoProva(
-        titulo_prova="AVALIAÇÃO DIAGNÓSTICA",
+        titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental I - 2º e 3º Ano",
-        # Centralizado: Abaixamos o Y e empurramos o X
-        GRID_START_Y=450, 
+        # Centralizado:
+        GRID_START_Y=460, 
         FREQ_X=130,       
         GRID_X_START=200,
         blocos=[
@@ -51,11 +50,11 @@ TIPOS_PROVA = {
         ]
     ),
     "4_ao_6_Ano_44Q": ConfiguracaoProva(
-        titulo_prova="AVALIAÇÃO DIAGNÓSTICA",
+        titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental - 4º ao 6º Ano",
-        GRID_START_Y=570,
+        GRID_START_Y=580,
         FREQ_X=35,
-        GRID_X_START=105,
+        GRID_X_START=100,
         blocos=[
             BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 11, COR_AZUL),
             BlocoQuestao("BLOCO 2", "LÍNGUA PORTUGUESA", 12, 11, COR_AZUL),
@@ -64,11 +63,11 @@ TIPOS_PROVA = {
         ]
     ),
     "7_ao_9_Ano_52Q": ConfiguracaoProva(
-        titulo_prova="AVALIAÇÃO DIAGNÓSTICA",
+        titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental II - 7º ao 9º Ano",
-        GRID_START_Y=570,
+        GRID_START_Y=580,
         FREQ_X=35,
-        GRID_X_START=105,
+        GRID_X_START=100,
         blocos=[
             BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 13, COR_AZUL),
             BlocoQuestao("BLOCO 2", "LÍNGUA PORTUGUESA", 14, 13, COR_AZUL),
