@@ -3,13 +3,13 @@ import numpy as np
 from layout_samar import ConfiguracaoProva
 
 def alinhar_imagem(img, conf: ConfiguracaoProva):
-    """Encontra as 4 âncoras e corrige a perspectiva"""
+    # A lógica de alinhamento continua a mesma, mas agora usa o novo MARGIN (45)
+    # que está dentro de 'conf'.
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     _, thresh = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY_INV)
     cnts, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
     ancoras = []
-    # Procura quadrados sólidos (Tamanho esperado: ~25x25 pts em 200dpi)
+    
     for c in cnts:
         area = cv2.contourArea(c)
         if 200 < area < 15000:
@@ -22,17 +22,15 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
                     ancoras.append([cx, cy])
     
     if len(ancoras) >= 4:
-        # Ordenação Top-Left -> Bottom-Right
         pts = np.array(ancoras, dtype="float32")
         s = pts.sum(axis=1)
         diff = np.diff(pts, axis=1)
         rect = np.zeros((4, 2), dtype="float32")
-        rect[0] = pts[np.argmin(s)]   # TL
-        rect[2] = pts[np.argmax(s)]   # BR
-        rect[1] = pts[np.argmin(diff)] # TR
-        rect[3] = pts[np.argmax(diff)] # BL
+        rect[0] = pts[np.argmin(s)]   
+        rect[2] = pts[np.argmax(s)]   
+        rect[1] = pts[np.argmin(diff)] 
+        rect[3] = pts[np.argmax(diff)] 
         
-        # Mapeamento para tamanho aumentado (x2) para precisão
         scale = 2.0
         w_target = int(conf.PAGE_W * scale)
         h_target = int(conf.PAGE_H * scale)
@@ -48,7 +46,6 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
         M = cv2.getPerspectiveTransform(rect, dst)
         return cv2.warpPerspective(img, M, (w_target, h_target)), scale
     
-    # Fallback: Apenas redimensiona
     return cv2.resize(img, (int(conf.PAGE_W*2), int(conf.PAGE_H*2))), 2.0
 
 def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None):
@@ -59,19 +56,28 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None):
     res = {"respostas": {}, "frequencia": ""}
     img_vis = warped.copy()
     
-    # Converte ponto (ReportLab) para pixel (OpenCV)
     def pt_to_px(x, y_pdf):
         return int(x * scale), int((conf.PAGE_H - y_pdf) * scale)
     
-    # 1. FREQUÊNCIA
+    # 1. FREQUÊNCIA (Lógica atualizada para centralização)
     if conf.tem_frequencia:
         val_freq = ""
-        for col_idx in range(2): # D, U
+        
+        # Recalcula geometria da caixa para achar os centros das colunas
+        box_w = 54
+        box_x = conf.FREQ_X
+        center_x = box_x + (box_w / 2)
+        offset_x = 12
+        
+        for col_idx in range(2): # 0=D, 1=U
             votos = []
-            x_base = conf.FREQ_X + 10 + (col_idx * 25)
+            
+            # Mesma lógica do gerador: Esquerda ou Direita do centro
+            col_center_x = center_x - offset_x if col_idx == 0 else center_x + offset_x
+            
             for i in range(10):
                 y_base = conf.GRID_START_Y - 25 - (i * 18)
-                cx, cy = pt_to_px(x_base, y_base + 3) # +3 ajuste fino da bolinha
+                cx, cy = pt_to_px(col_center_x, y_base + 3)
                 
                 roi = thresh[cy-10:cy+10, cx-10:cx+10]
                 votos.append(cv2.countNonZero(roi))
@@ -81,13 +87,13 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None):
                 idx = np.argmax(votos)
                 val_freq += str(idx)
                 y_hit = conf.GRID_START_Y - 25 - (idx * 18)
-                cx, cy = pt_to_px(x_base, y_hit + 3)
+                cx, cy = pt_to_px(col_center_x, y_hit + 3)
                 cv2.circle(img_vis, (cx, cy), 13, (255, 0, 0), -1)
             else:
                 val_freq += "0"
         res["frequencia"] = val_freq
         
-    # 2. QUESTÕES
+    # 2. QUESTÕES (Segue padrão normal)
     current_x = conf.GRID_X_START
     for bloco in conf.blocos:
         for i in range(bloco.quantidade):
@@ -96,7 +102,7 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None):
             
             pixels = []
             coords = []
-            for j in range(4): # A, B, C, D
+            for j in range(4):
                 bx = current_x + 20 + (j * 20)
                 cx, cy = pt_to_px(bx, y_base + 3)
                 coords.append((cx, cy))
@@ -108,13 +114,11 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None):
             letra = ["A", "B", "C", "D"][idx] if marcou else "."
             res["respostas"][q_num] = letra
             
-            # Máscara Visual
             cx, cy = coords[idx]
             if gabarito and q_num in gabarito:
                 correta = gabarito[q_num]
                 idx_c = ["A","B","C","D"].index(correta)
                 cx_c, cy_c = coords[idx_c]
-                
                 if marcou:
                     if letra == correta:
                         cv2.circle(img_vis, (cx, cy), 14, (0, 255, 0), -1)
