@@ -15,8 +15,8 @@ def desenhar_ancoras(c, conf: ConfiguracaoProva):
     c.rect(m, h - m - s, s, s, fill=1, stroke=0)
     c.rect(w - m - s, h - m - s, s, s, fill=1, stroke=0)
     
-    # Inferior Esquerdo / Direito (CORRIGIDO PARA SIMETRIA)
-    # Antes estava muito baixo. Agora respeita a margem 'm' igual ao topo.
+    # Inferior Esquerdo / Direito (SIMETRIA CORRIGIDA)
+    # Agora desenha na coordenada 'm', bem acima da borda física
     c.rect(m, m, s, s, fill=1, stroke=0)
     c.rect(w - m - s, m, s, s, fill=1, stroke=0)
 
@@ -27,7 +27,7 @@ def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     
     # Títulos
     c.setFillColor(HexColor("#2980b9")) 
-    c.setFont("Helvetica-Bold", 16)
+    c.setFont("Helvetica-Bold", 15)
     c.drawCentredString(w/2, top_y, conf.titulo_prova.upper())
     
     c.setFillColor(colors.black)
@@ -35,8 +35,8 @@ def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     c.drawCentredString(w/2, top_y - 15, conf.subtitulo)
     
     # Caixa de Dados
-    box_y = top_y - 50 # Começa um pouco mais abaixo do título
-    line_h = 28        # Espaçamento entre linhas
+    box_y = top_y - 50 
+    line_h = 28        
     
     c.setStrokeColor(colors.black)
     c.setLineWidth(0.5)
@@ -68,13 +68,14 @@ def desenhar_grade(c, conf: ConfiguracaoProva):
     if conf.tem_frequencia:
         box_w = 54
         box_x = conf.FREQ_X
-        center_x = box_x + (box_w / 2)
         
         # Borda da caixa
         c.setStrokeColor(HexColor("#2980b9"))
         c.setLineWidth(1)
-        # Ajustei a altura da caixa para não ficar gigante
+        # Altura ajustada
         c.rect(box_x, conf.GRID_START_Y - 215, box_w, 235, stroke=1, fill=0)
+        
+        center_x = box_x + (box_w / 2)
         
         c.setFillColor(HexColor("#e67e22"))
         c.setFont("Helvetica-Bold", 10)
@@ -131,5 +132,10 @@ def desenhar_grade(c, conf: ConfiguracaoProva):
                 
         current_x += conf.GRID_COL_W
 
+def gerar_pdf(conf: ConfiguracaoProva, filename):
+    c = canvas.Canvas(filename, pagesize=A4)
+    desenhar_ancoras(c, conf)
+    desenhar_cabecalho(c, conf)
+    desenhar_grade(c, conf)
     c.save()
     return filename
