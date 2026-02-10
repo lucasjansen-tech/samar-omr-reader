@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 
-# Cores
+# CORES
 COR_AZUL = "#2980b9"
 COR_LARANJA = "#e67e22"
 
@@ -19,34 +19,31 @@ class ConfiguracaoProva:
     subtitulo: str
     blocos: List[BlocoQuestao]
     
-    # --- GEOMETRIA EXATA (A4: 595 x 842 pt) ---
+    # GEOMETRIA A4
     PAGE_W = 595
     PAGE_H = 842
-    
-    # MARGEM DE 40px (Garante que a âncora inferior suba e fique igual a superior)
-    MARGIN = 40       
+    MARGIN = 30       # Margem padrão segura
     ANCORA_SIZE = 25  
     
-    # Posições Padrão
+    # Configurações Dinâmicas
     FREQ_X: int = 40
+    GRID_START_Y: int = 580 
     GRID_X_START: int = 110
     GRID_COL_W: int = 120   
     
-    # Posição Vertical (Onde começa o gabarito)
-    GRID_START_Y: int = 580 
-    
     tem_frequencia: bool = True
 
-# --- CONFIGURAÇÃO DOS 3 TIPOS ---
+# PADRÕES
 TIPOS_PROVA = {
     "2_e_3_Ano_18Q": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental I - 2º e 3º Ano",
-        # CENTRALIZAÇÃO: Baixei o Y para 460 (meio da folha)
-        GRID_START_Y=460,
-        # Empurrei para direita para centralizar horizontalmente
-        FREQ_X=150,
-        GRID_X_START=210,
+        # CENTRALIZAÇÃO PERFEITA
+        # Y=420 coloca a prova no meio vertical
+        GRID_START_Y=420,
+        # X=165 centraliza os 2 blocos + freq horizontalmente
+        FREQ_X=165,
+        GRID_X_START=225,
         
         blocos=[
             BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 9, COR_AZUL),
@@ -56,7 +53,7 @@ TIPOS_PROVA = {
     "4_ao_6_Ano_44Q": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental - 4º ao 6º Ano",
-        GRID_START_Y=580, # Mais alto para caber tudo
+        GRID_START_Y=580,
         FREQ_X=40,
         GRID_X_START=110,
         blocos=[
