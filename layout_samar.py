@@ -19,12 +19,11 @@ class ConfiguracaoProva:
     subtitulo: str
     blocos: List[BlocoQuestao]
     
-    # GEOMETRIA A4 (Pontos)
+    # GEOMETRIA A4
     PAGE_W = 595
     PAGE_H = 842
     
     # Margem e Tamanho da Âncora
-    # Aumentado para facilitar detecção
     MARGIN = 35       
     ANCORA_SIZE = 30  
     
