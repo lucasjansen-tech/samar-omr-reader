@@ -3,6 +3,8 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.colors import HexColor
 from layout_samar import ConfiguracaoProva
+from pdf2image import convert_from_path
+import os
 
 def desenhar_ancoras(c, conf: ConfiguracaoProva):
     c.setFillColor(colors.black)
@@ -10,7 +12,7 @@ def desenhar_ancoras(c, conf: ConfiguracaoProva):
     w, h = conf.PAGE_W, conf.PAGE_H
     m = conf.MARGIN
     
-    # Desenha âncoras exatas
+    # 4 Âncoras
     c.rect(m, h - m - s, s, s, fill=1, stroke=0)
     c.rect(w - m - s, h - m - s, s, s, fill=1, stroke=0)
     c.rect(m, m, s, s, fill=1, stroke=0)
@@ -20,6 +22,7 @@ def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     w, h = conf.PAGE_W, conf.PAGE_H
     top_y = h - conf.MARGIN - conf.ANCORA_SIZE - 20
     
+    # Títulos
     c.setFillColor(HexColor("#2980b9"))
     c.setFont("Helvetica-Bold", 16)
     c.drawCentredString(w/2, top_y, conf.titulo_prova.upper())
@@ -35,11 +38,12 @@ def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     c.setLineWidth(0.5)
     c.setFont("Helvetica-Bold", 9)
     
-    # Linhas
+    # Linha 1
     y = box_y
     c.drawString(conf.MARGIN + 20, y, "UNIDADE DE ENSINO:")
     c.line(conf.MARGIN + 125, y-2, w - conf.MARGIN - 20, y-2)
     
+    # Linha 2
     y -= lh
     c.drawString(conf.MARGIN + 20, y, "ANO DE ENSINO:")
     c.line(conf.MARGIN + 105, y-2, conf.MARGIN + 200, y-2)
@@ -48,6 +52,7 @@ def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     c.drawString(w - 150, y, "TURNO:")
     c.line(w - 110, y-2, w - conf.MARGIN - 20, y-2)
     
+    # Linha 3
     y -= lh
     c.drawString(conf.MARGIN + 20, y, "NOME DO ALUNO:")
     c.line(conf.MARGIN + 110, y-2, w - conf.MARGIN - 20, y-2)
@@ -76,6 +81,7 @@ def desenhar_grade(c, conf: ConfiguracaoProva):
             c.drawCentredString(col_center_x, start_y - 5, label)
             for i in range(10):
                 y = start_y - 25 - (i * 18)
+                c.setStrokeColor(colors.black)
                 c.circle(col_center_x, y + 3, 7, stroke=1, fill=0)
                 c.setFont("Helvetica", 8)
                 c.drawCentredString(col_center_x, y + 0.5, str(i))
@@ -111,9 +117,34 @@ def desenhar_grade(c, conf: ConfiguracaoProva):
         current_x += conf.GRID_COL_W
 
 def gerar_pdf(conf: ConfiguracaoProva, filename):
+    """Gera o arquivo PDF vetorial"""
     c = canvas.Canvas(filename, pagesize=A4)
     desenhar_ancoras(c, conf)
     desenhar_cabecalho(c, conf)
     desenhar_grade(c, conf)
     c.save()
     return filename
+
+def gerar_imagem_a4(conf: ConfiguracaoProva, filename_saida, formato="png"):
+    """
+    Gera o gabarito como imagem (PNG/JPG) em alta resolução (300dpi).
+    Cria um PDF temporário e converte para garantir fidelidade visual.
+    """
+    temp_pdf = "temp_gabarito.pdf"
+    gerar_pdf(conf, temp_pdf)
+    
+    # Converte PDF para Imagem (300 DPI = Qualidade de Impressão A4)
+    # Requer poppler instalado no sistema (o mesmo usado pelo pdf2image no app.py)
+    try:
+        imagens = convert_from_path(temp_pdf, dpi=300)
+        if imagens:
+            img = imagens[0]
+            img.save(filename_saida, formato.upper())
+            
+            # Limpa temporário
+            if os.path.exists(temp_pdf):
+                os.remove(temp_pdf)
+            return filename_saida
+    except Exception as e:
+        print(f"Erro ao converter imagem: {e}")
+        return None
