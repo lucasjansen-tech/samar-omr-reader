@@ -33,9 +33,9 @@ def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     c.setFont("Helvetica", 11)
     c.drawCentredString(w/2, top_y - 18, conf.subtitulo)
     
-    # --- NOVO LAYOUT DE CAMPOS ---
+    # --- NOVO LAYOUT DE CAMPOS (Solicitado) ---
     box_y = top_y - 50
-    line_h = 28 # Altura da linha para escrever
+    line_h = 30 # Altura da linha
     
     c.setStrokeColor(colors.black)
     c.setLineWidth(0.5)
@@ -66,7 +66,7 @@ def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     c.line(conf.MARGIN + 120, y-2, w - conf.MARGIN - 30, y-2)
 
 def desenhar_grade(c, conf: ConfiguracaoProva):
-    # Usa o Y personalizado (centralizado ou topo)
+    # Usa o Y personalizado do layout (Centralizado ou Topo)
     start_y = conf.GRID_START_Y
     
     # --- FREQUÊNCIA ---
@@ -102,6 +102,7 @@ def desenhar_grade(c, conf: ConfiguracaoProva):
                 c.drawCentredString(col_center_x, y + 0.5, str(i))
 
     # --- QUESTÕES ---
+    # Usa o X personalizado do layout (Centralizado)
     current_x = conf.GRID_X_START
     
     for bloco in conf.blocos:
