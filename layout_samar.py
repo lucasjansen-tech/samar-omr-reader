@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 
-# CORES
+# CORES OFICIAIS
 COR_AZUL = "#2980b9"
 COR_LARANJA = "#e67e22"
 
@@ -19,10 +19,12 @@ class ConfiguracaoProva:
     subtitulo: str
     blocos: List[BlocoQuestao]
     
-    # GEOMETRIA A4 (Pontos)
+    # --- GEOMETRIA DA PÁGINA (A4: 595 x 842 pts) ---
     PAGE_W = 595
     PAGE_H = 842
-    MARGIN = 30       # Margem segura
+    
+    # MARGEM SEGURA (40pts) - Âncoras ficam a 40pts da borda
+    MARGIN = 40       
     ANCORA_SIZE = 25  
     
     # Layout Padrão
@@ -32,15 +34,15 @@ class ConfiguracaoProva:
     GRID_COL_W: int = 120   
     tem_frequencia: bool = True
 
-# --- DEFINIÇÃO DOS MODELOS ---
+# --- TIPOS DE PROVA ---
 TIPOS_PROVA = {
     "2_e_3_Ano_18Q": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental I - 2º e 3º Ano",
-        # AJUSTES DE POSIÇÃO:
-        GRID_START_Y=480, # Centralizado verticalmente
-        FREQ_X=120,       # Frequência mais à direita
-        GRID_X_START=200, # AFASTADO DA FREQUÊNCIA (Era muito perto)
+        # CENTRALIZAÇÃO (Cálculo Visual)
+        GRID_START_Y=460, # Meio vertical
+        FREQ_X=130,       # Empurrado para a direita
+        GRID_X_START=200, # Blocos ao lado da frequência
         
         blocos=[
             BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 9, COR_AZUL),
@@ -51,8 +53,8 @@ TIPOS_PROVA = {
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental - 4º ao 6º Ano",
         GRID_START_Y=580,
-        FREQ_X=40,
-        GRID_X_START=110,
+        FREQ_X=35,
+        GRID_X_START=100,
         blocos=[
             BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 11, COR_AZUL),
             BlocoQuestao("BLOCO 2", "LÍNGUA PORTUGUESA", 12, 11, COR_AZUL),
@@ -64,8 +66,8 @@ TIPOS_PROVA = {
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental II - 7º ao 9º Ano",
         GRID_START_Y=580,
-        FREQ_X=40,
-        GRID_X_START=110,
+        FREQ_X=35,
+        GRID_X_START=100,
         blocos=[
             BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 13, COR_AZUL),
             BlocoQuestao("BLOCO 2", "LÍNGUA PORTUGUESA", 14, 13, COR_AZUL),
