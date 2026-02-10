@@ -10,25 +10,26 @@ def desenhar_ancoras(c, conf: ConfiguracaoProva):
     w, h = conf.PAGE_W, conf.PAGE_H
     m = conf.MARGIN
     
-    # 4 Âncoras Simétricas
-    c.rect(m, h - m - s, s, s, fill=1, stroke=0)
-    c.rect(w - m - s, h - m - s, s, s, fill=1, stroke=0)
-    c.rect(m, m, s, s, fill=1, stroke=0)
-    c.rect(w - m - s, m, s, s, fill=1, stroke=0)
+    # Desenha nos 4 cantos exatos da margem
+    c.rect(m, h - m - s, s, s, fill=1, stroke=0) # Top-Esq
+    c.rect(w - m - s, h - m - s, s, s, fill=1, stroke=0) # Top-Dir
+    c.rect(m, m, s, s, fill=1, stroke=0) # Inf-Esq
+    c.rect(w - m - s, m, s, s, fill=1, stroke=0) # Inf-Dir
 
 def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     w, h = conf.PAGE_W, conf.PAGE_H
     top_y = h - conf.MARGIN - conf.ANCORA_SIZE - 20
     
+    # Títulos
     c.setFillColor(HexColor("#2980b9")) 
-    c.setFont("Helvetica-Bold", 16)
+    c.setFont("Helvetica-Bold", 15)
     c.drawCentredString(w/2, top_y, conf.titulo_prova.upper())
     
     c.setFillColor(colors.black)
-    c.setFont("Helvetica", 11)
-    c.drawCentredString(w/2, top_y - 18, conf.subtitulo)
+    c.setFont("Helvetica", 10)
+    c.drawCentredString(w/2, top_y - 15, conf.subtitulo)
     
-    # --- CABEÇALHO NOVO ---
+    # --- NOVO CABEÇALHO ---
     box_y = top_y - 50
     line_h = 28
     
@@ -36,26 +37,26 @@ def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     c.setLineWidth(0.5)
     c.setFont("Helvetica-Bold", 9)
     
-    # 1. Unidade de Ensino
+    # Linha 1: UNIDADE DE ENSINO
     y = box_y
-    c.drawString(conf.MARGIN + 30, y, "UNIDADE DE ENSINO:")
-    c.line(conf.MARGIN + 135, y-2, w - conf.MARGIN - 30, y-2)
+    c.drawString(conf.MARGIN + 20, y, "UNIDADE DE ENSINO:")
+    c.line(conf.MARGIN + 125, y-2, w - conf.MARGIN - 20, y-2)
     
-    # 2. Ano | Turma | Turno
+    # Linha 2: ANO | TURMA | TURNO
     y -= line_h
-    c.drawString(conf.MARGIN + 30, y, "ANO DE ENSINO:")
-    c.line(conf.MARGIN + 115, y-2, conf.MARGIN + 200, y-2)
+    c.drawString(conf.MARGIN + 20, y, "ANO DE ENSINO:")
+    c.line(conf.MARGIN + 105, y-2, conf.MARGIN + 200, y-2)
     
     c.drawString(conf.MARGIN + 220, y, "TURMA:")
     c.line(conf.MARGIN + 260, y-2, conf.MARGIN + 340, y-2)
     
     c.drawString(w - 150, y, "TURNO:")
-    c.line(w - 110, y-2, w - conf.MARGIN - 30, y-2)
+    c.line(w - 110, y-2, w - conf.MARGIN - 20, y-2)
     
-    # 3. Nome do Aluno
+    # Linha 3: NOME DO ALUNO
     y -= line_h
-    c.drawString(conf.MARGIN + 30, y, "NOME DO ALUNO:")
-    c.line(conf.MARGIN + 120, y-2, w - conf.MARGIN - 30, y-2)
+    c.drawString(conf.MARGIN + 20, y, "NOME DO ALUNO:")
+    c.line(conf.MARGIN + 110, y-2, w - conf.MARGIN - 20, y-2)
 
 def desenhar_grade(c, conf: ConfiguracaoProva):
     start_y = conf.GRID_START_Y
@@ -63,7 +64,7 @@ def desenhar_grade(c, conf: ConfiguracaoProva):
     if conf.tem_frequencia:
         box_w = 54
         box_x = conf.FREQ_X
-        # Altura fixa
+        # Altura da caixa da frequência
         c.setStrokeColor(HexColor("#2980b9"))
         c.setLineWidth(1)
         c.rect(box_x, start_y - 215, box_w, 235, stroke=1, fill=0)
@@ -87,9 +88,12 @@ def desenhar_grade(c, conf: ConfiguracaoProva):
                 c.drawCentredString(col_center_x, y + 0.5, str(i))
 
     current_x = conf.GRID_X_START
+    
     for bloco in conf.blocos:
         c.setFillColor(HexColor(bloco.cor_hex))
         c.setStrokeColor(HexColor(bloco.cor_hex))
+        
+        # Cabeçalho do Bloco
         c.roundRect(current_x, start_y + 5, 105, 22, 4, fill=1, stroke=0)
         
         c.setFillColor(colors.white)
@@ -106,13 +110,16 @@ def desenhar_grade(c, conf: ConfiguracaoProva):
         for i in range(bloco.quantidade):
             q_num = bloco.questao_inicial + i
             y = start_y - 25 - (i * 20)
+            
             c.setFont("Helvetica-Bold", 9)
             c.drawString(current_x - 5, y, f"{q_num:02d}")
+            
             for j, letra in enumerate(["A", "B", "C", "D"]):
                 bx = current_x + 20 + (j * 20)
                 c.circle(bx, y + 3, 7, stroke=1, fill=0)
                 c.setFont("Helvetica", 6)
                 c.drawCentredString(bx, y + 1, letra)
+                
         current_x += conf.GRID_COL_W
 
 def gerar_pdf(conf: ConfiguracaoProva, filename):
