@@ -19,22 +19,19 @@ class ConfiguracaoProva:
     subtitulo: str
     blocos: List[BlocoQuestao]
     
-    # --- GEOMETRIA DA PÁGINA (A4: 595 x 842) ---
+    # --- GEOMETRIA ---
     PAGE_W = 595
     PAGE_H = 842
-    
-    # MARGEM: 40px em cima e 40px embaixo (SIMETRIA DAS ÂNCORAS)
-    MARGIN = 40       
+    MARGIN = 30       # Margem padrão (30px) para simetria visual
     ANCORA_SIZE = 25  
     
-    # Posições Padrão
+    # Posições Padrão (Podem ser sobrescritas nos modelos)
     FREQ_X = 40
-    GRID_X_START = 110          
-    GRID_COL_W = 120   
     
-    # Posição Vertical Personalizada (Define onde começa a grade)
-    # Isso permite centralizar provas pequenas e subir provas grandes
+    # Posição Vertical e Horizontal da Grade
     GRID_START_Y: int = 580 
+    GRID_X_START: int = 110 # Padrão para 4 blocos
+    GRID_COL_W: int = 120   
     
     tem_frequencia: bool = True
 
@@ -42,9 +39,14 @@ class ConfiguracaoProva:
 TIPOS_PROVA = {
     "2_e_3_Ano_18Q": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
-        subtitulo="Ensino Fundamental I",
-        # CENTRALIZAÇÃO: Começa em 430 para ficar no MEIO da página
-        GRID_START_Y=430, 
+        subtitulo="Ensino Fundamental I - 2º e 3º Ano",
+        # CENTRALIZAÇÃO TOTAL PARA 18 QUESTÕES
+        # Baixa a grade para o meio da folha (Y=450)
+        GRID_START_Y=450, 
+        # Empurra para a direita para centralizar horizontalmente (2 blocos + freq)
+        GRID_X_START=160, 
+        FREQ_X=90, # Move a frequência junto
+        
         blocos=[
             BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 9, COR_AZUL),
             BlocoQuestao("BLOCO 2", "MATEMÁTICA", 10, 9, COR_LARANJA)
@@ -53,8 +55,9 @@ TIPOS_PROVA = {
     "4_ao_6_Ano_44Q": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental - 4º ao 6º Ano",
-        # Começa mais alto para caber as 44 questões
-        GRID_START_Y=580, 
+        GRID_START_Y=580,
+        GRID_X_START=100, # Ajuste para caber 4 blocos
+        FREQ_X=35,
         blocos=[
             BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 11, COR_AZUL),
             BlocoQuestao("BLOCO 2", "LÍNGUA PORTUGUESA", 12, 11, COR_AZUL),
@@ -65,8 +68,9 @@ TIPOS_PROVA = {
     "7_ao_9_Ano_52Q": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental II - 7º ao 9º Ano",
-        # Começa alto para caber 52 questões sem bater no cabeçalho
-        GRID_START_Y=580, 
+        GRID_START_Y=580,
+        GRID_X_START=100,
+        FREQ_X=35,
         blocos=[
             BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 13, COR_AZUL),
             BlocoQuestao("BLOCO 2", "LÍNGUA PORTUGUESA", 14, 13, COR_AZUL),
