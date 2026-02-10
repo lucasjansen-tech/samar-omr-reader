@@ -7,12 +7,12 @@ from pdf2image import convert_from_path
 import os
 
 def desenhar_ancoras(c, conf: ConfiguracaoProva):
-    """Desenha âncoras sólidas nos 4 cantos"""
     c.setFillColor(colors.black)
     s = conf.ANCORA_SIZE
     w, h = conf.PAGE_W, conf.PAGE_H
     m = conf.MARGIN
     
+    # 4 Cantos Sólidos
     c.rect(m, h - m - s, s, s, fill=1, stroke=0)
     c.rect(w - m - s, h - m - s, s, s, fill=1, stroke=0)
     c.rect(m, m, s, s, fill=1, stroke=0)
@@ -30,13 +30,13 @@ def desenhar_cabecalho(c, conf: ConfiguracaoProva):
     c.setFont("Helvetica", 11)
     c.drawCentredString(w/2, top_y - 18, conf.subtitulo)
     
+    # Campos
     box_y = top_y - 50
     lh = 28
     c.setStrokeColor(colors.black)
     c.setLineWidth(0.5)
     c.setFont("Helvetica-Bold", 9)
     
-    # Campos
     y = box_y
     c.drawString(conf.MARGIN + 20, y, "UNIDADE DE ENSINO:")
     c.line(conf.MARGIN + 125, y-2, w - conf.MARGIN - 20, y-2)
