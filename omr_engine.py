@@ -3,36 +3,30 @@ import numpy as np
 from layout_samar import ConfiguracaoProva, GridConfig
 
 def encontrar_ancoras_globais(thresh):
-    # Procura contornos
     cnts, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     candidatos = []
     h, w = thresh.shape
-    
     for c in cnts:
         area = cv2.contourArea(c)
         if area < 100 or area > (w*h*0.1): continue
         approx = cv2.approxPolyDP(c, 0.04 * cv2.arcLength(c, True), True)
-        
         if len(approx) == 4:
             _, _, bw, bh = cv2.boundingRect(approx)
             ar = bw / float(bh)
-            # Filtro quadrado
             if 0.7 <= ar <= 1.3:
                 M = cv2.moments(c)
                 if M["m00"] != 0:
                     candidatos.append([int(M["m10"]/M["m00"]), int(M["m01"]/M["m00"])])
     
     if len(candidatos) < 4: return None
-    
-    # Ordena os 4 cantos extremos
     pts = np.array(candidatos, dtype="float32")
     s = pts.sum(axis=1); d = np.diff(pts, axis=1)
     return np.array([pts[np.argmin(s)], pts[np.argmin(d)], pts[np.argmax(s)], pts[np.argmax(d)]], dtype="float32")
 
 def alinhar_imagem(img, conf: ConfiguracaoProva):
+    """Normaliza a imagem para o tamanho REF_W x REF_H usando as âncoras."""
     if len(img.shape) == 3: gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else: gray = img
-    
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
     
@@ -48,20 +42,23 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
     return cv2.resize(img, (W_FINAL, H_FINAL)), W_FINAL, H_FINAL
 
 def ler_grid(img_thresh, grid: GridConfig, w_img, h_img, img_debug):
-    # Converte % para Pixels
+    """Recorta o quadrante (grid) e divide em células matemáticas."""
+    # 1. Converter % para Pixels
     x1 = int(grid.x_start * w_img)
     x2 = int(grid.x_end * w_img)
     y1 = int(grid.y_start * h_img)
     y2 = int(grid.y_end * h_img)
     
-    # DEBUG: Desenha retângulo VERDE onde o sistema está lendo
+    # DEBUG: Desenha a caixa do Grid (Verde) para validar alinhamento
     cv2.rectangle(img_debug, (x1, y1), (x2, y2), (0, 255, 0), 3)
     
+    # 2. Calcular tamanho da célula
     cell_h = (y2 - y1) / grid.rows
     cell_w = (x2 - x1) / grid.cols
+    
     res_bloco = {}
     
-    # FREQUÊNCIA (Lógica Vertical)
+    # CASO ESPECIAL: Frequência (Lê colunas verticais)
     if grid.labels == ["D", "U"]:
         freq_res = ["0", "0"]
         for c in range(grid.cols):
@@ -73,18 +70,19 @@ def ler_grid(img_thresh, grid: GridConfig, w_img, h_img, img_debug):
                 
                 roi = img_thresh[cy-raio:cy+raio, cx-raio:cx+raio]
                 col_votos.append(cv2.countNonZero(roi))
-                cv2.circle(img_debug, (cx, cy), 3, (200, 200, 200), -1)
+                # Debug ponto de leitura
+                cv2.circle(img_debug, (cx, cy), 3, (150, 150, 150), -1)
             
             idx_max = np.argmax(col_votos)
             if max(col_votos) > (raio*raio*0.5):
                 freq_res[c] = str(idx_max)
-                # Pinta seleção
+                # Visualização acerto
                 cy_hit = int(y1 + (idx_max * cell_h) + (cell_h/2))
                 cx_hit = int(x1 + (c * cell_w) + (cell_w/2))
                 cv2.circle(img_debug, (cx_hit, cy_hit), int(raio*1.2), (255, 0, 0), -1)
         return "".join(freq_res), {}
 
-    # QUESTÕES (Lógica Horizontal)
+    # CASO PADRÃO: Questões (Lê linhas horizontais)
     for r in range(grid.rows):
         cy = int(y1 + (r * cell_h) + (cell_h/2))
         densidades = []
