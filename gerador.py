@@ -11,14 +11,14 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
     m = W * conf.MARGIN_PCT
     s = 30
     
-    # 1. Âncoras (Externas)
+    # Âncoras
     c.setFillColor(colors.black)
     c.rect(m, H-m-s, s, s, fill=1, stroke=0)
     c.rect(W-m-s, H-m-s, s, s, fill=1, stroke=0)
     c.rect(m, m, s, s, fill=1, stroke=0)
     c.rect(W-m-s, m, s, s, fill=1, stroke=0)
     
-    # 2. Cabeçalho
+    # Cabeçalho
     c.setFillColor(HexColor("#2980b9"))
     c.setFont("Helvetica-Bold", 16)
     c.drawCentredString(W/2, H - 50, conf.titulo_prova)
@@ -26,10 +26,24 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
     c.setFont("Helvetica", 12)
     c.drawCentredString(W/2, H - 70, conf.subtitulo)
     
-    c.setStrokeColor(colors.black); c.setLineWidth(0.5); c.setFont("Helvetica-Bold", 10)
-    y = H - 120
-    c.drawString(m, y, "UNIDADE DE ENSINO:"); c.line(m+110, y-2, W-m, y-2)
-    c.drawString(m, y-30, "ALUNO:"); c.line(m+50, y-32, W-m, y-32)
+    c.setStrokeColor(colors.black); c.setLineWidth(0.5); c.setFont("Helvetica-Bold", 9)
+    
+    # Dados do Aluno
+    y = H - 110
+    c.drawString(m, y, "UNIDADE DE ENSINO:"); c.line(m+100, y-2, W-m, y-2)
+    y -= 25
+    c.drawString(m, y, "ANO:"); c.line(m+30, y-2, m+150, y-2)
+    c.drawString(m+160, y, "TURMA:"); c.line(m+200, y-2, m+300, y-2)
+    c.drawString(m+310, y, "TURNO:"); c.line(m+350, y-2, W-m, y-2)
+    y -= 25
+    c.drawString(m, y, "ALUNO:"); c.line(m+40, y-2, W-m, y-2)
+    
+    # Instruções
+    y -= 35
+    c.setStrokeColor(HexColor("#e67e22"))
+    c.rect(m, y-10, W-(2*m), 25, stroke=1, fill=0)
+    c.setFillColor(colors.black); c.setFont("Helvetica", 8)
+    c.drawString(m+10, y+2, "INSTRUÇÕES: 1. Use caneta azul ou preta. 2. Preencha totalmente a bolinha. 3. Não rasure.")
     
     for g in conf.grids:
         x1 = g.x_start * W
@@ -37,49 +51,34 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
         y_top = H - (g.y_start * H)
         h_g = (g.y_end - g.y_start) * H
         
-        # --- DESENHO DOS CABEÇALHOS (ACIMA DO GRID) ---
-        # Empilhamento para evitar sobreposição:
-        # 1. Título do Bloco (Mais alto)
-        # 2. Matéria (Meio)
-        # 3. Letras (Logo acima das bolinhas)
-        
-        # Caixa Colorida (Bloco)
+        # Título Bloco
         c.setFillColor(HexColor(g.cor_hex))
         c.roundRect(x1, y_top + 45, w_g, 20, 4, fill=1, stroke=0)
         c.setFillColor(colors.white); c.setFont("Helvetica-Bold", 10)
         c.drawCentredString(x1 + w_g/2, y_top + 51, g.titulo)
         
-        # Texto da Matéria (Abaixo da caixa, cor do bloco)
         if g.texto_extra:
-            c.setFillColor(HexColor(g.cor_hex))
-            c.setFont("Helvetica-Bold", 7)
-            # Posicionado estrategicamente entre a caixa e as letras
+            c.setFillColor(HexColor(g.cor_hex)); c.setFont("Helvetica-Bold", 7)
             c.drawCentredString(x1 + w_g/2, y_top + 32, g.texto_extra)
         
         cell_h = h_g / g.rows
         cell_w = w_g / g.cols
         c.setFillColor(colors.black); c.setStrokeColor(colors.black)
         
-        # Rótulos das Colunas (A B C D)
         if g.labels:
             for i, lbl in enumerate(g.labels):
                 cx = x1 + (i * cell_w) + (cell_w/2)
                 c.setFont("Helvetica-Bold", 9)
-                # +12px acima da linha da primeira questão
                 c.drawCentredString(cx, y_top + 12, lbl)
 
-        # --- CORPO DO GRID ---
         for r in range(g.rows):
             cy = y_top - (r * cell_h) - (cell_h/2)
             y_box_bot = y_top - ((r+1) * cell_h)
             
-            # Grid Visual (Caixa cinza clara)
-            c.setStrokeColor(colors.lightgrey)
-            c.setLineWidth(0.5)
+            c.setStrokeColor(colors.lightgrey); c.setLineWidth(0.5)
             c.rect(x1, y_box_bot, w_g, cell_h, stroke=1, fill=0)
             
             c.setFillColor(colors.black)
-            # Números
             if g.questao_inicial > 0:
                 c.setFont("Helvetica-Bold", 9)
                 c.drawRightString(x1 - 5, cy - 3, f"{g.questao_inicial+r:02d}")
@@ -87,11 +86,9 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
                 c.setFont("Helvetica", 9)
                 c.drawRightString(x1 - 5, cy - 3, str(r))
 
-            # Bolinhas
             for col in range(g.cols):
                 cx = x1 + (col * cell_w) + (cell_w/2)
-                c.setStrokeColor(colors.black)
-                c.setLineWidth(1)
+                c.setStrokeColor(colors.black); c.setLineWidth(1)
                 c.circle(cx, cy, 7, stroke=1, fill=0)
                 if g.questao_inicial > 0:
                     c.setFont("Helvetica", 6)
