@@ -44,14 +44,14 @@ def ler_grid(img_thresh, grid: GridConfig, w_img, h_img, img_debug):
     y1 = int(grid.y_start * h_img)
     y2 = int(grid.y_end * h_img)
     
-    # DEBUG VERDE: Área de leitura das bolinhas
+    # Desenha a caixa do Grid (Verde)
     cv2.rectangle(img_debug, (x1, y1), (x2, y2), (0, 255, 0), 2)
     
     cell_h = (y2 - y1) / grid.rows
     cell_w = (x2 - x1) / grid.cols
     res_bloco = {}
     
-    # Frequência
+    # FREQUÊNCIA (Leitura Coluna a Coluna)
     if grid.labels == ["D", "U"]:
         freq_res = ["0", "0"]
         for c in range(grid.cols):
@@ -59,18 +59,27 @@ def ler_grid(img_thresh, grid: GridConfig, w_img, h_img, img_debug):
             for r in range(grid.rows):
                 cx = int(x1 + (c * cell_w) + (cell_w/2))
                 cy = int(y1 + (r * cell_h) + (cell_h/2))
-                raio = int(min(cell_h, cell_w) * 0.28)
+                raio = int(min(cell_h, cell_w) * 0.25)
+                
                 roi = img_thresh[cy-raio:cy+raio, cx-raio:cx+raio]
                 col_votos.append(cv2.countNonZero(roi))
+                
+                # Debug ponto de leitura (pequeno ponto azul)
+                cv2.circle(img_debug, (cx, cy), 3, (255, 0, 0), -1)
+            
+            # Quem ganhou na coluna?
             idx_max = np.argmax(col_votos)
+            # Limiar mínimo de tinta
             if max(col_votos) > (raio*raio*0.5):
                 freq_res[c] = str(idx_max)
+                # Pinta o vencedor (Círculo preenchido vermelho)
                 cy_hit = int(y1 + (idx_max * cell_h) + (cell_h/2))
                 cx_hit = int(x1 + (c * cell_w) + (cell_w/2))
-                cv2.circle(img_debug, (cx_hit, cy_hit), int(raio*1.1), (255, 0, 0), -1)
+                cv2.circle(img_debug, (cx_hit, cy_hit), int(raio*1.2), (0, 0, 255), -1)
+                
         return "".join(freq_res), {}
 
-    # Questões
+    # QUESTÕES
     for r in range(grid.rows):
         cy = int(y1 + (r * cell_h) + (cell_h/2))
         densidades = []
@@ -78,7 +87,7 @@ def ler_grid(img_thresh, grid: GridConfig, w_img, h_img, img_debug):
         for c in range(grid.cols):
             cx = int(x1 + (c * cell_w) + (cell_w/2))
             centros.append((cx, cy))
-            raio = int(min(cell_h, cell_w) * 0.28)
+            raio = int(min(cell_h, cell_w) * 0.25)
             roi = img_thresh[cy-raio:cy+raio, cx-raio:cx+raio]
             densidades.append(cv2.countNonZero(roi))
             
@@ -95,7 +104,7 @@ def ler_grid(img_thresh, grid: GridConfig, w_img, h_img, img_debug):
         if grid.questao_inicial > 0:
             res_bloco[grid.questao_inicial + r] = letra
             if marcou:
-                cv2.circle(img_debug, centros[idx_max], int(raio*1.1), (0, 255, 0), 2)
+                cv2.circle(img_debug, centros[idx_max], int(raio*1.2), (0, 255, 0), 2)
 
     return None, res_bloco
 
