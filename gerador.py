@@ -10,14 +10,15 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
     W, H = A4
     m = W * conf.MARGIN_PCT
     s = 30
-    # Âncoras
+    
+    # 1. Âncoras
     c.setFillColor(colors.black)
     c.rect(m, H-m-s, s, s, fill=1, stroke=0)
     c.rect(W-m-s, H-m-s, s, s, fill=1, stroke=0)
     c.rect(m, m, s, s, fill=1, stroke=0)
     c.rect(W-m-s, m, s, s, fill=1, stroke=0)
     
-    # Cabeçalho
+    # 2. Cabeçalho
     c.setFillColor(HexColor("#2980b9"))
     c.setFont("Helvetica-Bold", 16)
     c.drawCentredString(W/2, H - 50, conf.titulo_prova)
@@ -25,36 +26,43 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
     c.setFont("Helvetica", 12)
     c.drawCentredString(W/2, H - 70, conf.subtitulo)
     
+    # Dados do Aluno
     c.setStrokeColor(colors.black); c.setLineWidth(0.5); c.setFont("Helvetica-Bold", 10)
     y = H - 120
     c.drawString(m, y, "UNIDADE DE ENSINO:"); c.line(m+110, y-2, W-m, y-2)
     c.drawString(m, y-30, "ALUNO:"); c.line(m+50, y-32, W-m, y-32)
     
-    # Desenhar Grids
+    # 3. GRIDS
     for g in conf.grids:
+        # Converter coordenadas percentuais para pontos PDF
         x1 = g.x_start * W
         w_g = (g.x_end - g.x_start) * W
         y_top = H - (g.y_start * H)
-        h_g = (g.y_end - g.y_start) * H
+        h_g = (g.y_end - g.y_start) * H 
         
-        # Título
+        # Cabeçalho do Bloco (Correto conforme config)
         c.setFillColor(HexColor(g.cor_hex))
         c.roundRect(x1, y_top + 10, w_g, 20, 4, fill=1, stroke=0)
         c.setFillColor(colors.white); c.setFont("Helvetica-Bold", 10)
         c.drawCentredString(x1 + w_g/2, y_top + 16, g.titulo)
         
+        # Corpo do Grid
         cell_h = h_g / g.rows
         cell_w = w_g / g.cols
         c.setFillColor(colors.black); c.setStrokeColor(colors.black)
         
+        # Rótulos Colunas
         if g.labels:
             for i, lbl in enumerate(g.labels):
                 cx = x1 + (i * cell_w) + (cell_w/2)
                 c.setFont("Helvetica-Bold", 9)
                 c.drawCentredString(cx, y_top + 2, lbl)
 
+        # Linhas e Bolinhas
         for r in range(g.rows):
             cy = y_top - (r * cell_h) - (cell_h/2)
+            
+            # Número lateral
             if g.questao_inicial > 0:
                 c.setFont("Helvetica-Bold", 9)
                 c.drawRightString(x1 - 5, cy - 3, f"{g.questao_inicial+r:02d}")
@@ -79,7 +87,7 @@ def gerar_imagem_a4(conf, filename_saida, formato="png"):
     temp_pdf = "temp_gabarito.pdf"
     gerar_pdf(conf, temp_pdf)
     
-    # Tratamento explícito de erro
+    # Tratamento de erro robusto para não travar o app
     try:
         imagens = convert_from_path(temp_pdf, dpi=300)
         if imagens:
@@ -88,6 +96,6 @@ def gerar_imagem_a4(conf, filename_saida, formato="png"):
             if os.path.exists(temp_pdf): os.remove(temp_pdf)
             return filename_saida
     except Exception as e:
-        print(f"ERRO AO GERAR IMAGEM: {e}")
+        print(f"ERRO CRÍTICO POPPLER: {e}")
         return None
     return None
