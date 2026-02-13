@@ -56,5 +56,11 @@ with tab2:
             else: img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
             
             res, vis, _ = processar_gabarito(img, conf, gab)
-            st.image(vis, caption=f"Leitura Grid - Pág {i+1}")
-            st.json(res)
+            
+            st.write(f"### Resultado Página {i+1}")
+            c1, c2 = st.columns([2, 1])
+            with c1:
+                # Mostra imagem grande para ver os detalhes
+                st.image(vis, caption="Visualização de Debug (Pontos=Leitura)", use_container_width=True)
+            with c2:
+                st.json(res)
