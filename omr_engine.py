@@ -24,7 +24,6 @@ def encontrar_ancoras_globais(thresh):
     return np.array([pts[np.argmin(s)], pts[np.argmin(d)], pts[np.argmax(s)], pts[np.argmax(d)]], dtype="float32")
 
 def alinhar_imagem(img, conf: ConfiguracaoProva):
-    """Normaliza a imagem para o tamanho REF_W x REF_H usando as âncoras."""
     if len(img.shape) == 3: gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else: gray = img
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
@@ -38,27 +37,22 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
         dst = np.array([[m, m], [W_FINAL-m, m], [W_FINAL-m, H_FINAL-m], [m, H_FINAL-m]], dtype="float32")
         M = cv2.getPerspectiveTransform(rect, dst)
         return cv2.warpPerspective(img, M, (W_FINAL, H_FINAL)), W_FINAL, H_FINAL
-    
     return cv2.resize(img, (W_FINAL, H_FINAL)), W_FINAL, H_FINAL
 
 def ler_grid(img_thresh, grid: GridConfig, w_img, h_img, img_debug):
-    """Recorta o quadrante (grid) e divide em células matemáticas."""
-    # 1. Converter % para Pixels
     x1 = int(grid.x_start * w_img)
     x2 = int(grid.x_end * w_img)
     y1 = int(grid.y_start * h_img)
     y2 = int(grid.y_end * h_img)
     
-    # DEBUG: Desenha a caixa do Grid (Verde) para validar alinhamento
-    cv2.rectangle(img_debug, (x1, y1), (x2, y2), (0, 255, 0), 3)
+    # Desenha o GRID VERDE (para você conferir o alinhamento)
+    cv2.rectangle(img_debug, (x1, y1), (x2, y2), (0, 255, 0), 2)
     
-    # 2. Calcular tamanho da célula
     cell_h = (y2 - y1) / grid.rows
     cell_w = (x2 - x1) / grid.cols
-    
     res_bloco = {}
     
-    # CASO ESPECIAL: Frequência (Lê colunas verticais)
+    # FREQUÊNCIA (Colunas Verticais)
     if grid.labels == ["D", "U"]:
         freq_res = ["0", "0"]
         for c in range(grid.cols):
@@ -67,35 +61,28 @@ def ler_grid(img_thresh, grid: GridConfig, w_img, h_img, img_debug):
                 cx = int(x1 + (c * cell_w) + (cell_w/2))
                 cy = int(y1 + (r * cell_h) + (cell_h/2))
                 raio = int(min(cell_h, cell_w) * 0.25)
-                
                 roi = img_thresh[cy-raio:cy+raio, cx-raio:cx+raio]
                 col_votos.append(cv2.countNonZero(roi))
-                # Debug ponto de leitura
-                cv2.circle(img_debug, (cx, cy), 3, (150, 150, 150), -1)
             
             idx_max = np.argmax(col_votos)
             if max(col_votos) > (raio*raio*0.5):
                 freq_res[c] = str(idx_max)
-                # Visualização acerto
                 cy_hit = int(y1 + (idx_max * cell_h) + (cell_h/2))
                 cx_hit = int(x1 + (c * cell_w) + (cell_w/2))
                 cv2.circle(img_debug, (cx_hit, cy_hit), int(raio*1.2), (255, 0, 0), -1)
         return "".join(freq_res), {}
 
-    # CASO PADRÃO: Questões (Lê linhas horizontais)
+    # QUESTÕES (Linhas Horizontais)
     for r in range(grid.rows):
         cy = int(y1 + (r * cell_h) + (cell_h/2))
         densidades = []
         centros = []
-        
         for c in range(grid.cols):
             cx = int(x1 + (c * cell_w) + (cell_w/2))
             centros.append((cx, cy))
             raio = int(min(cell_h, cell_w) * 0.25)
-            
             roi = img_thresh[cy-raio:cy+raio, cx-raio:cx+raio]
             densidades.append(cv2.countNonZero(roi))
-            cv2.circle(img_debug, (cx, cy), 3, (200, 200, 200), -1)
             
         max_v = max(densidades)
         idx_max = np.argmax(densidades)
@@ -103,7 +90,6 @@ def ler_grid(img_thresh, grid: GridConfig, w_img, h_img, img_debug):
         
         marcou = False
         letra = "."
-        
         if max_v > (raio*raio*0.5) and max_v > (avg_v * 1.3):
             marcou = True
             letra = grid.labels[idx_max]
