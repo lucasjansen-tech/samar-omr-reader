@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from pdf2image import convert_from_bytes
 from layout_samar import TIPOS_PROVA
-from gerador import gerar_pdf
+from gerador import gerar_pdf, gerar_imagem_a4
 from omr_engine import processar_gabarito
 import cv2
 import numpy as np
@@ -17,14 +17,33 @@ conf = TIPOS_PROVA[modelo]
 tab1, tab2 = st.tabs(["1. Gerar Prova", "2. Leitura"])
 
 with tab1:
-    if st.button("Gerar PDF"):
-        fn = f"Gabarito_{modelo}.pdf"
-        gerar_pdf(conf, fn)
-        with open(fn, "rb") as f:
-            st.download_button("Baixar PDF", f, fn, "application/pdf")
+    col1, col2 = st.columns(2)
+    with col1:
+        fmt = st.radio("Formato:", ["PDF", "PNG", "JPEG"], horizontal=True)
+    with col2:
+        if st.button("Gerar Arquivo"):
+            ext = fmt.split()[0].lower()
+            fn = f"Gabarito_{modelo}.{ext}"
+            
+            sucesso = False
+            if ext == "pdf":
+                gerar_pdf(conf, fn)
+                mime_type = "application/pdf"
+                sucesso = True
+            else:
+                res = gerar_imagem_a4(conf, fn, ext)
+                if res:
+                    mime_type = f"image/{ext}"
+                    sucesso = True
+                else:
+                    st.error("Erro ao gerar imagem. Verifique se o 'poppler-utils' está instalado no sistema.")
+
+            if sucesso and os.path.exists(fn):
+                with open(fn, "rb") as f:
+                    st.download_button("Baixar Arquivo", f, fn, mime_type)
 
 with tab2:
-    gab = {i: "A" for i in range(1, 53)} # Gabarito dummy
+    gab = {i: "A" for i in range(1, 53)} 
     up = st.file_uploader("Upload", type=["pdf", "png", "jpg"])
     
     if up:
