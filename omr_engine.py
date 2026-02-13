@@ -26,10 +26,10 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
     if len(img.shape) == 3: gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else: gray = img
     
-    # Blur para limpar ruído
+    # Pré-processamento
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    # Threshold simples para achar âncoras (que são pretas sólidas)
-    _, thresh_ancoras = cv2.threshold(blurred, 80, 255, cv2.THRESH_BINARY_INV)
+    thresh_ancoras = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                           cv2.THRESH_BINARY_INV, 51, 15)
     
     rect = encontrar_ancoras_globais(thresh_ancoras)
     W_FINAL, H_FINAL = conf.REF_W, conf.REF_H
@@ -42,15 +42,12 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
     else:
         warped = cv2.resize(gray, (W_FINAL, H_FINAL))
 
-    # --- CORREÇÃO DE CALIBRAGEM (OTSU) ---
-    # OTSU calcula automaticamente o limiar ideal para separar tinta de papel
+    # --- A GRANDE MUDANÇA: OTSU BINARIZATION ---
+    # Isso cria uma imagem preto e branco pura, ideal para contar pixels de tinta
     blur_warp = cv2.GaussianBlur(warped, (3, 3), 0)
     _, binaria = cv2.threshold(blur_warp, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
     
-    # Operação morfológica para remover "chuvisco" (pontinhos pequenos)
-    kernel = np.ones((2,2), np.uint8)
-    binaria = cv2.morphologyEx(binaria, cv2.MORPH_OPEN, kernel)
-    
+    # Retorna colorido para debug visual e binário para o cálculo
     return cv2.cvtColor(warped, cv2.COLOR_GRAY2BGR), binaria, W_FINAL, H_FINAL
 
 def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug):
@@ -59,15 +56,17 @@ def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug):
     y1 = int(grid.y_start * h_img)
     y2 = int(grid.y_end * h_img)
     
+    # Caixa Verde (Debug)
     cv2.rectangle(img_debug, (x1, y1), (x2, y2), (0, 255, 0), 2)
     
+    # Centros Matemáticos
     centros_y = np.linspace(y1, y2, grid.rows * 2 + 1)[1::2].astype(int)
     centros_x = np.linspace(x1, x2, grid.cols * 2 + 1)[1::2].astype(int)
     
+    # Raio pequeno (18%) para focar no miolo e ignorar bordas/grids
     cell_w = (x2 - x1) / grid.cols
     cell_h = (y2 - y1) / grid.rows
-    # Raio menor (16%) para garantir que estamos lendo o MIOLO da bolinha
-    raio = int(min(cell_w, cell_h) * 0.16) 
+    raio = int(min(cell_w, cell_h) * 0.18) 
     area_roi = (raio * 2) ** 2
     
     res_bloco = {}
@@ -75,7 +74,7 @@ def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug):
     # --- FREQUÊNCIA ---
     if grid.labels == ["D", "U"]:
         freq_res = ["0", "0"]
-        centros_x.sort() # Garante D na esq, U na direita
+        centros_x.sort() # Garante Esquerda -> Direita
         
         for c_idx, cx in enumerate(centros_x):
             votos = []
@@ -87,14 +86,14 @@ def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug):
             idx_max = np.argmax(votos)
             val_max = max(votos)
             
-            # Se a bolinha vencedora tem 30% de preenchimento
+            # Com OTSU, a tinta é sólida. 30% é um bom corte.
             if val_max > (area_roi * 0.30):
                 freq_res[c_idx] = str(idx_max)
                 cv2.circle(img_debug, (cx, centros_y[idx_max]), int(raio), (255, 0, 0), -1)
                 
         return "".join(freq_res), {}
 
-    # --- QUESTÕES (Lógica Relativa) ---
+    # --- QUESTÕES ---
     for r_idx, cy in enumerate(centros_y):
         tintas = []
         for cx in centros_x:
@@ -103,17 +102,13 @@ def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug):
             
         max_tinta = max(tintas)
         idx_max = np.argmax(tintas)
-        
-        # Média de tinta das bolinhas NÃO marcadas (ruído de fundo)
-        soma_outros = sum(tintas) - max_tinta
-        media_ruido = soma_outros / 3
+        avg_tinta = sum(tintas) / 4
         
         marcou = False
-        
-        # CRITÉRIO DE CALIBRAGEM:
-        # 1. A marcada deve ter pelo menos 25% de pixel preto absoluto (OTSU)
-        # 2. A marcada deve ter 2x mais tinta que a média das outras (Destaque)
-        if max_tinta > (area_roi * 0.25) and max_tinta > (media_ruido * 2.0):
+        # Lógica OTSU:
+        # 1. Tinta > 30% da área
+        # 2. Destaque > 50% sobre a média (muito mais preto que o resto)
+        if max_tinta > (area_roi * 0.30) and max_tinta > (avg_tinta * 1.5):
             marcou = True
             
         if grid.questao_inicial > 0:
