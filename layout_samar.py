@@ -2,17 +2,17 @@ from dataclasses import dataclass
 from typing import List
 
 # Cores Oficiais
-COR_AZUL = "#2980b9"
-COR_LARANJA = "#e67e22"
+COR_AZUL = "#2980b9"    # Português
+COR_LARANJA = "#e67e22" # Matemática
 
 @dataclass
 class GridConfig:
     titulo: str
     texto_extra: str
-    x_start: float
-    x_end: float
-    y_start: float
-    y_end: float
+    x_start: float   # % largura
+    x_end: float     # % largura
+    y_start: float   # % altura (Topo das BOLINHAS)
+    y_end: float     # % altura (Fundo das BOLINHAS)
     rows: int
     cols: int
     labels: List[str] 
@@ -28,28 +28,31 @@ class ConfiguracaoProva:
     REF_H = 1754
     MARGIN_PCT = 0.05 
 
-# --- CÁLCULO DE ALINHAMENTO PERFEITO ---
-Y_TOP = 0.32
-Y_BOT = 0.91
-ALTURA_TOTAL = Y_BOT - Y_TOP
-ALTURA_LINHA = ALTURA_TOTAL / 13 # Cada questão ocupa 1/13 da altura
-
-# A frequência tem 10 linhas, então ela termina na décima 'fatia'
-Y_END_FREQ = Y_TOP + (ALTURA_LINHA * 10)
+# --- GEOMETRIA ---
+# Y_TOP: Onde começa a PRIMEIRA LINHA DE BOLINHAS (não o título)
+# Baixei para 0.35 para caber os títulos em cima sem bater no cabeçalho
+Y_TOP = 0.35 
+Y_BOT = 0.92
 
 TIPOS_PROVA = {
     "52_Questoes_Grid": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental II - 7º ao 9º Ano",
         grids=[
-            # FREQ (Termina exatamente na altura da questão 10)
-            GridConfig("FREQ.", "", 0.05, 0.12, Y_TOP, Y_END_FREQ, 10, 2, ["D", "U"], 0, COR_LARANJA),
+            # FREQ (Laranja)
+            GridConfig("FREQ.", "", 0.05, 0.11, Y_TOP, 0.65, 10, 2, ["D", "U"], 0, COR_LARANJA),
             
-            # BLOCOS (Preenchem até o final)
-            GridConfig("BLOCO 1", "LÍNGUA PORTUGUESA", 0.16, 0.33, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 1, COR_AZUL),
-            GridConfig("BLOCO 2", "LÍNGUA PORTUGUESA", 0.37, 0.54, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 14, COR_AZUL),
-            GridConfig("BLOCO 3", "MATEMÁTICA", 0.58, 0.75, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 27, COR_LARANJA),
-            GridConfig("BLOCO 4", "MATEMÁTICA", 0.79, 0.96, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 40, COR_LARANJA),
+            # BLOCO 1 (Azul)
+            GridConfig("BLOCO 1", "LÍNGUA PORTUGUESA", 0.15, 0.32, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 1, COR_AZUL),
+            
+            # BLOCO 2 (Azul)
+            GridConfig("BLOCO 2", "LÍNGUA PORTUGUESA", 0.36, 0.53, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 14, COR_AZUL),
+            
+            # BLOCO 3 (Laranja)
+            GridConfig("BLOCO 3", "MATEMÁTICA", 0.57, 0.74, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 27, COR_LARANJA),
+            
+            # BLOCO 4 (Laranja)
+            GridConfig("BLOCO 4", "MATEMÁTICA", 0.78, 0.95, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 40, COR_LARANJA),
         ]
     )
 }
