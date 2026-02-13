@@ -57,10 +57,9 @@ with tab2:
             
             res, vis, _ = processar_gabarito(img, conf, gab)
             
-            st.write(f"### Resultado Página {i+1}")
-            c1, c2 = st.columns([2, 1])
+            st.write(f"### Página {i+1}")
+            c1, c2 = st.columns([3, 1])
             with c1:
-                # Mostra imagem grande para ver os detalhes
-                st.image(vis, caption="Visualização de Debug (Pontos=Leitura)", use_container_width=True)
+                st.image(vis, caption="Visualização de Leitura (Pontos Coloridos = Detectado)", use_container_width=True)
             with c2:
                 st.json(res)
