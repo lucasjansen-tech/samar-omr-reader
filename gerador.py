@@ -11,14 +11,14 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
     m = W * conf.MARGIN_PCT
     s = 30
     
-    # Âncoras
+    # 1. Âncoras (Sólidas)
     c.setFillColor(colors.black)
     c.rect(m, H-m-s, s, s, fill=1, stroke=0)
     c.rect(W-m-s, H-m-s, s, s, fill=1, stroke=0)
     c.rect(m, m, s, s, fill=1, stroke=0)
     c.rect(W-m-s, m, s, s, fill=1, stroke=0)
     
-    # Cabeçalho
+    # 2. Cabeçalho Completo (Restaurado)
     c.setFillColor(HexColor("#2980b9"))
     c.setFont("Helvetica-Bold", 16)
     c.drawCentredString(W/2, H - 50, conf.titulo_prova)
@@ -26,52 +26,73 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
     c.setFont("Helvetica", 12)
     c.drawCentredString(W/2, H - 70, conf.subtitulo)
     
-    c.setStrokeColor(colors.black); c.setLineWidth(0.5); c.setFont("Helvetica-Bold", 10)
-    y = H - 120
-    c.drawString(m, y, "UNIDADE DE ENSINO:"); c.line(m+110, y-2, W-m, y-2)
-    c.drawString(m, y-30, "ALUNO:"); c.line(m+50, y-32, W-m, y-32)
+    c.setStrokeColor(colors.black); c.setLineWidth(0.5); c.setFont("Helvetica-Bold", 9)
     
+    # Linha 1: Unidade de Ensino
+    y = H - 110
+    c.drawString(m, y, "UNIDADE DE ENSINO:")
+    c.line(m+100, y-2, W-m, y-2)
+    
+    # Linha 2: Ano, Turma, Turno
+    y -= 30
+    c.drawString(m, y, "ANO DE ENSINO:")
+    c.line(m+80, y-2, m+200, y-2)
+    
+    c.drawString(m+220, y, "TURMA:")
+    c.line(m+260, y-2, m+350, y-2)
+    
+    c.drawString(W-150, y, "TURNO:")
+    c.line(W-110, y-2, W-m, y-2)
+    
+    # Linha 3: Nome
+    y -= 30
+    c.drawString(m, y, "ALUNO:")
+    c.line(m+40, y-2, W-m, y-2)
+    
+    # 3. GRIDS E CONTEÚDO
     for g in conf.grids:
         x1 = g.x_start * W
         w_g = (g.x_end - g.x_start) * W
-        y_top = H - (g.y_start * H)
-        h_g = (g.y_end - g.y_start) * H
         
-        # Cabeçalho do Bloco
+        # y_top no PDF (baseado no layout percentual)
+        # O layout define onde começam as BOLINHAS.
+        # Os títulos serão desenhados ACIMA disso.
+        y_top_bolinhas = H - (g.y_start * H)
+        y_bot_bolinhas = H - (g.y_end * H)
+        h_grid = y_top_bolinhas - y_bot_bolinhas
+        
+        # --- DESENHO DOS TÍTULOS (ACIMA DO GRID) ---
+        # Caixa Colorida (Bloco)
         c.setFillColor(HexColor(g.cor_hex))
-        c.roundRect(x1, y_top + 15, w_g, 20, 4, fill=1, stroke=0)
+        c.roundRect(x1, y_top_bolinhas + 35, w_g, 20, 4, fill=1, stroke=0)
         c.setFillColor(colors.white); c.setFont("Helvetica-Bold", 10)
-        c.drawCentredString(x1 + w_g/2, y_top + 21, g.titulo)
+        c.drawCentredString(x1 + w_g/2, y_top_bolinhas + 41, g.titulo)
         
+        # Matéria (Abaixo da caixa, acima das letras)
         if g.texto_extra:
             c.setFillColor(HexColor(g.cor_hex))
             c.setFont("Helvetica-Bold", 7)
-            c.drawCentredString(x1 + w_g/2, y_top + 5, g.texto_extra)
+            c.drawCentredString(x1 + w_g/2, y_top_bolinhas + 22, g.texto_extra)
         
-        cell_h = h_g / g.rows
+        # Cabeçalhos das Colunas (A, B, C, D) - Logo acima da primeira bolinha
         cell_w = w_g / g.cols
-        c.setFillColor(colors.black); c.setStrokeColor(colors.black)
-        
-        # Rótulos Colunas
+        c.setFillColor(colors.black)
         if g.labels:
             for i, lbl in enumerate(g.labels):
                 cx = x1 + (i * cell_w) + (cell_w/2)
                 c.setFont("Helvetica-Bold", 9)
-                c.drawCentredString(cx, y_top + 2, lbl)
+                # +10 pixels acima da linha de corte
+                c.drawCentredString(cx, y_top_bolinhas + 10, lbl)
 
-        # Desenhar Linhas (QUESTÕES)
+        # --- CORPO DO GRID (BOLINHAS) ---
+        cell_h = h_grid / g.rows
+        c.setStrokeColor(colors.black)
+        
         for r in range(g.rows):
-            cy = y_top - (r * cell_h) - (cell_h/2)
-            y_line_top = y_top - (r * cell_h)
-            y_line_bot = y_top - ((r+1) * cell_h)
+            # Centro Y da célula atual
+            cy = y_top_bolinhas - (r * cell_h) - (cell_h/2)
             
-            # Grid de Divisão (Visual) - Retângulo cinza claro ou linhas
-            c.setStrokeColor(colors.lightgrey)
-            c.setLineWidth(0.3)
-            # Desenha a caixa ao redor da linha da questão
-            c.rect(x1, y_line_bot, w_g, cell_h, stroke=1, fill=0)
-            
-            c.setFillColor(colors.black)
+            # Número da questão (lateral)
             if g.questao_inicial > 0:
                 c.setFont("Helvetica-Bold", 9)
                 c.drawRightString(x1 - 5, cy - 3, f"{g.questao_inicial+r:02d}")
@@ -79,12 +100,15 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
                 c.setFont("Helvetica", 9)
                 c.drawRightString(x1 - 5, cy - 3, str(r))
 
+            # Bolinhas
             for col in range(g.cols):
                 cx = x1 + (col * cell_w) + (cell_w/2)
-                c.setStrokeColor(colors.black)
                 c.setLineWidth(1)
                 c.circle(cx, cy, 7, stroke=1, fill=0)
+                
+                # Letra dentro da bolinha (apenas questões)
                 if g.questao_inicial > 0:
+                    c.setLineWidth(0.5)
                     c.setFont("Helvetica", 6)
                     c.drawCentredString(cx, cy - 2, g.labels[col])
 
@@ -105,6 +129,6 @@ def gerar_imagem_a4(conf, filename_saida, formato="png"):
             if os.path.exists(temp_pdf): os.remove(temp_pdf)
             return filename_saida
     except Exception as e:
-        print(f"ERRO POPPLER: {e}")
+        print(f"Erro imagem: {e}")
         return None
     return None
