@@ -27,8 +27,6 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
     c.drawCentredString(W/2, H - 70, conf.subtitulo)
     
     c.setStrokeColor(colors.black); c.setLineWidth(0.5); c.setFont("Helvetica-Bold", 9)
-    
-    # Dados do Aluno
     y = H - 110
     c.drawString(m, y, "UNIDADE DE ENSINO:"); c.line(m+100, y-2, W-m, y-2)
     y -= 25
@@ -51,7 +49,6 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
         y_top = H - (g.y_start * H)
         h_g = (g.y_end - g.y_start) * H
         
-        # Título Bloco
         c.setFillColor(HexColor(g.cor_hex))
         c.roundRect(x1, y_top + 45, w_g, 20, 4, fill=1, stroke=0)
         c.setFillColor(colors.white); c.setFont("Helvetica-Bold", 10)
