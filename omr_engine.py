@@ -26,13 +26,12 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
     if len(img.shape) == 3: gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else: gray = img
     
-    # Blur para tirar ruído do papel
+    # Pré-processamento
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    thresh_ancoras = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                           cv2.THRESH_BINARY_INV, 51, 15)
     
-    # 1. Achar Âncoras (Threshold simples funciona bem para quadrados pretos)
-    _, thresh_ancoras = cv2.threshold(blurred, 80, 255, cv2.THRESH_BINARY_INV)
     rect = encontrar_ancoras_globais(thresh_ancoras)
-    
     W_FINAL, H_FINAL = conf.REF_W, conf.REF_H
     
     if rect is not None:
@@ -43,14 +42,13 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
     else:
         warped = cv2.resize(gray, (W_FINAL, H_FINAL))
 
-    # 2. PREPARAÇÃO PARA LEITURA (A MUDANÇA CHAVE)
-    # OTSU Global: Decide o melhor ponto de corte entre "escuro" e "claro"
-    # Isso preenche totalmente as bolinhas marcadas, sem deixar buracos
-    _, binaria = cv2.threshold(warped, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+    # --- A GRANDE MUDANÇA: OTSU BINARIZATION ---
+    # Isso cria uma imagem preto e branco pura, ideal para contar pixels de tinta
+    blur_warp = cv2.GaussianBlur(warped, (3, 3), 0)
+    _, binaria = cv2.threshold(blur_warp, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
     
-    # Retorna a imagem colorida para debug e a binária para contagem
-    vis_color = cv2.cvtColor(warped, cv2.COLOR_GRAY2BGR)
-    return vis_color, binaria, W_FINAL, H_FINAL
+    # Retorna colorido para debug visual e binário para o cálculo
+    return cv2.cvtColor(warped, cv2.COLOR_GRAY2BGR), binaria, W_FINAL, H_FINAL
 
 def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug):
     x1 = int(grid.x_start * w_img)
@@ -58,46 +56,40 @@ def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug):
     y1 = int(grid.y_start * h_img)
     y2 = int(grid.y_end * h_img)
     
-    # Debug Verde
+    # Caixa Verde (Debug)
     cv2.rectangle(img_debug, (x1, y1), (x2, y2), (0, 255, 0), 2)
     
-    # Coordenadas Matemáticas
+    # Centros Matemáticos
     centros_y = np.linspace(y1, y2, grid.rows * 2 + 1)[1::2].astype(int)
     centros_x = np.linspace(x1, x2, grid.cols * 2 + 1)[1::2].astype(int)
     
+    # Raio pequeno (18%) para focar no miolo e ignorar bordas/grids
     cell_w = (x2 - x1) / grid.cols
     cell_h = (y2 - y1) / grid.rows
-    
-    # Raio de leitura: 20% da célula (foco no miolo)
-    raio = int(min(cell_w, cell_h) * 0.20)
-    area_roi = (raio * 2) ** 2 # Quadrado ao redor do raio
+    raio = int(min(cell_w, cell_h) * 0.18) 
+    area_roi = (raio * 2) ** 2
     
     res_bloco = {}
     
     # --- FREQUÊNCIA ---
     if grid.labels == ["D", "U"]:
         freq_res = ["0", "0"]
-        # Ordena X para garantir Esquerda(D) -> Direita(U)
-        centros_x.sort()
+        centros_x.sort() # Garante Esquerda -> Direita
         
         for c_idx, cx in enumerate(centros_x):
-            votos_coluna = []
+            votos = []
             for r_idx, cy in enumerate(centros_y):
-                # Recorte na imagem BINÁRIA (Preto/Branco puro)
                 roi = img_binaria[cy-raio:cy+raio, cx-raio:cx+raio]
-                tinta = cv2.countNonZero(roi)
-                votos_coluna.append(tinta)
-                # Debug Amarelo
+                votos.append(cv2.countNonZero(roi))
                 cv2.circle(img_debug, (cx, cy), 2, (0, 255, 255), -1)
             
-            idx_max = np.argmax(votos_coluna)
-            max_tinta = max(votos_coluna)
+            idx_max = np.argmax(votos)
+            val_max = max(votos)
             
-            # Se mais de 40% da área estiver preta, é uma marcação
-            if max_tinta > (area_roi * 0.40):
+            # Com OTSU, a tinta é sólida. 30% é um bom corte.
+            if val_max > (area_roi * 0.30):
                 freq_res[c_idx] = str(idx_max)
-                cy_hit = centros_y[idx_max]
-                cv2.circle(img_debug, (cx, cy_hit), int(raio), (255, 0, 0), -1)
+                cv2.circle(img_debug, (cx, centros_y[idx_max]), int(raio), (255, 0, 0), -1)
                 
         return "".join(freq_res), {}
 
@@ -106,16 +98,17 @@ def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug):
         tintas = []
         for cx in centros_x:
             roi = img_binaria[cy-raio:cy+raio, cx-raio:cx+raio]
-            tinta = cv2.countNonZero(roi)
-            tintas.append(tinta)
+            tintas.append(cv2.countNonZero(roi))
             
         max_tinta = max(tintas)
         idx_max = np.argmax(tintas)
+        avg_tinta = sum(tintas) / 4
         
-        # Limiar Fixo: Se tiver mais de 40% de tinta, marcou.
-        # OTSU garante que tinta é tinta.
         marcou = False
-        if max_tinta > (area_roi * 0.40):
+        # Lógica OTSU:
+        # 1. Tinta > 30% da área
+        # 2. Destaque > 50% sobre a média (muito mais preto que o resto)
+        if max_tinta > (area_roi * 0.30) and max_tinta > (avg_tinta * 1.5):
             marcou = True
             
         if grid.questao_inicial > 0:
@@ -123,11 +116,9 @@ def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug):
             res_bloco[grid.questao_inicial + r_idx] = letra
             
             if marcou:
-                cx_win = centros_x[idx_max]
-                cv2.circle(img_debug, (cx_win, cy), int(raio), (0, 255, 0), 2)
+                cv2.circle(img_debug, (centros_x[idx_max], cy), int(raio), (0, 255, 0), 2)
             else:
-                for cx in centros_x:
-                    cv2.circle(img_debug, (cx, cy), 2, (100, 100, 100), -1)
+                for cx in centros_x: cv2.circle(img_debug, (cx, cy), 2, (150, 150, 150), -1)
 
     return None, res_bloco
 
