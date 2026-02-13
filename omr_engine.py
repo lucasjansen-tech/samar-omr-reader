@@ -59,7 +59,8 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
     _, rt = cv2.threshold(br, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
     return cv2.cvtColor(r, cv2.COLOR_GRAY2BGR), rt, W_FINAL, H_FINAL
 
-def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug):
+# Adicionado gabarito na assinatura da função
+def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug, gabarito=None):
     x1 = grid.x_start * w_img
     x2 = grid.x_end * w_img
     y1 = grid.y_start * h_img
@@ -78,6 +79,7 @@ def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug):
     
     res_bloco = {}
     
+    # --- FREQUÊNCIA ---
     if grid.labels == ["D", "U"]:
         freq_res = ["0", "0"]
         for c_idx, cx in enumerate(centros_x):
@@ -96,6 +98,7 @@ def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug):
                 
         return "".join(freq_res), {}
 
+    # --- QUESTÕES COM FEEDBACK DE COR ---
     for r_idx, cy in enumerate(centros_y):
         tintas = []
         for cx in centros_x:
@@ -114,10 +117,20 @@ def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug):
             letra = grid.labels[idx_max]
             
         if grid.questao_inicial > 0:
-            res_bloco[grid.questao_inicial + r_idx] = letra
+            q_num = grid.questao_inicial + r_idx
+            res_bloco[q_num] = letra
+            
             if marcou:
-                cv2.circle(img_debug, (centros_x[idx_max], cy), int(raio), (0, 255, 0), 2)
+                # Lógica de Cor: Verde (Acerto), Vermelho (Erro)
+                cor_marcada = (0, 255, 0) # Verde padrão
+                if gabarito and q_num in gabarito:
+                    if letra != gabarito[q_num]:
+                        cor_marcada = (0, 0, 255) # Vermelho se errou
+                
+                # Desenha o círculo mais grosso para visualização clara
+                cv2.circle(img_debug, (centros_x[idx_max], cy), int(raio), cor_marcada, 3)
             else:
+                # Pontinhos cinzas indicam onde o sistema buscou, mas não achou tinta
                 for cx in centros_x: cv2.circle(img_debug, (cx, cy), 2, (150, 150, 150), -1)
 
     return None, res_bloco
@@ -127,18 +140,18 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None, offset_x=0, 
     final = {"respostas": {}, "frequencia": "00"}
     
     for g in conf.grids:
-        f_val, r_dict = ler_grid(binaria, g, w, h, vis)
+        # Passa o gabarito oficial para a função ler_grid para pintar as cores
+        f_val, r_dict = ler_grid(binaria, g, w, h, vis, gabarito)
         if g.labels == ["D", "U"]: final["frequencia"] = f_val
         else: final["respostas"].update(r_dict)
             
-    # --- ANÁLISE DE DADOS E CORREÇÃO ---
+    # --- ANÁLISE ESTATÍSTICA ---
     if gabarito:
         acertos = 0
         detalhes_correcao = {}
         
-        for q_str, resp_lida in final["respostas"].items():
-            q_num = int(q_str)
-            resp_oficial = gabarito.get(q_num, ".")
+        for q_num_int, resp_lida in final["respostas"].items():
+            resp_oficial = gabarito.get(q_num_int, ".")
             
             status = "Em Branco"
             if resp_lida != ".":
@@ -148,7 +161,7 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None, offset_x=0, 
                 else:
                     status = "Incorreto"
             
-            detalhes_correcao[q_num] = {
+            detalhes_correcao[q_num_int] = {
                 "Lida": resp_lida,
                 "Gabarito": resp_oficial,
                 "Status": status
