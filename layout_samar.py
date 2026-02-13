@@ -1,80 +1,60 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, Tuple
 
 # Cores
 COR_AZUL = "#2980b9"
 COR_LARANJA = "#e67e22"
 
 @dataclass
-class BlocoQuestao:
+class GridConfig:
     titulo: str
-    componente: str
-    questao_inicial: int
-    quantidade: int
-    cor_hex: str
+    x_start_pct: float  # Onde começa (0.0 a 1.0 da largura)
+    x_end_pct: float    # Onde termina
+    y_start_pct: float  # Onde começa a primeira bolinha
+    y_end_pct: float    # Onde termina a última bolinha
+    rows: int
+    cols: int           # 4 para questões (ABCD), 2 para freq (DU)
+    labels: List[str]   # Ex: ["A", "B", "C", "D"]
+    questao_inicial: int = 0
+    cor_hex: str = "#000000"
 
 @dataclass
 class ConfiguracaoProva:
     titulo_prova: str
     subtitulo: str
-    blocos: List[BlocoQuestao]
+    grids: List[GridConfig]
     
-    # GEOMETRIA A4
-    PAGE_W = 595
-    PAGE_H = 842
-    MARGIN = 35       
-    ANCORA_SIZE = 30  
+    # Proporção A4 (Largura/Altura = 0.707)
+    # Usaremos uma base de alta resolução para cálculos, mas a lógica é %
+    REF_W = 1240
+    REF_H = 1754
     
-    # --- POSIÇÕES AJUSTADAS ---
-    FREQ_X: int = 47
-    
-    # Baixei mais o início para compensar o deslocamento para cima
-    GRID_START_Y: int = 560 
-    GRID_X_START: int = 118
-    GRID_COL_W: int = 118   
-    
-    # Espaçamento base (A lógica elástica usará isso apenas como referência inicial)
-    V_SPACING: int = 23
-    
-    tem_frequencia: bool = True
+    MARGIN_PCT = 0.05 # 5% de margem para as âncoras
 
-# --- MODELOS ---
+# --- DEFINIÇÃO DO MODELO 52 QUESTÕES (Baseado no seu A4 - 9.jpg) ---
+# A altura útil para as questões vai de 32% (topo) a 90% (fundo) da página
+Y_TOP = 0.32
+Y_BOT = 0.90
+
 TIPOS_PROVA = {
-    "2_e_3_Ano_18Q": ConfiguracaoProva(
-        titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
-        subtitulo="Ensino Fundamental I - 2º e 3º Ano",
-        GRID_START_Y=450, 
-        FREQ_X=135,       
-        GRID_X_START=210,
-        blocos=[
-            BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 9, COR_AZUL),
-            BlocoQuestao("BLOCO 2", "MATEMÁTICA", 10, 9, COR_LARANJA)
-        ]
-    ),
-    "4_ao_6_Ano_44Q": ConfiguracaoProva(
+    "52_Questoes_Grid": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental - 4º ao 6º Ano",
-        GRID_START_Y=560,
-        FREQ_X=47,
-        GRID_X_START=118,
-        blocos=[
-            BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 11, COR_AZUL),
-            BlocoQuestao("BLOCO 2", "LÍNGUA PORTUGUESA", 12, 11, COR_AZUL),
-            BlocoQuestao("BLOCO 3", "MATEMÁTICA", 23, 11, COR_LARANJA),
-            BlocoQuestao("BLOCO 4", "MATEMÁTICA", 34, 11, COR_LARANJA)
-        ]
-    ),
-    "7_ao_9_Ano_52Q": ConfiguracaoProva(
-        titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
-        subtitulo="Ensino Fundamental II - 7º ao 9º Ano",
-        GRID_START_Y=560,
-        FREQ_X=47,
-        GRID_X_START=118,
-        blocos=[
-            BlocoQuestao("BLOCO 1", "LÍNGUA PORTUGUESA", 1, 13, COR_AZUL),
-            BlocoQuestao("BLOCO 2", "LÍNGUA PORTUGUESA", 14, 13, COR_AZUL),
-            BlocoQuestao("BLOCO 3", "MATEMÁTICA", 27, 13, COR_LARANJA),
-            BlocoQuestao("BLOCO 4", "MATEMÁTICA", 40, 13, COR_LARANJA)
+        grids=[
+            # GRID FREQUÊNCIA (Esquerda)
+            GridConfig("FREQ.", 0.06, 0.14, Y_TOP, 0.60, 10, 2, ["D", "U"], 0, COR_AZUL),
+            
+            # GRID BLOCO 1 (Questões 01-13)
+            GridConfig("BLOCO 1", 0.18, 0.35, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 1, COR_LARANJA),
+            
+            # GRID BLOCO 2 (Questões 14-26)
+            GridConfig("BLOCO 2", 0.39, 0.56, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 14, COR_LARANJA),
+            
+            # GRID BLOCO 3 (Questões 27-39)
+            GridConfig("BLOCO 3", 0.60, 0.77, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 27, COR_AZUL),
+            
+            # GRID BLOCO 4 (Questões 40-52)
+            GridConfig("BLOCO 4", 0.81, 0.98, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 40, COR_AZUL),
         ]
     )
 }
