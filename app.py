@@ -60,6 +60,6 @@ with tab2:
             st.write(f"### Página {i+1}")
             c1, c2 = st.columns([3, 1])
             with c1:
-                st.image(vis, caption="Visualização de Leitura (Pontos Coloridos = Detectado)", use_container_width=True)
+                st.image(vis, caption="Leitura Debug", use_container_width=True)
             with c2:
                 st.json(res)
