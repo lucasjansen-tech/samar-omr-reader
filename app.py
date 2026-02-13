@@ -14,7 +14,7 @@ st.title("🖨️ Sistema SAMAR - Leitura OMR Inteligente")
 modelo = st.selectbox("Modelo de Prova:", list(TIPOS_PROVA.keys()))
 conf = TIPOS_PROVA[modelo]
 
-tab1, tab2 = st.tabs(["1. Gerador de PDF", "2. Leitura e Correção"])
+tab1, tab2 = st.tabs(["1. Gerador de PDF", "2. Leitura, Correção e Exportação"])
 
 # --- ABA 1: GERADOR ---
 with tab1:
@@ -44,7 +44,7 @@ with tab1:
                 with open(fn, "rb") as f:
                     st.download_button(f"📥 Baixar {ext.upper()}", f, fn, mime)
 
-# --- ABA 2: LEITURA E CORREÇÃO ---
+# --- ABA 2: LEITURA, CORREÇÃO E EXPORTAÇÃO ---
 with tab2:
     st.markdown("### 📝 Passo 1: Configurar Gabarito Oficial")
     
@@ -66,7 +66,6 @@ with tab2:
                 gab_oficial[q_count] = char
                 q_count += 1
     else:
-        # Preenchimento Intuitivo por Blocos
         cols = st.columns(4)
         for bloco in range(4):
             with cols[bloco]:
@@ -80,8 +79,8 @@ with tab2:
                     )
 
     st.markdown("---")
-    st.markdown("### 📸 Passo 2: Analisar Prova Preenchida")
-    up = st.file_uploader("Faça o Upload do PDF ou Imagem escaneada:", type=["pdf", "png", "jpg"])
+    st.markdown("### 📸 Passo 2: Analisar Prova(s) Preenchida(s)")
+    up = st.file_uploader("Faça o Upload do PDF (Múltiplas páginas) ou Imagem escaneada:", type=["pdf", "png", "jpg"])
     
     if up:
         if up.type == "application/pdf": 
@@ -90,6 +89,9 @@ with tab2:
             from PIL import Image
             pages = [Image.open(up)]
         
+        # Variável para armazenar os dados de todos os alunos processados
+        resultados_lote = []
+        
         for i, p in enumerate(pages):
             img = np.array(p)
             if img.ndim == 2: img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
@@ -97,26 +99,55 @@ with tab2:
             
             res, vis, _ = processar_gabarito(img, conf, gab_oficial)
             
-            st.write(f"#### Resultados - Página {i+1}")
+            freq = res.get("frequencia", "00")
+            acertos = res.get("total_acertos", 0)
+            
+            # 1. Monta o dicionário estruturado para a linha do aluno
+            aluno_dados = {"Frequencia": freq}
+            for q_num in range(1, 53):
+                # Pega a resposta lida ou um ponto se estiver vazio
+                aluno_dados[f"Q{q_num:02d}"] = res["respostas"].get(q_num, ".")
+            aluno_dados["Total_Acertos"] = acertos
+            
+            resultados_lote.append(aluno_dados)
+            
+            # 2. Exibição Visual (Mantida)
+            st.write(f"#### Resultados - Página {i+1} (Aluno: {freq})")
             c1, c2 = st.columns([1, 1])
             
             with c1:
-                # Imagem exibe os círculos Verdes/Vermelhos!
                 st.image(vis, caption="🟢 Acertos | 🔴 Erros | ⚪ Em Branco", use_container_width=True)
                 
             with c2:
-                freq = res.get("frequencia", "00")
-                acertos = res.get("total_acertos", 0)
-                
                 st.info(f"**ID do Aluno (Frequência):** {freq}")
                 st.success(f"**Pontuação:** {acertos} / {len(gab_oficial)} Acertos")
                 
                 if "correcao_detalhada" in res:
-                    df = pd.DataFrame.from_dict(res["correcao_detalhada"], orient="index")
-                    
-                    def color_status(val):
-                        if val == 'Correto': return 'color: #2e7d32; font-weight: bold'
-                        elif val == 'Incorreto': return 'color: #d32f2f; font-weight: bold'
-                        return 'color: #f57c00' 
-                    
-                    st.dataframe(df.style.map(color_status, subset=['Status']), height=500, use_container_width=True)
+                    with st.expander("Ver Correção Detalhada"):
+                        df_detalhe = pd.DataFrame.from_dict(res["correcao_detalhada"], orient="index")
+                        def color_status(val):
+                            if val == 'Correto': return 'color: #2e7d32; font-weight: bold'
+                            elif val == 'Incorreto': return 'color: #d32f2f; font-weight: bold'
+                            return 'color: #f57c00' 
+                        st.dataframe(df_detalhe.style.map(color_status, subset=['Status']), use_container_width=True)
+                        
+        # 3. Bloco de Exportação (Fora do loop de páginas)
+        if resultados_lote:
+            st.markdown("---")
+            st.markdown("### 📊 Exportação de Dados")
+            
+            df_export = pd.DataFrame(resultados_lote)
+            
+            # Mostra uma prévia da tabela gerada
+            st.write("Prévia dos dados formatados para a planilha:")
+            st.dataframe(df_export)
+            
+            # Botão de Download em CSV (separado por ponto e vírgula, ideal para Excel Brasil)
+            csv_dados = df_export.to_csv(index=False, sep=";")
+            st.download_button(
+                label="📥 Baixar Dados para Calculadora (CSV)",
+                data=csv_dados,
+                file_name="analise_samar_dados.csv",
+                mime="text/csv",
+                type="primary"
+            )
