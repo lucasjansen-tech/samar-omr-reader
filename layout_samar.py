@@ -8,10 +8,10 @@ COR_LARANJA = "#e67e22"
 class GridConfig:
     titulo: str
     texto_extra: str
-    x_start: float   # % largura
-    x_end: float     # % largura
-    y_start: float   # % altura
-    y_end: float     # % altura
+    x_start: float
+    x_end: float
+    y_start: float
+    y_end: float
     rows: int
     cols: int
     labels: List[str] 
@@ -27,13 +27,13 @@ class ConfiguracaoProva:
     REF_H = 1754
     MARGIN_PCT = 0.05 
 
-# --- GEOMETRIA DE SEGURANÇA MÁXIMA ---
-# Y_TOP: 0.36 (Mantém cabeçalho legível)
-# Y_BOT: 0.86 (SUBIU MUITO. Garante distância da âncora inferior)
+# --- GEOMETRIA BLINDADA ---
+# Y_TOP: 0.36 (Espaço seguro para o cabeçalho)
+# Y_BOT: 0.85 (MUITO MAIS ALTO. Garante zero colisão com a âncora inferior)
 Y_TOP = 0.36
-Y_BOT = 0.86 
+Y_BOT = 0.85 
 
-# Cálculo para Frequência terminar alinhada com Q10
+# Cálculo proporcional para a Frequência acompanhar o alinhamento das linhas 1-10
 ALTURA_BLOCO = Y_BOT - Y_TOP
 ALTURA_FREQ = (ALTURA_BLOCO / 13) * 10
 Y_END_FREQ = Y_TOP + ALTURA_FREQ
@@ -43,10 +43,10 @@ TIPOS_PROVA = {
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental II - 7º ao 9º Ano",
         grids=[
-            # FREQ (Larga para garantir captura)
-            GridConfig("FREQ.", "", 0.05, 0.13, Y_TOP, Y_END_FREQ, 10, 2, ["D", "U"], 0, COR_LARANJA),
+            # FREQ: Largura 0.05-0.12 (Ideal para centralizar D e U)
+            GridConfig("FREQ.", "", 0.05, 0.12, Y_TOP, Y_END_FREQ, 10, 2, ["D", "U"], 0, COR_LARANJA),
             
-            # BLOCOS
+            # BLOCOS (Espaçamento horizontal seguro)
             GridConfig("BLOCO 1", "LÍNGUA PORTUGUESA", 0.16, 0.33, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 1, COR_AZUL),
             GridConfig("BLOCO 2", "LÍNGUA PORTUGUESA", 0.37, 0.54, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 14, COR_AZUL),
             GridConfig("BLOCO 3", "MATEMÁTICA", 0.58, 0.75, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 27, COR_LARANJA),
