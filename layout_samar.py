@@ -27,10 +27,11 @@ class ConfiguracaoProva:
     REF_H = 1754
     MARGIN_PCT = 0.05 
 
-# GEOMETRIA VALIDADA
+# GEOMETRIA
 Y_TOP = 0.36
 Y_BOT = 0.85 
 
+# Altura proporcional para Frequência (10 linhas)
 ALTURA_BLOCO = Y_BOT - Y_TOP
 ALTURA_FREQ = (ALTURA_BLOCO / 13) * 10
 Y_END_FREQ = Y_TOP + ALTURA_FREQ
@@ -40,10 +41,10 @@ TIPOS_PROVA = {
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental II - 7º ao 9º Ano",
         grids=[
-            # FREQ: Movido para 0.09 para desgrudar da âncora (que vai até 0.05)
+            # FREQ: Movida para 0.09 (9%) para desgrudar da âncora (5%)
             GridConfig("FREQ.", "", 0.09, 0.15, Y_TOP, Y_END_FREQ, 10, 2, ["D", "U"], 0, COR_LARANJA),
             
-            # BLOCOS
+            # BLOCOS: Ajustados para manter espaçamento harmônico
             GridConfig("BLOCO 1", "LÍNGUA PORTUGUESA", 0.19, 0.34, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 1, COR_AZUL),
             GridConfig("BLOCO 2", "LÍNGUA PORTUGUESA", 0.38, 0.53, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 14, COR_AZUL),
             GridConfig("BLOCO 3", "MATEMÁTICA", 0.57, 0.72, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 27, COR_LARANJA),
