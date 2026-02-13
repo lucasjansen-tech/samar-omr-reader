@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from typing import List
 
-# Cores
-COR_AZUL = "#2980b9"
-COR_LARANJA = "#e67e22"
+# Cores Oficiais
+COR_AZUL = "#2980b9"    # Português
+COR_LARANJA = "#e67e22" # Matemática
 
 @dataclass
 class GridConfig:
@@ -26,30 +26,30 @@ class ConfiguracaoProva:
     grids: List[GridConfig]
     REF_W = 1240
     REF_H = 1754
+    # Âncoras ficam a 5% da borda (bem externas)
     MARGIN_PCT = 0.05 
 
-# --- GEOMETRIA EXPANDIDA ---
-Y_TOP = 0.33
-Y_BOT = 0.93 # Estendido para não cortar a questão 52
-
-# Sincronia da Frequência (10 linhas ocupam 10/13 da altura do bloco)
-ALTURA_BLOCO = Y_BOT - Y_TOP
-ALTURA_FREQ = (ALTURA_BLOCO / 13) * 10
-Y_END_FREQ = Y_TOP + ALTURA_FREQ
+# --- GEOMETRIA ---
+# Y_TOP: Baixei para 0.36 para dar espaço aos títulos dos blocos não baterem no cabeçalho
+Y_TOP = 0.36 
+# Y_BOT: Até 92% para caber as 13 questões confortavelmente
+Y_BOT = 0.92
 
 TIPOS_PROVA = {
     "52_Questoes_Grid": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental II - 7º ao 9º Ano",
         grids=[
-            # FREQ (Alargada para 0.04-0.13 para garantir leitura de D e U)
-            GridConfig("FREQ.", "", 0.04, 0.13, Y_TOP, Y_END_FREQ, 10, 2, ["D", "U"], 0, COR_LARANJA),
+            # FREQUÊNCIA (Mais estreita e recuada da âncora)
+            # Começa em 0.08 (8%) para ficar longe da âncora que está em 0.05 (5%)
+            GridConfig("FREQ.", "", 0.08, 0.14, Y_TOP, 0.66, 10, 2, ["D", "U"], 0, COR_LARANJA),
             
-            # BLOCOS (Ajustados horizontalmente para caber números)
-            GridConfig("BLOCO 1", "LÍNGUA PORTUGUESA", 0.16, 0.33, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 1, COR_AZUL),
-            GridConfig("BLOCO 2", "LÍNGUA PORTUGUESA", 0.37, 0.54, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 14, COR_AZUL),
-            GridConfig("BLOCO 3", "MATEMÁTICA", 0.58, 0.75, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 27, COR_LARANJA),
-            GridConfig("BLOCO 4", "MATEMÁTICA", 0.79, 0.96, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 40, COR_LARANJA),
+            # BLOCOS (Compactados horizontalmente)
+            # Note os intervalos menores entre x_start e x_end para reduzir a largura total
+            GridConfig("BLOCO 1", "LÍNGUA PORTUGUESA", 0.18, 0.33, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 1, COR_AZUL),
+            GridConfig("BLOCO 2", "LÍNGUA PORTUGUESA", 0.37, 0.52, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 14, COR_AZUL),
+            GridConfig("BLOCO 3", "MATEMÁTICA", 0.56, 0.71, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 27, COR_LARANJA),
+            GridConfig("BLOCO 4", "MATEMÁTICA", 0.75, 0.90, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 40, COR_LARANJA),
         ]
     )
 }
