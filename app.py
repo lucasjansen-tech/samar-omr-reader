@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 import os
 
-st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
+st.set_page_config(layout="wide", page_title="SAMAR GRID OTSU")
 st.title("🖨️ Sistema SAMAR - Tecnologia Grid OTSU")
 
 modelo = st.selectbox("Modelo:", list(TIPOS_PROVA.keys()))
@@ -56,5 +56,10 @@ with tab2:
             else: img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
             
             res, vis, _ = processar_gabarito(img, conf, gab)
-            st.image(vis, caption=f"Leitura Grid - Pág {i+1}")
-            st.json(res)
+            
+            st.write(f"### Página {i+1}")
+            c1, c2 = st.columns([3, 1])
+            with c1:
+                st.image(vis, caption="Debug OTSU", use_container_width=True)
+            with c2:
+                st.json(res)
