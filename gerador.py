@@ -11,14 +11,14 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
     m = W * conf.MARGIN_PCT
     s = 30
     
-    # Âncoras
+    # 1. Âncoras (Externas)
     c.setFillColor(colors.black)
     c.rect(m, H-m-s, s, s, fill=1, stroke=0)
     c.rect(W-m-s, H-m-s, s, s, fill=1, stroke=0)
     c.rect(m, m, s, s, fill=1, stroke=0)
     c.rect(W-m-s, m, s, s, fill=1, stroke=0)
     
-    # Cabeçalho
+    # 2. Cabeçalho
     c.setFillColor(HexColor("#2980b9"))
     c.setFont("Helvetica-Bold", 16)
     c.drawCentredString(W/2, H - 50, conf.titulo_prova)
@@ -37,41 +37,49 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
         y_top = H - (g.y_start * H)
         h_g = (g.y_end - g.y_start) * H
         
-        # Cabeçalho do Bloco
-        c.setFillColor(HexColor(g.cor_hex))
-        c.roundRect(x1, y_top + 15, w_g, 20, 4, fill=1, stroke=0)
-        c.setFillColor(colors.white); c.setFont("Helvetica-Bold", 10)
-        c.drawCentredString(x1 + w_g/2, y_top + 21, g.titulo)
+        # --- DESENHO DOS CABEÇALHOS (ACIMA DO GRID) ---
+        # Empilhamento para evitar sobreposição:
+        # 1. Título do Bloco (Mais alto)
+        # 2. Matéria (Meio)
+        # 3. Letras (Logo acima das bolinhas)
         
+        # Caixa Colorida (Bloco)
+        c.setFillColor(HexColor(g.cor_hex))
+        c.roundRect(x1, y_top + 45, w_g, 20, 4, fill=1, stroke=0)
+        c.setFillColor(colors.white); c.setFont("Helvetica-Bold", 10)
+        c.drawCentredString(x1 + w_g/2, y_top + 51, g.titulo)
+        
+        # Texto da Matéria (Abaixo da caixa, cor do bloco)
         if g.texto_extra:
             c.setFillColor(HexColor(g.cor_hex))
             c.setFont("Helvetica-Bold", 7)
-            c.drawCentredString(x1 + w_g/2, y_top + 5, g.texto_extra)
+            # Posicionado estrategicamente entre a caixa e as letras
+            c.drawCentredString(x1 + w_g/2, y_top + 32, g.texto_extra)
         
         cell_h = h_g / g.rows
         cell_w = w_g / g.cols
-        c.setFillColor(colors.black)
+        c.setFillColor(colors.black); c.setStrokeColor(colors.black)
         
-        # Cabeçalhos Colunas
+        # Rótulos das Colunas (A B C D)
         if g.labels:
             for i, lbl in enumerate(g.labels):
                 cx = x1 + (i * cell_w) + (cell_w/2)
                 c.setFont("Helvetica-Bold", 9)
-                c.drawCentredString(cx, y_top + 2, lbl)
+                # +12px acima da linha da primeira questão
+                c.drawCentredString(cx, y_top + 12, lbl)
 
-        # Corpo
+        # --- CORPO DO GRID ---
         for r in range(g.rows):
             cy = y_top - (r * cell_h) - (cell_h/2)
-            y_box_top = y_top - (r * cell_h)
             y_box_bot = y_top - ((r+1) * cell_h)
             
-            # --- GRID DE DIVISÃO (LINHAS CINZAS) ---
+            # Grid Visual (Caixa cinza clara)
             c.setStrokeColor(colors.lightgrey)
             c.setLineWidth(0.5)
             c.rect(x1, y_box_bot, w_g, cell_h, stroke=1, fill=0)
             
             c.setFillColor(colors.black)
-            # Número da questão (Alinhado à esquerda do grid, mas fora da caixa)
+            # Números
             if g.questao_inicial > 0:
                 c.setFont("Helvetica-Bold", 9)
                 c.drawRightString(x1 - 5, cy - 3, f"{g.questao_inicial+r:02d}")
@@ -79,6 +87,7 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
                 c.setFont("Helvetica", 9)
                 c.drawRightString(x1 - 5, cy - 3, str(r))
 
+            # Bolinhas
             for col in range(g.cols):
                 cx = x1 + (col * cell_w) + (cell_w/2)
                 c.setStrokeColor(colors.black)
