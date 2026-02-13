@@ -1,25 +1,21 @@
 import cv2
 import numpy as np
-from layout_samar import ConfiguracaoProva
+from layout_samar import ConfiguracaoProva, GridConfig
 
-def order_points(pts):
-    rect = np.zeros((4, 2), dtype="float32")
-    s = pts.sum(axis=1); rect[0] = pts[np.argmin(s)]; rect[2] = pts[np.argmax(s)]
-    diff = np.diff(pts, axis=1); rect[1] = pts[np.argmin(diff)]; rect[3] = pts[np.argmax(diff)]
-    return rect
-
-def encontrar_ancoras_quadradas(thresh_img):
-    cnts, _ = cv2.findContours(thresh_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+def encontrar_ancoras_globais(thresh):
+    """Encontra os 4 cantos extremos da folha."""
+    cnts, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     candidatos = []
-    h, w = thresh_img.shape
+    h, w = thresh.shape
+    
     for c in cnts:
         area = cv2.contourArea(c)
-        if area < 100 or area > (h*w * 0.05): continue
+        if area < 100 or area > (w*h*0.1): continue
         approx = cv2.approxPolyDP(c, 0.04 * cv2.arcLength(c, True), True)
         if len(approx) == 4:
             x, y, bw, bh = cv2.boundingRect(approx)
             ar = bw / float(bh)
-            if 0.7 <= ar <= 1.3:
+            if 0.7 <= ar <= 1.3: # Quadrado
                 M = cv2.moments(c)
                 if M["m00"] != 0:
                     candidatos.append([int(M["m10"]/M["m00"]), int(M["m01"]/M["m00"])])
@@ -29,207 +25,158 @@ def encontrar_ancoras_quadradas(thresh_img):
     s = pts.sum(axis=1); d = np.diff(pts, axis=1)
     return np.array([pts[np.argmin(s)], pts[np.argmin(d)], pts[np.argmax(s)], pts[np.argmax(d)]], dtype="float32")
 
-def alinhar_imagem(img, conf):
+def alinhar_imagem(img, conf: ConfiguracaoProva):
+    """
+    Normaliza a imagem para o tamanho de referência (REF_W x REF_H)
+    baseado nas âncoras.
+    """
     if len(img.shape) == 3: gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else: gray = img
+    
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
-    rect = encontrar_ancoras_quadradas(thresh)
+    
+    rect = encontrar_ancoras_globais(thresh)
+    
+    # Tamanho de trabalho padronizado (Alta resolução)
+    W_FINAL = conf.REF_W
+    H_FINAL = conf.REF_H
     
     if rect is not None:
-        scale = 2.0
-        w_t, h_t = int(conf.PAGE_W * scale), int(conf.PAGE_H * scale)
-        m = conf.MARGIN * scale
-        s = (conf.ANCORA_SIZE / 2.0) * scale
-        dst = np.array([[m+s, m+s], [w_t-(m+s), m+s], [w_t-(m+s), h_t-(m+s)], [m+s, h_t-(m+s)]], dtype="float32")
+        # Âncoras ficam a 5% das bordas (definido no layout)
+        m = int(W_FINAL * conf.MARGIN_PCT)
+        
+        dst = np.array([
+            [m, m],                 # TL
+            [W_FINAL-m, m],         # TR
+            [W_FINAL-m, H_FINAL-m], # BR
+            [m, H_FINAL-m]          # BL
+        ], dtype="float32")
+        
         M = cv2.getPerspectiveTransform(rect, dst)
-        return cv2.warpPerspective(img, M, (w_t, h_t)), scale, thresh
-    return cv2.resize(img, (int(conf.PAGE_W*2), int(conf.PAGE_H*2))), 2.0, thresh
+        warped = cv2.warpPerspective(img, M, (W_FINAL, H_FINAL))
+        return warped, W_FINAL, H_FINAL
+    
+    return cv2.resize(img, (W_FINAL, H_FINAL)), W_FINAL, H_FINAL
 
-def get_coords_manual(x_pdf, y_pdf, off_x, off_y, scale, page_h):
-    return int(x_pdf * scale) + off_x, int((page_h - y_pdf) * scale) + off_y
-
-def detectar_linhas_elasticas(img_thresh, x_center_pdf, y_start_pdf, spacing_pdf, num_rows, scale, page_h, off_y):
+def ler_grid(img_thresh, grid: GridConfig, w_img, h_img, img_debug):
     """
-    PROJEÇÃO VERTICAL: Escaneia uma faixa vertical na imagem para achar 
-    onde as linhas REALMENTE estão, ignorando espaçamento fixo.
+    Lê um grid específico (Frequência ou Bloco) dividindo-o matematicamente.
     """
-    # 1. Define uma faixa vertical (ROI) onde esperamos as bolinhas
-    x_px = int(x_center_pdf * scale)
-    width_px = int(40 * scale) # Largura de busca
+    # 1. Definir a área do Grid em pixels
+    x1 = int(grid.x_start_pct * w_img)
+    x2 = int(grid.x_end_pct * w_img)
+    y1 = int(grid.y_start_pct * h_img)
+    y2 = int(grid.y_end_pct * h_img)
     
-    # Coordenadas estimadas de topo e fundo
-    y_top_pdf = y_start_pdf + 10 # Um pouco acima da primeira linha
-    y_bot_pdf = y_start_pdf - (num_rows * spacing_pdf) - 10
+    # Desenha o retângulo do grid no debug (Visualização do "Quadrante")
+    cv2.rectangle(img_debug, (x1, y1), (x2, y2), (255, 0, 0), 2)
     
-    y_start_px = int((page_h - y_top_pdf) * scale) + off_y
-    y_end_px = int((page_h - y_bot_pdf) * scale) + off_y
+    # Altura e largura de CADA CÉLULA (Bolinha)
+    cell_h = (y2 - y1) / grid.rows
+    cell_w = (x2 - x1) / grid.cols
     
-    # Proteção de bordas
-    y_start_px = max(0, y_start_px)
-    y_end_px = min(img_thresh.shape[0], y_end_px)
-    x_left = max(0, x_px - width_px//2)
-    x_right = min(img_thresh.shape[1], x_px + width_px//2)
+    resultados_bloco = {}
     
-    # 2. Recorta a faixa
-    roi = img_thresh[y_start_px:y_end_px, x_left:x_right]
-    
-    # 3. Projeção Horizontal (Soma linhas)
-    # Reduz para 1 dimensão (vetor vertical de densidade)
-    projecao = cv2.reduce(roi, 1, cv2.REDUCE_SUM, dtype=cv2.CV_32F).flatten()
-    
-    # 4. Encontrar Picos (Onde tem bolinhas/texto)
-    # Suaviza para evitar ruído
-    projecao = cv2.GaussianBlur(projecao, (1, 5), 0)
-    
-    # Normaliza
-    if projecao.max() > 0:
-        projecao = projecao / projecao.max()
-    
-    # Busca regiões onde a densidade é alta (> 0.2)
-    picos_y = []
-    dentro_pico = False
-    inicio_pico = 0
-    
-    for y, val in enumerate(projecao):
-        if val > 0.2 and not dentro_pico:
-            dentro_pico = True
-            inicio_pico = y
-        elif val <= 0.2 and dentro_pico:
-            dentro_pico = False
-            centro_pico = (inicio_pico + y) // 2
-            picos_y.append(y_start_px + centro_pico)
+    for r in range(grid.rows):
+        densidades = []
+        centros = []
+        
+        # Coordenada Y central da linha atual
+        cy = int(y1 + (r * cell_h) + (cell_h / 2))
+        
+        for c in range(grid.cols):
+            # Coordenada X central da coluna atual
+            cx = int(x1 + (c * cell_w) + (cell_w / 2))
+            centros.append((cx, cy))
             
-    # 5. Filtragem e Validação
-    # Esperamos 'num_rows' linhas.
-    # Se achamos o número certo (ou próximo), usamos. Se não, fallback para fixo.
-    
-    ys_finais = []
-    
-    # Se achou picos suficientes, tenta casar com o esperado
-    if len(picos_y) >= num_rows:
-        # Pega os 'num_rows' picos mais prováveis (baseado em espaçamento regular)
-        # Simplificação: Pega os primeiros num_rows se a contagem bater
-        # ou tenta distribuir.
-        # Aqui vamos confiar no fallback se a contagem for muito ruim.
+            # ROI de leitura (Raio fixo ou proporcional)
+            raio = int(min(cell_h, cell_w) * 0.25)
+            roi = img_thresh[cy-raio:cy+raio, cx-raio:cx+raio]
+            densidades.append(cv2.countNonZero(roi))
+            
+            # Debug: Mostra onde leu
+            cv2.circle(img_debug, (cx, cy), raio, (200, 200, 200), 1)
+
+        # Lógica Winner-Takes-All para a linha
+        max_val = max(densidades)
+        idx_max = np.argmax(densidades)
+        avg_val = sum(densidades) / len(densidades)
         
-        # Se tiver muitos picos (sujeira), pegamos os maiores intervalos? 
-        # Vamos assumir que o recorte foi bom.
+        if grid.labels[0] == "D": # Lógica especial Frequência (Dígito a Dígito)
+             # Na freq, lemos cada coluna independentemente? 
+             # No seu layout, é uma coluna D e uma U.
+             # O loop acima percorre D e U na mesma linha (ex: 0 e 0).
+             # Isso não serve para freq vertical.
+             # Ajuste: A Freq é lida verticalmente, mas o grid foi definido como 10 linhas.
+             # Então a linha 0 tem o número '0' da Dezena e '0' da Unidade.
+             pass # Frequência será tratada montando o número no final
         
-        # Retorna apenas os N primeiros que fazem sentido
-        ys_finais = picos_y[:num_rows]
-    else:
-        # Fallback: Gera fixo
-        spacing_px = int(spacing_pdf * scale)
-        start_px = int((page_h - y_start_pdf) * scale) + off_y + int(spacing_px) # Ajuste inicial
-        ys_finais = [start_px + (i * spacing_px) for i in range(num_rows)]
+        # Critério de Marcação
+        marcou = False
+        letra = "."
         
-    # Garante que temos a lista completa preenchida com fixo se falhar
-    while len(ys_finais) < num_rows:
-        last = ys_finais[-1] if ys_finais else int((page_h - y_start_pdf)*scale)
-        ys_finais.append(last + int(spacing_pdf * scale))
+        if max_val > (raio*raio*0.8) and max_val > (avg_val * 1.3):
+            marcou = True
+            if grid.labels == ["D", "U"]: # Frequência
+                # Retorna qual coluna foi marcada (D ou U) e o valor é o índice da linha
+                letra = str(r) # O valor é a linha (0 a 9)
+                # Guarda (coluna, valor)
+                resultados_bloco[f"L{r}"] = (c, marcou) # Simplificação
+            else:
+                letra = grid.labels[idx_max]
         
-    return ys_finais[:num_rows]
+        # Salva resultado da Questão
+        if grid.questao_inicial > 0:
+            q_num = grid.questao_inicial + r
+            resultados_bloco[q_num] = letra if marcou else "."
+            
+            # Pinta o debug
+            if marcou:
+                cv2.circle(img_debug, centros[idx_max], int(raio*1.2), (0, 255, 0), 2)
+
+    # Tratamento especial para Frequência (Retornar string "15", "02", etc)
+    if grid.labels == ["D", "U"]:
+        # Recalcular lógica vertical para freq
+        # Vamos varrer colunas verticalmente
+        freq_res = ["0", "0"]
+        for c in range(grid.cols):
+            col_votos = []
+            for r in range(grid.rows):
+                cx = int(x1 + (c * cell_w) + (cell_w / 2))
+                cy = int(y1 + (r * cell_h) + (cell_h / 2))
+                raio = int(min(cell_h, cell_w) * 0.25)
+                roi = img_thresh[cy-raio:cy+raio, cx-raio:cx+raio]
+                col_votos.append(cv2.countNonZero(roi))
+            
+            idx_voto = np.argmax(col_votos)
+            if max(col_votos) > (raio*raio*0.8):
+                freq_res[c] = str(idx_voto)
+                # Pinta debug
+                cy_hit = int(y1 + (idx_voto * cell_h) + (cell_h / 2))
+                cx_hit = int(x1 + (c * cell_w) + (cell_w / 2))
+                cv2.circle(img_debug, (cx_hit, cy_hit), int(raio*1.2), (255, 0, 0), -1)
+                
+        return "".join(freq_res), resultados_bloco
+
+    return None, resultados_bloco
 
 def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None, offset_x=0, offset_y=0):
-    warped, scale, _ = alinhar_imagem(img, conf)
+    warped, w, h = alinhar_imagem(img, conf)
+    
     gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
     thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 51, 10)
     
-    res = {"respostas": {}, "frequencia": ""}
     img_vis = warped.copy()
+    res_final = {"respostas": {}, "frequencia": "00"}
     
-    # --- FREQUÊNCIA ELÁSTICA ---
-    if conf.tem_frequencia:
-        val_freq = ""
-        cx_base = conf.FREQ_X + 27
+    # Processa cada GRID definido no Layout
+    for grid in conf.grids:
+        freq_val, dict_res = ler_grid(thresh, grid, w, h, img_vis)
         
-        # Detecta as linhas Y dinamicamente olhando para a coluna de Frequência
-        # Usamos 10 linhas, espaçamento base V_SPACING
-        ys_dinamicos = detectar_linhas_elasticas(thresh, cx_base, conf.GRID_START_Y - 25, conf.V_SPACING, 10, scale, conf.PAGE_H, offset_y)
-        
-        offset_col = 12
-        for col_idx in range(2): 
-            votos = []
-            col_cx = cx_base - offset_col if col_idx == 0 else cx_base + offset_col
+        if grid.labels == ["D", "U"]:
+            res_final["frequencia"] = freq_val
+        else:
+            res_final["respostas"].update(dict_res)
             
-            for i, y_px in enumerate(ys_dinamicos):
-                # X fixo (ajustado pelo slider), Y dinâmico
-                cx = int(col_cx * scale) + offset_x
-                cy = y_px
-                
-                roi = thresh[cy-10:cy+10, cx-10:cx+10]
-                votos.append(cv2.countNonZero(roi))
-                cv2.circle(img_vis, (cx, cy), 10, (200, 200, 200), 1)
-            
-            if max(votos) > (50 * scale):
-                idx = np.argmax(votos)
-                val_freq += str(idx)
-                # Pinta a escolhida
-                cx_hit = int(col_cx * scale) + offset_x
-                cy_hit = ys_dinamicos[idx]
-                cv2.circle(img_vis, (cx_hit, cy_hit), 12, (255, 0, 0), -1)
-            else:
-                val_freq += "0"
-        res["frequencia"] = val_freq
-        
-    # --- QUESTÕES ELÁSTICAS ---
-    # Para cada bloco, detectamos as linhas novamente (pois podem estar desalinhadas do bloco 1)
-    current_x = conf.GRID_X_START
-    for bloco in conf.blocos:
-        # Detecta Ys para este bloco específico (olhando para a primeira coluna do bloco)
-        # Isso corrige se o bloco 4 estiver mais baixo que o bloco 1
-        center_col_1 = current_x + 20
-        ys_bloco = detectar_linhas_elasticas(thresh, center_col_1, conf.GRID_START_Y - 25, conf.V_SPACING, bloco.quantidade, scale, conf.PAGE_H, offset_y)
-        
-        for i in range(bloco.quantidade):
-            q_num = bloco.questao_inicial + i
-            # Pega o Y calculado elasticamente para esta linha
-            if i < len(ys_bloco):
-                cy_row = ys_bloco[i]
-            else:
-                # Fallback seguro
-                cy_row = ys_bloco[-1] + int(conf.V_SPACING * scale)
-            
-            densidade = []
-            coords = []
-            
-            for j in range(4): # A, B, C, D
-                bx = current_x + 20 + (j * 20)
-                cx = int(bx * scale) + offset_x
-                cy = cy_row
-                
-                coords.append((cx, cy))
-                roi = thresh[cy-10:cy+10, cx-10:cx+10]
-                densidade.append(cv2.countNonZero(roi))
-            
-            max_val = max(densidade)
-            avg_val = sum(densidade) / 4
-            idx_max = np.argmax(densidade)
-            
-            if max_val > 80 and max_val > (avg_val * 1.35):
-                letra = ["A", "B", "C", "D"][idx_max]
-                res["respostas"][q_num] = letra
-                marcou = True
-            else:
-                res["respostas"][q_num] = "."
-                marcou = False
-                idx_max = 0
-            
-            # Visualização
-            cx_d, cy_d = coords[idx_max]
-            if gabarito and q_num in gabarito:
-                correta = gabarito[q_num]
-                idx_c = ["A","B","C","D"].index(correta)
-                cx_c, cy_c = coords[idx_c]
-                if marcou:
-                    if letra == correta: cv2.circle(img_vis, (cx_d, cy_d), 13, (0, 255, 0), -1)
-                    else:
-                        cv2.circle(img_vis, (cx_d, cy_d), 13, (0, 0, 255), -1)
-                        cv2.circle(img_vis, (cx_c, cy_c), 13, (0, 255, 0), 3)
-                else: cv2.circle(img_vis, (cx_c, cy_c), 10, (0, 255, 255), 2)
-            elif marcou: cv2.circle(img_vis, (cx_d, cy_d), 10, (100, 100, 100), -1)
-
-        current_x += conf.GRID_COL_W
-        
-    return res, img_vis, None
+    return res_final, img_vis, None
