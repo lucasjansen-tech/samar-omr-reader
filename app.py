@@ -25,20 +25,20 @@ with tab1:
             ext = fmt.split()[0].lower()
             fn = f"Gabarito_{modelo}.{ext}"
             
-            sucesso = False
+            success = False
             if ext == "pdf":
                 gerar_pdf(conf, fn)
                 mime = "application/pdf"
-                sucesso = True
+                success = True
             else:
                 res = gerar_imagem_a4(conf, fn, ext)
                 if res:
                     mime = f"image/{ext}"
-                    sucesso = True
+                    success = True
                 else:
-                    st.error("Erro ao gerar imagem. Instale Poppler.")
+                    st.error("Erro ao gerar imagem (Poppler ausente).")
 
-            if sucesso and os.path.exists(fn):
+            if success and os.path.exists(fn):
                 with open(fn, "rb") as f:
                     st.download_button("Baixar", f, fn, mime)
 
