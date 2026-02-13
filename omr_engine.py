@@ -25,8 +25,11 @@ def encontrar_ancoras_globais(thresh):
 def alinhar_imagem(img, conf: ConfiguracaoProva):
     if len(img.shape) == 3: gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else: gray = img
+    
+    # Pré-processamento agressivo para remover ruído
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+    thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                   cv2.THRESH_BINARY_INV, 51, 15)
     
     rect = encontrar_ancoras_globais(thresh)
     W_FINAL, H_FINAL = conf.REF_W, conf.REF_H
@@ -36,106 +39,118 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
         dst = np.array([[m, m], [W_FINAL-m, m], [W_FINAL-m, H_FINAL-m], [m, H_FINAL-m]], dtype="float32")
         M = cv2.getPerspectiveTransform(rect, dst)
         warped = cv2.warpPerspective(img, M, (W_FINAL, H_FINAL))
-        # Threshold limpo para leitura
+        
+        # Threshold final limpo para leitura
         warped_gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
         warped_thresh = cv2.adaptiveThreshold(warped_gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                              cv2.THRESH_BINARY_INV, 31, 15)
+                                              cv2.THRESH_BINARY_INV, 31, 10) # 10 é mais sensível que 15
         return warped, warped_thresh, W_FINAL, H_FINAL
-        
-    resized = cv2.resize(img, (W_FINAL, H_FINAL))
-    resized_thresh = cv2.adaptiveThreshold(cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY), 255, 
-                                           cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 31, 15)
-    return resized, resized_thresh, W_FINAL, H_FINAL
+    
+    # Fallback se não achar âncoras
+    r = cv2.resize(img, (W_FINAL, H_FINAL))
+    rt = cv2.adaptiveThreshold(cv2.cvtColor(r, cv2.COLOR_BGR2GRAY), 255, 
+                               cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 31, 10)
+    return r, rt, W_FINAL, H_FINAL
 
 def ler_grid(img_thresh, grid: GridConfig, w_img, h_img, img_debug):
+    # Coordenadas do bloco inteiro
     x1 = int(grid.x_start * w_img)
     x2 = int(grid.x_end * w_img)
     y1 = int(grid.y_start * h_img)
     y2 = int(grid.y_end * h_img)
     
-    # Visualização da área do Grid (Verde)
+    # Desenha caixa verde para confirmar que o bloco foi achado
     cv2.rectangle(img_debug, (x1, y1), (x2, y2), (0, 255, 0), 2)
     
-    cell_h = (y2 - y1) / grid.rows
+    # MATEMÁTICA DE PRECISÃO: Linspace
+    # Cria coordenadas Y exatas para o centro de cada linha
+    # Isso evita que o erro acumule na questão 13
+    centros_y = np.linspace(y1, y2, grid.rows * 2 + 1)[1::2].astype(int)
+    centros_x = np.linspace(x1, x2, grid.cols * 2 + 1)[1::2].astype(int)
+    
+    # Tamanho estimado da célula para definir o raio de leitura
     cell_w = (x2 - x1) / grid.cols
+    cell_h = (y2 - y1) / grid.rows
+    raio = int(min(cell_w, cell_h) * 0.25) # 25% da célula (cobre bem o centro)
+    area_roi = (raio * 2) ** 2
+    
     res_bloco = {}
     
     # --- FREQUÊNCIA ---
     if grid.labels == ["D", "U"]:
         freq_res = ["0", "0"]
-        for c in range(grid.cols):
-            col_votos = []
-            for r in range(grid.rows):
-                cx = int(x1 + (c * cell_w) + (cell_w/2))
-                cy = int(y1 + (r * cell_h) + (cell_h/2))
-                
-                # ROI um pouco maior para frequência para garantir captura
-                raio = int(min(cell_h, cell_w) * 0.25) 
-                
+        for c_idx, cx in enumerate(centros_x):
+            votos_coluna = []
+            
+            for r_idx, cy in enumerate(centros_y):
+                # Recorte (ROI)
                 roi = img_thresh[cy-raio:cy+raio, cx-raio:cx+raio]
-                col_votos.append(cv2.countNonZero(roi))
+                tinta = cv2.countNonZero(roi)
+                votos_coluna.append(tinta)
                 
-                # Debug onde leu
-                cv2.circle(img_debug, (cx, cy), 2, (0, 255, 255), -1)
+                # Debug visual (Ponto amarelo = lugar testado)
+                cv2.circle(img_debug, (cx, cy), 3, (0, 255, 255), -1)
             
-            idx_max = np.argmax(col_votos)
-            max_val = max(col_votos)
-            area_roi = (raio*2)**2
+            # Análise da coluna
+            max_tinta = max(votos_coluna)
+            idx_vencedor = np.argmax(votos_coluna)
             
-            # Limiar super permissivo para frequência (30%)
-            if max_val > (area_roi * 0.30):
-                freq_res[c] = str(idx_max)
-                cy_hit = int(y1 + (idx_max * cell_h) + (cell_h/2))
-                cx_hit = int(x1 + (c * cell_w) + (cell_w/2))
-                cv2.circle(img_debug, (cx_hit, cy_hit), int(raio*1.2), (255, 0, 0), -1)
-        
+            # Limiar baixo (25%) para pegar marcas fracas
+            if max_tinta > (area_roi * 0.25):
+                freq_res[c_idx] = str(idx_vencedor)
+                # Pinta bolinha vermelha no vencedor
+                cy_hit = centros_y[idx_vencedor]
+                cv2.circle(img_debug, (cx, cy_hit), int(raio), (255, 0, 0), -1)
+            else:
+                # Se ninguém ganhou, mantem 0 ou avisa
+                pass
+                
         return "".join(freq_res), {}
 
-    # --- QUESTÕES ---
-    for r in range(grid.rows):
-        cy = int(y1 + (r * cell_h) + (cell_h/2))
-        densidades = []
-        centros = []
+    # --- QUESTÕES (A, B, C, D) ---
+    for r_idx, cy in enumerate(centros_y):
+        tintas_linha = []
         
-        for c in range(grid.cols):
-            cx = int(x1 + (c * cell_w) + (cell_w/2))
-            centros.append((cx, cy))
-            
-            # ROI preciso para questões
-            raio = int(min(cell_h, cell_w) * 0.22)
-            
+        for c_idx, cx in enumerate(centros_x):
             roi = img_thresh[cy-raio:cy+raio, cx-raio:cx+raio]
-            densidades.append(cv2.countNonZero(roi))
+            tinta = cv2.countNonZero(roi)
+            tintas_linha.append(tinta)
+            # Debug ponto cinza
+            cv2.circle(img_debug, (cx, cy), 2, (150, 150, 150), -1)
             
-        max_v = max(densidades)
-        idx_max = np.argmax(densidades)
-        avg_v = sum(densidades)/4
-        area_roi = (raio*2)**2
+        max_tinta = max(tintas_linha)
+        idx_vencedor = np.argmax(tintas_linha)
+        avg_tinta = sum(tintas_linha) / 4
         
+        # Lógica de decisão:
+        # 1. Tinta absoluta > 25% da área
+        # 2. Tinta vencedora > 130% da média das outras (para evitar falsos em borrões)
         marcou = False
         letra = "."
         
-        # Limiar padrão para questões
-        if max_v > (area_roi * 0.35) and max_v > (avg_v * 1.25):
+        if max_tinta > (area_roi * 0.25) and max_tinta > (avg_tinta * 1.3):
             marcou = True
-            letra = grid.labels[idx_max]
-            
+            letra = grid.labels[idx_vencedor]
+        
         if grid.questao_inicial > 0:
-            res_bloco[grid.questao_inicial + r] = letra
+            res_bloco[grid.questao_inicial + r_idx] = letra
             if marcou:
-                cv2.circle(img_debug, centros[idx_max], int(raio*1.2), (0, 255, 0), 2)
+                # Pinta Verde se leu com sucesso
+                cx_win = centros_x[idx_vencedor]
+                cv2.circle(img_debug, (cx_win, cy), int(raio), (0, 255, 0), 2)
 
     return None, res_bloco
 
 def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None, offset_x=0, offset_y=0):
     warped, thresh, w, h = alinhar_imagem(img, conf)
-    
     vis = warped.copy()
     final = {"respostas": {}, "frequencia": "00"}
     
     for g in conf.grids:
         f_val, r_dict = ler_grid(thresh, g, w, h, vis)
-        if g.labels == ["D", "U"]: final["frequencia"] = f_val
-        else: final["respostas"].update(r_dict)
+        if g.labels == ["D", "U"]: 
+            final["frequencia"] = f_val
+        else: 
+            final["respostas"].update(r_dict)
             
     return final, vis, None
