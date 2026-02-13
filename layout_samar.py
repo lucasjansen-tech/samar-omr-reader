@@ -8,10 +8,10 @@ COR_LARANJA = "#e67e22"
 class GridConfig:
     titulo: str
     texto_extra: str
-    x_start: float
-    x_end: float
-    y_start: float
-    y_end: float
+    x_start: float   # % largura
+    x_end: float     # % largura
+    y_start: float   # % altura
+    y_end: float     # % altura
     rows: int
     cols: int
     labels: List[str] 
@@ -25,15 +25,14 @@ class ConfiguracaoProva:
     grids: List[GridConfig]
     REF_W = 1240
     REF_H = 1754
-    MARGIN_PCT = 0.05 
+    MARGIN_PCT = 0.05 # Âncoras ocupam os 5% externos
 
-# --- GEOMETRIA BLINDADA ---
-# Y_TOP: 0.36 (Espaço seguro para o cabeçalho)
-# Y_BOT: 0.85 (MUITO MAIS ALTO. Garante zero colisão com a âncora inferior)
+# --- GEOMETRIA DE CONTENÇÃO (CRUCIAL) ---
+# O conteúdo SÓ começa em 0.10 (10%) para fugir das âncoras (que estão em 0.05)
 Y_TOP = 0.36
 Y_BOT = 0.85 
 
-# Cálculo proporcional para a Frequência acompanhar o alinhamento das linhas 1-10
+# Freq termina alinhada com a questão 10
 ALTURA_BLOCO = Y_BOT - Y_TOP
 ALTURA_FREQ = (ALTURA_BLOCO / 13) * 10
 Y_END_FREQ = Y_TOP + ALTURA_FREQ
@@ -43,14 +42,14 @@ TIPOS_PROVA = {
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental II - 7º ao 9º Ano",
         grids=[
-            # FREQ: Largura 0.05-0.12 (Ideal para centralizar D e U)
-            GridConfig("FREQ.", "", 0.05, 0.12, Y_TOP, Y_END_FREQ, 10, 2, ["D", "U"], 0, COR_LARANJA),
+            # FREQ: Começa em 0.10 (Longe da âncora)
+            GridConfig("FREQ.", "", 0.10, 0.15, Y_TOP, Y_END_FREQ, 10, 2, ["D", "U"], 0, COR_LARANJA),
             
-            # BLOCOS (Espaçamento horizontal seguro)
-            GridConfig("BLOCO 1", "LÍNGUA PORTUGUESA", 0.16, 0.33, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 1, COR_AZUL),
-            GridConfig("BLOCO 2", "LÍNGUA PORTUGUESA", 0.37, 0.54, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 14, COR_AZUL),
-            GridConfig("BLOCO 3", "MATEMÁTICA", 0.58, 0.75, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 27, COR_LARANJA),
-            GridConfig("BLOCO 4", "MATEMÁTICA", 0.79, 0.96, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 40, COR_LARANJA),
+            # BLOCOS: Espremidos para caber no centro (0.18 a 0.90)
+            GridConfig("BLOCO 1", "LÍNGUA PORTUGUESA", 0.19, 0.34, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 1, COR_AZUL),
+            GridConfig("BLOCO 2", "LÍNGUA PORTUGUESA", 0.38, 0.53, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 14, COR_AZUL),
+            GridConfig("BLOCO 3", "MATEMÁTICA", 0.57, 0.72, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 27, COR_LARANJA),
+            GridConfig("BLOCO 4", "MATEMÁTICA", 0.76, 0.91, Y_TOP, Y_BOT, 13, 4, ["A","B","C","D"], 40, COR_LARANJA),
         ]
     )
 }
