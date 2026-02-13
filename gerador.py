@@ -11,12 +11,14 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
     m = W * conf.MARGIN_PCT
     s = 30
     
+    # Âncoras
     c.setFillColor(colors.black)
     c.rect(m, H-m-s, s, s, fill=1, stroke=0)
     c.rect(W-m-s, H-m-s, s, s, fill=1, stroke=0)
     c.rect(m, m, s, s, fill=1, stroke=0)
     c.rect(W-m-s, m, s, s, fill=1, stroke=0)
     
+    # Cabeçalho
     c.setFillColor(HexColor("#2980b9"))
     c.setFont("Helvetica-Bold", 16)
     c.drawCentredString(W/2, H - 50, conf.titulo_prova)
@@ -25,22 +27,20 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
     c.drawCentredString(W/2, H - 70, conf.subtitulo)
     
     c.setStrokeColor(colors.black); c.setLineWidth(0.5); c.setFont("Helvetica-Bold", 9)
-    pad = 40
-    
     y = H - 110
-    c.drawString(m+pad, y, "UNIDADE DE ENSINO:"); c.line(m+pad+100, y-2, W-m-pad, y-2)
+    c.drawString(m, y, "UNIDADE DE ENSINO:"); c.line(m+100, y-2, W-m, y-2)
     y -= 25
-    c.drawString(m+pad, y, "ANO:"); c.line(m+pad+30, y-2, m+pad+150, y-2)
-    c.drawString(m+pad+160, y, "TURMA:"); c.line(m+pad+200, y-2, m+pad+300, y-2)
-    c.drawString(m+pad+310, y, "TURNO:"); c.line(m+pad+350, y-2, W-m-pad, y-2)
+    c.drawString(m, y, "ANO:"); c.line(m+30, y-2, m+150, y-2)
+    c.drawString(m+160, y, "TURMA:"); c.line(m+200, y-2, m+300, y-2)
+    c.drawString(m+310, y, "TURNO:"); c.line(m+350, y-2, W-m, y-2)
     y -= 25
-    c.drawString(m+pad, y, "ALUNO:"); c.line(m+pad+40, y-2, W-m-pad, y-2)
+    c.drawString(m, y, "ALUNO:"); c.line(m+40, y-2, W-m, y-2)
     
     y -= 35
     c.setStrokeColor(HexColor("#e67e22"))
-    c.rect(m+pad, y-10, W-(2*(m+pad)), 25, stroke=1, fill=0)
+    c.rect(m, y-10, W-(2*m), 25, stroke=1, fill=0)
     c.setFillColor(colors.black); c.setFont("Helvetica", 8)
-    c.drawString(m+pad+10, y+2, "INSTRUÇÕES: 1. Use caneta azul ou preta. 2. Preencha totalmente a bolinha.")
+    c.drawString(m+10, y+2, "INSTRUÇÕES: 1. Use caneta azul ou preta. 2. Preencha totalmente a bolinha. 3. Não rasure.")
     
     for g in conf.grids:
         x1 = g.x_start * W
@@ -48,6 +48,7 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
         y_top = H - (g.y_start * H)
         h_g = (g.y_end - g.y_start) * H
         
+        # Título
         c.setFillColor(HexColor(g.cor_hex))
         c.roundRect(x1, y_top + 45, w_g, 20, 4, fill=1, stroke=0)
         c.setFillColor(colors.white); c.setFont("Helvetica-Bold", 10)
@@ -61,16 +62,18 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
         cell_w = w_g / g.cols
         c.setFillColor(colors.black); c.setStrokeColor(colors.black)
         
+        # Desenha Rótulos e Caixas
         if g.labels == ["D", "U"]:
-            # CAIXAS MANUAIS
-            box_sz = 16
-            # Centraliza as caixas
-            c.rect(x1 + (cell_w*0.5) - (box_sz/2), y_top + 18, box_sz, box_sz, stroke=1, fill=0)
-            c.rect(x1 + (cell_w*1.5) - (box_sz/2), y_top + 18, box_sz, box_sz, stroke=1, fill=0)
+            # Caixas para escrita manual na Frequência
+            box_sz = 15
+            c.setStrokeColor(colors.black)
+            # Centraliza as caixas acima das colunas
+            c.rect(x1 + (cell_w*0.5) - (box_sz/2), y_top + 15, box_sz, box_sz, stroke=1, fill=0)
+            c.rect(x1 + (cell_w*1.5) - (box_sz/2), y_top + 15, box_sz, box_sz, stroke=1, fill=0)
             
             c.setFont("Helvetica-Bold", 9)
-            c.drawCentredString(x1 + (cell_w*0.5), y_top + 6, "D")
-            c.drawCentredString(x1 + (cell_w*1.5), y_top + 6, "U")
+            c.drawCentredString(x1 + (cell_w*0.5), y_top + 5, "D")
+            c.drawCentredString(x1 + (cell_w*1.5), y_top + 5, "U")
             
         elif g.labels:
             for i, lbl in enumerate(g.labels):
