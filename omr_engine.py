@@ -25,13 +25,8 @@ def encontrar_ancoras_globais(thresh):
 def alinhar_imagem(img, conf: ConfiguracaoProva):
     if len(img.shape) == 3: gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else: gray = img
-    
-    # Blur leve
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    
-    # Threshold ajustado para lidar melhor com sombras
-    thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                   cv2.THRESH_BINARY_INV, 31, 15)
+    _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
     
     rect = encontrar_ancoras_globais(thresh)
     W_FINAL, H_FINAL = conf.REF_W, conf.REF_H
@@ -41,17 +36,15 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
         dst = np.array([[m, m], [W_FINAL-m, m], [W_FINAL-m, H_FINAL-m], [m, H_FINAL-m]], dtype="float32")
         M = cv2.getPerspectiveTransform(rect, dst)
         warped = cv2.warpPerspective(img, M, (W_FINAL, H_FINAL))
-        # Retorna também o threshold da imagem warpada para leitura limpa
+        # Threshold limpo para leitura
         warped_gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
         warped_thresh = cv2.adaptiveThreshold(warped_gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
                                               cv2.THRESH_BINARY_INV, 31, 15)
         return warped, warped_thresh, W_FINAL, H_FINAL
         
-    # Fallback
     resized = cv2.resize(img, (W_FINAL, H_FINAL))
-    resized_gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY) if len(resized.shape) == 3 else resized
-    resized_thresh = cv2.adaptiveThreshold(resized_gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                           cv2.THRESH_BINARY_INV, 31, 15)
+    resized_thresh = cv2.adaptiveThreshold(cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY), 255, 
+                                           cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 31, 15)
     return resized, resized_thresh, W_FINAL, H_FINAL
 
 def ler_grid(img_thresh, grid: GridConfig, w_img, h_img, img_debug):
@@ -76,12 +69,11 @@ def ler_grid(img_thresh, grid: GridConfig, w_img, h_img, img_debug):
                 cx = int(x1 + (c * cell_w) + (cell_w/2))
                 cy = int(y1 + (r * cell_h) + (cell_h/2))
                 
-                # Raio de 22% da célula (equilibrio entre pegar tudo e evitar borda)
-                raio = int(min(cell_h, cell_w) * 0.22) 
+                # ROI um pouco maior para frequência para garantir captura
+                raio = int(min(cell_h, cell_w) * 0.25) 
                 
                 roi = img_thresh[cy-raio:cy+raio, cx-raio:cx+raio]
-                pixels = cv2.countNonZero(roi)
-                col_votos.append(pixels)
+                col_votos.append(cv2.countNonZero(roi))
                 
                 # Debug onde leu
                 cv2.circle(img_debug, (cx, cy), 2, (0, 255, 255), -1)
@@ -90,8 +82,8 @@ def ler_grid(img_thresh, grid: GridConfig, w_img, h_img, img_debug):
             max_val = max(col_votos)
             area_roi = (raio*2)**2
             
-            # Sensibilidade: 35% de preenchimento (mais permissivo)
-            if max_val > (area_roi * 0.35):
+            # Limiar super permissivo para frequência (30%)
+            if max_val > (area_roi * 0.30):
                 freq_res[c] = str(idx_max)
                 cy_hit = int(y1 + (idx_max * cell_h) + (cell_h/2))
                 cx_hit = int(x1 + (c * cell_w) + (cell_w/2))
@@ -109,6 +101,7 @@ def ler_grid(img_thresh, grid: GridConfig, w_img, h_img, img_debug):
             cx = int(x1 + (c * cell_w) + (cell_w/2))
             centros.append((cx, cy))
             
+            # ROI preciso para questões
             raio = int(min(cell_h, cell_w) * 0.22)
             
             roi = img_thresh[cy-raio:cy+raio, cx-raio:cx+raio]
@@ -122,8 +115,7 @@ def ler_grid(img_thresh, grid: GridConfig, w_img, h_img, img_debug):
         marcou = False
         letra = "."
         
-        # Lógica calibrada: 
-        # Precisa ter 35% de preenchimento E ser 25% maior que a média (destaque)
+        # Limiar padrão para questões
         if max_v > (area_roi * 0.35) and max_v > (avg_v * 1.25):
             marcou = True
             letra = grid.labels[idx_max]
@@ -132,13 +124,10 @@ def ler_grid(img_thresh, grid: GridConfig, w_img, h_img, img_debug):
             res_bloco[grid.questao_inicial + r] = letra
             if marcou:
                 cv2.circle(img_debug, centros[idx_max], int(raio*1.2), (0, 255, 0), 2)
-            else:
-                cv2.circle(img_debug, centros[idx_max], 2, (150, 150, 150), -1)
 
     return None, res_bloco
 
 def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None, offset_x=0, offset_y=0):
-    # Obtém imagem alinhada E imagem binarizada limpa
     warped, thresh, w, h = alinhar_imagem(img, conf)
     
     vis = warped.copy()
