@@ -36,7 +36,7 @@ with tab1:
                     mime = f"image/{ext}"
                     success = True
                 else:
-                    st.error("Erro ao gerar imagem.")
+                    st.error("Erro ao gerar imagem. Instale Poppler.")
 
             if success and os.path.exists(fn):
                 with open(fn, "rb") as f:
