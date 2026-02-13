@@ -8,8 +8,8 @@ import cv2
 import numpy as np
 import os
 
-st.set_page_config(layout="wide", page_title="SAMAR GRID OTSU")
-st.title("🖨️ Sistema SAMAR - Tecnologia Grid OTSU")
+st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
+st.title("🖨️ Sistema SAMAR - Tecnologia Grid")
 
 modelo = st.selectbox("Modelo:", list(TIPOS_PROVA.keys()))
 conf = TIPOS_PROVA[modelo]
@@ -60,6 +60,6 @@ with tab2:
             st.write(f"### Página {i+1}")
             c1, c2 = st.columns([3, 1])
             with c1:
-                st.image(vis, caption="Debug OTSU", use_container_width=True)
+                st.image(vis, caption="Alinhamento e Leitura Corrigidos", use_container_width=True)
             with c2:
                 st.json(res)
