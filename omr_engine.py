@@ -59,7 +59,6 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
     _, rt = cv2.threshold(br, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
     return cv2.cvtColor(r, cv2.COLOR_GRAY2BGR), rt, W_FINAL, H_FINAL
 
-# Adicionado gabarito na assinatura da função
 def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug, gabarito=None):
     x1 = grid.x_start * w_img
     x2 = grid.x_end * w_img
@@ -98,40 +97,55 @@ def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug, gabarito=No
                 
         return "".join(freq_res), {}
 
-    # --- QUESTÕES COM FEEDBACK DE COR ---
+    # --- QUESTÕES (COM TRAVA ANTI-RASURA) ---
     for r_idx, cy in enumerate(centros_y):
         tintas = []
         for cx in centros_x:
             roi = img_binaria[cy-raio:cy+raio, cx-raio:cx+raio]
             tintas.append(cv2.countNonZero(roi))
             
-        max_tinta = max(tintas)
-        idx_max = np.argmax(tintas)
-        media_ruido = (sum(tintas) - max_tinta) / 3 if sum(tintas) > max_tinta else 0
+        marcadas = []
+        max_tinta_linha = max(tintas) if tintas else 0
         
-        marcou = False
-        letra = "."
+        # Só considera as bolinhas que têm pelo menos 25% de tinta 
+        # E que têm pelo menos 60% da força da bolinha mais escura (Filtro Anti-Borrão/Rasura)
+        for idx, tinta in enumerate(tintas):
+            if tinta > (area_roi * 0.25) and tinta > (max_tinta_linha * 0.60):
+                marcadas.append(idx)
         
-        if max_tinta > (area_roi * 0.25) and max_tinta > (media_ruido * 1.5):
-            marcou = True
-            letra = grid.labels[idx_max]
-            
         if grid.questao_inicial > 0:
             q_num = grid.questao_inicial + r_idx
-            res_bloco[q_num] = letra
+            resp_oficial = gabarito.get(q_num, ".") if gabarito else "."
             
-            if marcou:
-                # Lógica de Cor: Verde (Acerto), Vermelho (Erro)
-                cor_marcada = (0, 255, 0) # Verde padrão
-                if gabarito and q_num in gabarito:
-                    if letra != gabarito[q_num]:
-                        cor_marcada = (0, 0, 255) # Vermelho se errou
-                
-                # Desenha o círculo mais grosso para visualização clara
-                cv2.circle(img_debug, (centros_x[idx_max], cy), int(raio), cor_marcada, 3)
-            else:
-                # Pontinhos cinzas indicam onde o sistema buscou, mas não achou tinta
+            if len(marcadas) == 0:
+                # Nenhuma marcação válida
+                res_bloco[q_num] = "."
                 for cx in centros_x: cv2.circle(img_debug, (cx, cy), 2, (150, 150, 150), -1)
+                
+            elif len(marcadas) == 1:
+                # Uma única marcação perfeita
+                idx_max = marcadas[0]
+                letra = grid.labels[idx_max]
+                res_bloco[q_num] = letra
+                
+                # Cores de Correção
+                cor = (0, 255, 0) # Verde = Correto
+                if resp_oficial in ["NULA", "X"]:
+                    cor = (255, 200, 0) # Azul Celeste = Anulada (Ponto dado)
+                elif gabarito and letra != resp_oficial:
+                    cor = (0, 0, 255) # Vermelho = Errado
+                    
+                cv2.circle(img_debug, (centros_x[idx_max], cy), int(raio), cor, 3)
+                
+            else:
+                # Múltiplas Marcações!
+                res_bloco[q_num] = "*" # Asterisco representa múltiplas escolhas
+                
+                # Se for anulada, pinta de azul, senão pinta de Laranja (Aviso de Rasura)
+                cor = (255, 200, 0) if resp_oficial in ["NULA", "X"] else (0, 140, 255)
+                
+                for idx in marcadas:
+                    cv2.circle(img_debug, (centros_x[idx], cy), int(raio), cor, 3)
 
     return None, res_bloco
 
@@ -140,29 +154,35 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None, offset_x=0, 
     final = {"respostas": {}, "frequencia": "00"}
     
     for g in conf.grids:
-        # Passa o gabarito oficial para a função ler_grid para pintar as cores
         f_val, r_dict = ler_grid(binaria, g, w, h, vis, gabarito)
         if g.labels == ["D", "U"]: final["frequencia"] = f_val
         else: final["respostas"].update(r_dict)
             
-    # --- ANÁLISE ESTATÍSTICA ---
+    # --- ANÁLISE DE DADOS E CORREÇÃO AUTOMÁTICA ---
     if gabarito:
         acertos = 0
         detalhes_correcao = {}
         
         for q_num_int, resp_lida in final["respostas"].items():
             resp_oficial = gabarito.get(q_num_int, ".")
-            
             status = "Em Branco"
-            if resp_lida != ".":
-                if resp_lida == resp_oficial:
-                    status = "Correto"
-                    acertos += 1
-                else:
-                    status = "Incorreto"
+            
+            # Lógica de Correção
+            if resp_oficial in ["NULA", "X"]:
+                status = "Correto (Anulada)"
+                acertos += 1
+            else:
+                if resp_lida == "*":
+                    status = "Múltiplas Marcações" # Conta como erro automaticamente
+                elif resp_lida != ".":
+                    if resp_lida == resp_oficial:
+                        status = "Correto"
+                        acertos += 1
+                    else:
+                        status = "Incorreto"
             
             detalhes_correcao[q_num_int] = {
-                "Lida": resp_lida,
+                "Lida": "Múltiplas" if resp_lida == "*" else resp_lida,
                 "Gabarito": resp_oficial,
                 "Status": status
             }
