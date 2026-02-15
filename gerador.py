@@ -72,6 +72,7 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
             cy = y_top - (r * cell_h) - (cell_h/2)
             y_box_bot = y_top - ((r+1) * cell_h)
             
+            # GRID VISUAL (Retângulo cinza)
             c.setStrokeColor(colors.lightgrey); c.setLineWidth(0.5)
             c.rect(x1, y_box_bot, w_g, cell_h, stroke=1, fill=0)
             
