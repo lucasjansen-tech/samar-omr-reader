@@ -29,7 +29,7 @@ class ConfiguracaoProva:
     MARGIN_PCT = 0.05 
 
 # =========================================================
-# GEOMETRIA: SISTEMA SAMAR NATIVO (INTOCADA E VALIDADA)
+# GEOMETRIA: SISTEMA SAMAR NATIVO (Validado e Separado)
 # =========================================================
 Y_TOP = 0.35
 Y_BOT = 0.85 
@@ -38,26 +38,6 @@ ALTURA_BLOCO = Y_BOT - Y_TOP
 Y_END_FREQ_13 = Y_TOP + ((ALTURA_BLOCO / 13) * 10) 
 Y_END_FREQ_11 = Y_TOP + ((ALTURA_BLOCO / 11) * 10) 
 Y_END_FREQ_09 = Y_BOT 
-
-# =========================================================
-# GEOMETRIA: PADRÃO EVALBEE EM TELA CHEIA (Calibragem Fina)
-# =========================================================
-
-# --- EVALBEE 52 QUESTÕES ---
-Y_TOP_EV52 = 0.49
-Y_BOT_EV52 = 0.94
-H_EV52 = Y_BOT_EV52 - Y_TOP_EV52
-
-# --- EVALBEE 44 QUESTÕES ---
-Y_TOP_EV44 = 0.51
-Y_BOT_EV44 = 0.92
-H_EV44 = Y_BOT_EV44 - Y_TOP_EV44
-
-# --- EVALBEE 18 QUESTÕES (Baseado no seu print com caixas vermelhas) ---
-Y_TOP_EV18 = 0.62   # Começa bem abaixo do cabeçalho
-Y_BOT_EV18 = 0.865  # Fundo da questão 9
-H_EV18 = Y_BOT_EV18 - Y_TOP_EV18
-Y_END_FREQ_EV18 = Y_TOP_EV18 + ((H_EV18 / 9) * 10) # Frequência vai um pouco mais abaixo (10 linhas)
 
 TIPOS_PROVA = {
     # ---------------------------------------------------------
@@ -98,17 +78,17 @@ TIPOS_PROVA = {
     ),
 
     # ---------------------------------------------------------
-    # PADRÕES IMPORTADOS DO EVALBEE
+    # PADRÕES IMPORTADOS DO EVALBEE (Mapeamento Plano em A4)
     # ---------------------------------------------------------
     "EVALBEE_52_Questoes": ConfiguracaoProva(
         titulo_prova="GABARITO EVALBEE",
         subtitulo="Ensino Fundamental II - 7º ao 9º Ano",
         grids=[
-            GridConfig("FREQ.", "", 0.08, 0.15, Y_TOP_EV52, Y_TOP_EV52 + ((H_EV52/13)*10), 10, 2, ["D", "U"], 0, COR_EVALBEE),
-            GridConfig("BLOCO 1", "", 0.20, 0.35, Y_TOP_EV52, Y_BOT_EV52, 13, 4, ["A","B","C","D"], 1, COR_EVALBEE),
-            GridConfig("BLOCO 2", "", 0.40, 0.55, Y_TOP_EV52, Y_BOT_EV52, 13, 4, ["A","B","C","D"], 14, COR_EVALBEE),
-            GridConfig("BLOCO 3", "", 0.60, 0.75, Y_TOP_EV52, Y_BOT_EV52, 13, 4, ["A","B","C","D"], 27, COR_EVALBEE),
-            GridConfig("BLOCO 4", "", 0.80, 0.95, Y_TOP_EV52, Y_BOT_EV52, 13, 4, ["A","B","C","D"], 40, COR_EVALBEE),
+            GridConfig("FREQ.", "", 0.08, 0.15, 0.50, 0.90, 10, 2, ["D", "U"], 0, COR_EVALBEE),
+            GridConfig("BLOCO 1", "", 0.20, 0.35, 0.50, 0.90, 13, 4, ["A","B","C","D"], 1, COR_EVALBEE),
+            GridConfig("BLOCO 2", "", 0.40, 0.55, 0.50, 0.90, 13, 4, ["A","B","C","D"], 14, COR_EVALBEE),
+            GridConfig("BLOCO 3", "", 0.60, 0.75, 0.50, 0.90, 13, 4, ["A","B","C","D"], 27, COR_EVALBEE),
+            GridConfig("BLOCO 4", "", 0.80, 0.95, 0.50, 0.90, 13, 4, ["A","B","C","D"], 40, COR_EVALBEE),
         ]
     ),
 
@@ -116,22 +96,22 @@ TIPOS_PROVA = {
         titulo_prova="GABARITO EVALBEE",
         subtitulo="Ensino Fundamental - 4º ao 6º Ano",
         grids=[
-            GridConfig("FREQ.", "", 0.08, 0.15, Y_TOP_EV44, Y_TOP_EV44 + ((H_EV44/11)*10), 10, 2, ["D", "U"], 0, COR_EVALBEE),
-            GridConfig("BLOCO 1", "", 0.20, 0.35, Y_TOP_EV44, Y_BOT_EV44, 11, 4, ["A","B","C","D"], 1, COR_EVALBEE),
-            GridConfig("BLOCO 2", "", 0.40, 0.55, Y_TOP_EV44, Y_BOT_EV44, 11, 4, ["A","B","C","D"], 12, COR_EVALBEE),
-            GridConfig("BLOCO 3", "", 0.60, 0.75, Y_TOP_EV44, Y_BOT_EV44, 11, 4, ["A","B","C","D"], 23, COR_EVALBEE),
-            GridConfig("BLOCO 4", "", 0.80, 0.95, Y_TOP_EV44, Y_BOT_EV44, 11, 4, ["A","B","C","D"], 34, COR_EVALBEE),
+            GridConfig("FREQ.", "", 0.08, 0.15, 0.50, 0.90, 10, 2, ["D", "U"], 0, COR_EVALBEE),
+            GridConfig("BLOCO 1", "", 0.20, 0.35, 0.50, 0.90, 11, 4, ["A","B","C","D"], 1, COR_EVALBEE),
+            GridConfig("BLOCO 2", "", 0.40, 0.55, 0.50, 0.90, 11, 4, ["A","B","C","D"], 12, COR_EVALBEE),
+            GridConfig("BLOCO 3", "", 0.60, 0.75, 0.50, 0.90, 11, 4, ["A","B","C","D"], 23, COR_EVALBEE),
+            GridConfig("BLOCO 4", "", 0.80, 0.95, 0.50, 0.90, 11, 4, ["A","B","C","D"], 34, COR_EVALBEE),
         ]
     ),
 
+    # FOCO ABSOLUTO AQUI: A Frequência e os Blocos começam a 60% da página (0.60).
     "EVALBEE_18_Questoes": ConfiguracaoProva(
         titulo_prova="GABARITO EVALBEE",
         subtitulo="Ensino Fundamental I - 1º ao 3º Ano",
         grids=[
-            # Alinhado rigorosamente com as caixas vermelhas do Group 276.png
-            GridConfig("FREQ.", "", 0.19, 0.27, Y_TOP_EV18, Y_END_FREQ_EV18, 10, 2, ["D", "U"], 0, COR_EVALBEE),
-            GridConfig("BLOCO 1", "", 0.36, 0.56, Y_TOP_EV18, Y_BOT_EV18, 9, 4, ["A","B","C","D"], 1, COR_EVALBEE),
-            GridConfig("BLOCO 2", "", 0.64, 0.84, Y_TOP_EV18, Y_BOT_EV18, 9, 4, ["A","B","C","D"], 10, COR_EVALBEE),
+            GridConfig("FREQ.", "", 0.17, 0.25, 0.60, 0.81, 10, 2, ["D", "U"], 0, COR_EVALBEE),
+            GridConfig("BLOCO 1", "", 0.35, 0.55, 0.63, 0.81, 9, 4, ["A","B","C","D"], 1, COR_EVALBEE),
+            GridConfig("BLOCO 2", "", 0.63, 0.83, 0.63, 0.81, 9, 4, ["A","B","C","D"], 10, COR_EVALBEE),
         ]
     )
 }
