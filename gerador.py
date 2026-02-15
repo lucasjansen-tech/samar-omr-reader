@@ -83,22 +83,22 @@ def gerar_pdf(conf, filename, titulo_custom=None, subtitulo_custom=None, logos=N
         c.setStrokeColor(cor_materia)
         c.setLineWidth(1.2)
         
-        # Margens confortáveis para abraçar as bolinhas e os números
+        # Margens para o quadro abraçar o conteúdo
         box_x = x1 - 20
         box_w = (x2 - x1) + 30
         box_y = y1_pdf - 25
         box_h = (y2_pdf - y1_pdf) + 50
         
-        # Quadro especial mais enxuto para a Frequência
+        # Ajuste fino para a Frequência
         if grid.labels == ["D", "U"]:
             box_x = x1 - 15
             box_w = (x2 - x1) + 25
             
-        # Desenha o quadro com cantos levemente arredondados
+        # Desenha o retângulo com cantos arredondados
         c.roundRect(box_x, box_y, box_w, box_h, 4, stroke=1, fill=0)
 
         # -------------------------------------------------------------
-        # TEXTOS DO CABEÇALHO DO BLOCO (Coloridos)
+        # TÍTULOS COLORIDOS
         # -------------------------------------------------------------
         c.setFillColor(cor_materia)
         c.setFont("Helvetica-Bold", 9)
@@ -107,7 +107,7 @@ def gerar_pdf(conf, filename, titulo_custom=None, subtitulo_custom=None, logos=N
             c.setFont("Helvetica-Bold", 8)
             c.drawCentredString((x1+x2)/2, y2_pdf + 0, grid.texto_extra)
 
-        # Retorna o pincel para PRETO e CINZA para imprimir as alternativas
+        # Volta para preto/cinza para as bolinhas
         c.setFillColorRGB(0, 0, 0)
         c.setStrokeColorRGB(0.4, 0.4, 0.4)
 
