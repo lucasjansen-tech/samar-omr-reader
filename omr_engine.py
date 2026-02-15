@@ -16,17 +16,28 @@ def encontrar_ancoras_globais(thresh):
         x, y, bw, bh = cv2.boundingRect(c)
         ar = bw / float(bh)
         
-        if solidez > 0.7 and 0.5 <= ar <= 2.0:
+        # Volta a exigir formato quadrado perfeito das âncoras SAMAR
+        if solidez > 0.8 and 0.5 <= ar <= 1.5:
             M = cv2.moments(c)
             if M["m00"] != 0:
-                candidatos.append((int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]), area))
+                cx = int(M["m10"] / M["m00"])
+                cy = int(M["m01"] / M["m00"])
+                candidatos.append((cx, cy, area))
                 
     if len(candidatos) < 4: return None
     
-    pt_tl = min(candidatos, key=lambda item: item[0] + item[1])[:2]
-    pt_tr = min(candidatos, key=lambda item: (w - item[0]) + item[1])[:2]
-    pt_bl = min(candidatos, key=lambda item: item[0] + (h - item[1]))[:2]
-    pt_br = min(candidatos, key=lambda item: (w - item[0]) + (h - item[1]))[:2]
+    meio_x, meio_y = w / 2, h / 2
+    tl = [c for c in candidatos if c[0] < meio_x and c[1] < meio_y]
+    tr = [c for c in candidatos if c[0] > meio_x and c[1] < meio_y]
+    br = [c for c in candidatos if c[0] > meio_x and c[1] > meio_y]
+    bl = [c for c in candidatos if c[0] < meio_x and c[1] > meio_y]
+    
+    if not (tl and tr and br and bl): return None
+    
+    pt_tl = max(tl, key=lambda item: item[2])[:2]
+    pt_tr = max(tr, key=lambda item: item[2])[:2]
+    pt_br = max(br, key=lambda item: item[2])[:2]
+    pt_bl = max(bl, key=lambda item: item[2])[:2]
     
     return np.array([pt_tl, pt_tr, pt_br, pt_bl], dtype="float32")
 
@@ -36,34 +47,28 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
     
     W_FINAL, H_FINAL = conf.REF_W, conf.REF_H
     
-    # === AQUI ESTÁ A SEPARAÇÃO ABSOLUTA DOS PADRÕES ===
-    is_evalbee = "EVALBEE" in conf.titulo_prova.upper()
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    _, thresh_ancoras = cv2.threshold(blurred, 120, 255, cv2.THRESH_BINARY_INV)
     
-    if is_evalbee:
-        # SE FOR EVALBEE: Nenhuma distorção, nenhum corte. Apenas redimensiona para o tamanho A4.
-        warped = cv2.resize(gray, (W_FINAL, H_FINAL))
-    else:
-        # SE FOR SAMAR (Nativo): Aplica a distorção para corrigir a foto baseada nas âncoras.
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-        _, thresh_ancoras = cv2.threshold(blurred, 120, 255, cv2.THRESH_BINARY_INV)
-        rect = encontrar_ancoras_globais(thresh_ancoras)
+    rect = encontrar_ancoras_globais(thresh_ancoras)
+    
+    if rect is not None:
+        m_px = W_FINAL * conf.MARGIN_PCT
+        s_px = W_FINAL * 0.04 
+        offset = m_px + (s_px / 2.0)
         
-        if rect is not None:
-            m_px = W_FINAL * conf.MARGIN_PCT
-            s_px = W_FINAL * 0.04 
-            offset = m_px + (s_px / 2.0)
-            dst = np.array([
-                [offset, offset],
-                [W_FINAL - offset, offset],
-                [W_FINAL - offset, H_FINAL - offset],
-                [offset, H_FINAL - offset]
-            ], dtype="float32")
-            M = cv2.getPerspectiveTransform(rect, dst)
-            warped = cv2.warpPerspective(gray, M, (W_FINAL, H_FINAL))
-        else:
-            warped = cv2.resize(gray, (W_FINAL, H_FINAL))
-            
-    # Filtro OTSU (Inteligência de leitura de bolinhas) continua igual para ambos
+        dst = np.array([
+            [offset, offset],
+            [W_FINAL - offset, offset],
+            [W_FINAL - offset, H_FINAL - offset],
+            [offset, H_FINAL - offset]
+        ], dtype="float32")
+        
+        M = cv2.getPerspectiveTransform(rect, dst)
+        warped = cv2.warpPerspective(gray, M, (W_FINAL, H_FINAL))
+    else:
+        warped = cv2.resize(gray, (W_FINAL, H_FINAL))
+        
     blur_warp = cv2.GaussianBlur(warped, (3, 3), 0)
     _, binaria = cv2.threshold(blur_warp, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
     kernel = np.ones((2,2), np.uint8)
