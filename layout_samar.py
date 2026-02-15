@@ -40,18 +40,17 @@ Y_END_FREQ_11 = Y_TOP + ((ALTURA_BLOCO / 11) * 10)
 Y_END_FREQ_09 = Y_BOT 
 
 # =========================================================
-# GEOMETRIA: PADRÃO EVALBEE (Mapeamento Real)
-# Baseado nos PDFs que você enviou, as bolinhas começam por 
-# volta de 53% da folha e terminam em 90%.
+# GEOMETRIA: PADRÃO EVALBEE EM TELA CHEIA
+# Com o novo alinhamento, a imagem fica em proporção real.
+# As bolinhas do Evalbee ficam entre 61% e 93% da página.
 # =========================================================
-Y_TOP_EV = 0.53
-Y_BOT_EV = 0.90
+Y_TOP_EV = 0.61
+Y_BOT_EV = 0.93
 ALTURA_BLOCO_EV = Y_BOT_EV - Y_TOP_EV
 
-# A altura da Frequência precisa acompanhar matematicamente o tamanho da linha
 Y_END_FREQ_13_EV = Y_TOP_EV + ((ALTURA_BLOCO_EV / 13) * 10)
 Y_END_FREQ_11_EV = Y_TOP_EV + ((ALTURA_BLOCO_EV / 11) * 10)
-Y_END_FREQ_09_EV = Y_TOP_EV + ((ALTURA_BLOCO_EV / 9) * 10) 
+Y_END_FREQ_09_EV = Y_BOT_EV
 
 TIPOS_PROVA = {
     # ---------------------------------------------------------
@@ -98,11 +97,11 @@ TIPOS_PROVA = {
         titulo_prova="GABARITO EVALBEE",
         subtitulo="Ensino Fundamental II - 7º ao 9º Ano",
         grids=[
-            GridConfig("FREQ.", "", 0.10, 0.18, Y_TOP_EV, Y_END_FREQ_13_EV, 10, 2, ["D", "U"], 0, COR_EVALBEE),
-            GridConfig("BLOCO 1", "", 0.23, 0.38, Y_TOP_EV, Y_BOT_EV, 13, 4, ["A","B","C","D"], 1, COR_EVALBEE),
-            GridConfig("BLOCO 2", "", 0.42, 0.57, Y_TOP_EV, Y_BOT_EV, 13, 4, ["A","B","C","D"], 14, COR_EVALBEE),
-            GridConfig("BLOCO 3", "", 0.61, 0.76, Y_TOP_EV, Y_BOT_EV, 13, 4, ["A","B","C","D"], 27, COR_EVALBEE),
-            GridConfig("BLOCO 4", "", 0.80, 0.95, Y_TOP_EV, Y_BOT_EV, 13, 4, ["A","B","C","D"], 40, COR_EVALBEE),
+            GridConfig("FREQ.", "", 0.08, 0.15, Y_TOP_EV, Y_END_FREQ_13_EV, 10, 2, ["D", "U"], 0, COR_EVALBEE),
+            GridConfig("BLOCO 1", "", 0.20, 0.35, Y_TOP_EV, Y_BOT_EV, 13, 4, ["A","B","C","D"], 1, COR_EVALBEE),
+            GridConfig("BLOCO 2", "", 0.38, 0.53, Y_TOP_EV, Y_BOT_EV, 13, 4, ["A","B","C","D"], 14, COR_EVALBEE),
+            GridConfig("BLOCO 3", "", 0.58, 0.73, Y_TOP_EV, Y_BOT_EV, 13, 4, ["A","B","C","D"], 27, COR_EVALBEE),
+            GridConfig("BLOCO 4", "", 0.77, 0.92, Y_TOP_EV, Y_BOT_EV, 13, 4, ["A","B","C","D"], 40, COR_EVALBEE),
         ]
     ),
 
@@ -110,11 +109,11 @@ TIPOS_PROVA = {
         titulo_prova="GABARITO EVALBEE",
         subtitulo="Ensino Fundamental - 4º ao 6º Ano",
         grids=[
-            GridConfig("FREQ.", "", 0.10, 0.18, Y_TOP_EV, Y_END_FREQ_11_EV, 10, 2, ["D", "U"], 0, COR_EVALBEE),
-            GridConfig("BLOCO 1", "", 0.23, 0.38, Y_TOP_EV, Y_BOT_EV, 11, 4, ["A","B","C","D"], 1, COR_EVALBEE),
-            GridConfig("BLOCO 2", "", 0.42, 0.57, Y_TOP_EV, Y_BOT_EV, 11, 4, ["A","B","C","D"], 12, COR_EVALBEE),
-            GridConfig("BLOCO 3", "", 0.61, 0.76, Y_TOP_EV, Y_BOT_EV, 11, 4, ["A","B","C","D"], 23, COR_EVALBEE),
-            GridConfig("BLOCO 4", "", 0.80, 0.95, Y_TOP_EV, Y_BOT_EV, 11, 4, ["A","B","C","D"], 34, COR_EVALBEE),
+            GridConfig("FREQ.", "", 0.08, 0.15, Y_TOP_EV, Y_END_FREQ_11_EV, 10, 2, ["D", "U"], 0, COR_EVALBEE),
+            GridConfig("BLOCO 1", "", 0.20, 0.35, Y_TOP_EV, Y_BOT_EV, 11, 4, ["A","B","C","D"], 1, COR_EVALBEE),
+            GridConfig("BLOCO 2", "", 0.38, 0.53, Y_TOP_EV, Y_BOT_EV, 11, 4, ["A","B","C","D"], 12, COR_EVALBEE),
+            GridConfig("BLOCO 3", "", 0.58, 0.73, Y_TOP_EV, Y_BOT_EV, 11, 4, ["A","B","C","D"], 23, COR_EVALBEE),
+            GridConfig("BLOCO 4", "", 0.77, 0.92, Y_TOP_EV, Y_BOT_EV, 11, 4, ["A","B","C","D"], 34, COR_EVALBEE),
         ]
     ),
 
@@ -122,8 +121,8 @@ TIPOS_PROVA = {
         titulo_prova="GABARITO EVALBEE",
         subtitulo="Ensino Fundamental I - 1º ao 3º Ano",
         grids=[
-            GridConfig("FREQ.", "", 0.15, 0.25, Y_TOP_EV, Y_END_FREQ_09_EV, 10, 2, ["D", "U"], 0, COR_EVALBEE),
-            GridConfig("BLOCO 1", "", 0.35, 0.55, Y_TOP_EV, Y_BOT_EV, 9, 4, ["A","B","C","D"], 1, COR_EVALBEE),
+            GridConfig("FREQ.", "", 0.18, 0.28, Y_TOP_EV, Y_END_FREQ_09_EV, 10, 2, ["D", "U"], 0, COR_EVALBEE),
+            GridConfig("BLOCO 1", "", 0.38, 0.58, Y_TOP_EV, Y_BOT_EV, 9, 4, ["A","B","C","D"], 1, COR_EVALBEE),
             GridConfig("BLOCO 2", "", 0.65, 0.85, Y_TOP_EV, Y_BOT_EV, 9, 4, ["A","B","C","D"], 10, COR_EVALBEE),
         ]
     )
