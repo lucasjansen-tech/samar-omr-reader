@@ -2,11 +2,12 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.colors import HexColor
+from reportlab.lib.utils import ImageReader  # <-- Injetado para as logos
 from layout_samar import ConfiguracaoProva
 from pdf2image import convert_from_path
 import os
 
-def desenhar_layout_grid(c, conf: ConfiguracaoProva):
+def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitulo_custom=None, logos=None):
     W, H = A4
     m = W * conf.MARGIN_PCT
     s = 30
@@ -18,13 +19,31 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
     c.rect(m, m, s, s, fill=1, stroke=0)
     c.rect(W-m-s, m, s, s, fill=1, stroke=0)
     
-    # Cabeçalho
+    # ====================================================================
+    # INÍCIO DA INJEÇÃO: LOGOS E TÍTULOS DINÂMICOS
+    # ====================================================================
+    texto_titulo = titulo_custom if titulo_custom else conf.titulo_prova
+    texto_subtitulo = subtitulo_custom if subtitulo_custom else conf.subtitulo
+
+    if logos:
+        y_logo = H - 75   # Posição segura no topo para não empurrar os quadros
+        h_logo = 45
+        w_logo = W * 0.18
+        if logos.get('esq'):
+            c.drawImage(ImageReader(logos['esq']), m, y_logo, width=w_logo, height=h_logo, preserveAspectRatio=True, mask='auto')
+        if logos.get('cen'):
+            c.drawImage(ImageReader(logos['cen']), W * 0.35, y_logo, width=W*0.30, height=h_logo, preserveAspectRatio=True, mask='auto')
+        if logos.get('dir'):
+            c.drawImage(ImageReader(logos['dir']), W - m - w_logo, y_logo, width=w_logo, height=h_logo, preserveAspectRatio=True, mask='auto')
+    # ====================================================================
+    
+    # Cabeçalho (Exatamente o seu código, apenas usando as variáveis de texto)
     c.setFillColor(HexColor("#2980b9"))
     c.setFont("Helvetica-Bold", 16)
-    c.drawCentredString(W/2, H - 50, conf.titulo_prova)
+    c.drawCentredString(W/2, H - 50, texto_titulo)
     c.setFillColor(colors.black)
     c.setFont("Helvetica", 12)
-    c.drawCentredString(W/2, H - 70, conf.subtitulo)
+    c.drawCentredString(W/2, H - 70, texto_subtitulo)
     
     c.setStrokeColor(colors.black); c.setLineWidth(0.5); c.setFont("Helvetica-Bold", 9)
     y = H - 110
@@ -43,6 +62,9 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
     c.setFillColor(colors.black); c.setFont("Helvetica", 8)
     c.drawString(m+10, y+2, "INSTRUÇÕES: 1. Use caneta azul ou preta. 2. Preencha totalmente a bolinha. 3. Não rasure.")
     
+    # ====================================================================
+    # GABARITO: O SEU CÓDIGO INTOCÁVEL DAQUI PARA BAIXO
+    # ====================================================================
     for g in conf.grids:
         x1 = g.x_start * W
         w_g = (g.x_end - g.x_start) * W
@@ -92,15 +114,18 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva):
                     c.setFont("Helvetica", 6)
                     c.drawCentredString(cx, cy - 2, g.labels[col])
 
-def gerar_pdf(conf, filename):
+# ====================================================================
+# FUNÇÕES DE CHAMADA (Agora aceitam os parâmetros de customização)
+# ====================================================================
+def gerar_pdf(conf, filename, titulo_custom=None, subtitulo_custom=None, logos=None):
     c = canvas.Canvas(filename, pagesize=A4)
-    desenhar_layout_grid(c, conf)
+    desenhar_layout_grid(c, conf, titulo_custom, subtitulo_custom, logos)
     c.save()
     return filename
 
-def gerar_imagem_a4(conf, filename_saida, formato="png"):
+def gerar_imagem_a4(conf, filename_saida, formato="png", titulo_custom=None, subtitulo_custom=None, logos=None):
     temp_pdf = "temp_gabarito.pdf"
-    gerar_pdf(conf, temp_pdf)
+    gerar_pdf(conf, temp_pdf, titulo_custom, subtitulo_custom, logos)
     try:
         imagens = convert_from_path(temp_pdf, dpi=300)
         if imagens:
