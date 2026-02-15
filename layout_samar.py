@@ -30,8 +30,7 @@ class ConfiguracaoProva:
 # =========================================================
 # GEOMETRIA: SISTEMA SAMAR NATIVO (AJUSTADO)
 # =========================================================
-# Y_TOP desceu de 0.35 para 0.44 para dar espaço ao super cabeçalho e logos.
-# Y_BOT esticou de 0.85 para 0.92 para as bolinhas não espremerem no meio da página.
+# Y_TOP em 0.44 garante que o bloco comece ABAIXO do cabeçalho
 Y_TOP = 0.44  
 Y_BOT = 0.92  
 ALTURA_BLOCO = Y_BOT - Y_TOP
