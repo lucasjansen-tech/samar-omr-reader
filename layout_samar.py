@@ -54,19 +54,22 @@ Y_BOT_EV44 = 0.73
 H_EV44 = Y_BOT_EV44 - Y_TOP_EV44
 
 # =========================================================
-# EVALBEE 18 QUESTÕES (CALIBRAÇÃO FINAL - IMAGEM RAIO-X)
+# EVALBEE 18 QUESTÕES (CORREÇÃO BASEADA NAS MARCAÇÕES VERMELHAS)
 # =========================================================
 
-# FREQUÊNCIA: Mais curta, pois não tem salto. Termina exatamente na bolinha 9.
-Y_TOP_FREQ = 0.631
-Y_BOT_FREQ = 0.796
+# FREQUÊNCIA: Encurtada (Topo desceu, Fundo subiu) para abraçar apenas os círculos.
+Y_TOP_FREQ = 0.640
+Y_BOT_FREQ = 0.785
 
-# BLOCOS DE QUESTÕES (Com o salto exato de uma linha entre a 5 e a 6)
-Y_TOP_PT1 = 0.647  # Empurrado para baixo para não ler o texto "A B C D"
-Y_BOT_PT1 = 0.730  
+# BLOCOS DE QUESTÕES (Parte de cima antes do salto)
+# O Topo desceu para parar de invadir as letras "A B C D"
+Y_TOP_PT1 = 0.655  
+Y_BOT_PT1 = 0.725  
 
-Y_TOP_PT2 = 0.747  # Inicia logo após o salto
-Y_BOT_PT2 = 0.813  # Puxado sutilmente para cima para não vazar a bolinha
+# BLOCOS DE QUESTÕES (Parte de baixo depois do salto)
+# O Fundo subiu para parar de sobrar abaixo da bolinha 9 e 18
+Y_TOP_PT2 = 0.745  
+Y_BOT_PT2 = 0.800  
 
 TIPOS_PROVA = {
     # ---------------------------------------------------------
@@ -137,16 +140,16 @@ TIPOS_PROVA = {
         titulo_prova="GABARITO EVALBEE",
         subtitulo="Ensino Fundamental I - 1º ao 3º Ano",
         grids=[
-            # Frequência isolada com a altura exata
-            GridConfig("FREQ.", "", 0.22, 0.28, Y_TOP_FREQ, Y_BOT_FREQ, 10, 2, ["D", "U"], 0, COR_EVALBEE),
+            # Frequência encolhida nas alturas e perfeitamente ajustada na largura
+            GridConfig("FREQ.", "", 0.23, 0.28, Y_TOP_FREQ, Y_BOT_FREQ, 10, 2, ["D", "U"], 0, COR_EVALBEE),
             
-            # Bloco 1 (Português)
-            GridConfig("BLOCO 1A", "", 0.44, 0.55, Y_TOP_PT1, Y_BOT_PT1, 5, 4, ["A","B","C","D"], 1, COR_EVALBEE), 
-            GridConfig("BLOCO 1B", "", 0.44, 0.55, Y_TOP_PT2, Y_BOT_PT2, 4, 4, ["A","B","C","D"], 6, COR_EVALBEE), 
+            # Bloco 1A (Top baixou) e 1B (Base subiu)
+            GridConfig("BLOCO 1A", "", 0.445, 0.545, Y_TOP_PT1, Y_BOT_PT1, 5, 4, ["A","B","C","D"], 1, COR_EVALBEE), 
+            GridConfig("BLOCO 1B", "", 0.445, 0.545, Y_TOP_PT2, Y_BOT_PT2, 4, 4, ["A","B","C","D"], 6, COR_EVALBEE), 
             
-            # Bloco 2 (Matemática)
-            GridConfig("BLOCO 2A", "", 0.65, 0.76, Y_TOP_PT1, Y_BOT_PT1, 5, 4, ["A","B","C","D"], 10, COR_EVALBEE), 
-            GridConfig("BLOCO 2B", "", 0.65, 0.76, Y_TOP_PT2, Y_BOT_PT2, 4, 4, ["A","B","C","D"], 15, COR_EVALBEE), 
+            # Bloco 2A (Top baixou) e 2B (Base subiu)
+            GridConfig("BLOCO 2A", "", 0.655, 0.755, Y_TOP_PT1, Y_BOT_PT1, 5, 4, ["A","B","C","D"], 10, COR_EVALBEE), 
+            GridConfig("BLOCO 2B", "", 0.655, 0.755, Y_TOP_PT2, Y_BOT_PT2, 4, 4, ["A","B","C","D"], 15, COR_EVALBEE), 
         ]
     )
 }
