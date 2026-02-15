@@ -40,7 +40,7 @@ Y_END_FREQ_11 = Y_TOP + ((ALTURA_BLOCO / 11) * 10)
 Y_END_FREQ_09 = Y_BOT 
 
 # =========================================================
-# GEOMETRIA: PADRÃO EVALBEE (Medição Pixel a Pixel)
+# GEOMETRIA: PADRÃO EVALBEE (Ajuste Fino Milimétrico)
 # =========================================================
 
 # --- EVALBEE 52 QUESTÕES ---
@@ -53,8 +53,9 @@ Y_TOP_EV44 = 0.48
 Y_BOT_EV44 = 0.73
 H_EV44 = Y_BOT_EV44 - Y_TOP_EV44
 
-# --- EVALBEE 18 QUESTÕES (Baseado nas caixas vermelhas) ---
-Y_TOP_EV18 = 0.635  
+# --- EVALBEE 18 QUESTÕES (Calibrado com a imagem image_e4b8e0.jpg) ---
+# Subimos o Y_TOP de 0.635 para 0.615 para parar de cortar a cabeça da primeira linha
+Y_TOP_EV18 = 0.615  
 Y_BOT_EV18 = 0.840  
 H_EV18 = Y_BOT_EV18 - Y_TOP_EV18
 Y_END_FREQ_EV18 = Y_TOP_EV18 + ((H_EV18 / 9) * 10)
@@ -128,8 +129,9 @@ TIPOS_PROVA = {
         titulo_prova="GABARITO EVALBEE",
         subtitulo="Ensino Fundamental I - 1º ao 3º Ano",
         grids=[
-            # Alinhado 100% com as caixas vermelhas
-            GridConfig("FREQ.", "", 0.24, 0.29, Y_TOP_EV18, Y_END_FREQ_EV18, 10, 2, ["D", "U"], 0, COR_EVALBEE),
+            # FREQ deslocado para a esquerda (0.20 a 0.27) para abraçar as duas colunas
+            GridConfig("FREQ.", "", 0.20, 0.27, Y_TOP_EV18, Y_END_FREQ_EV18, 10, 2, ["D", "U"], 0, COR_EVALBEE),
+            # Blocos mantiveram o eixo X pois os centros já estavam cravando nas bolinhas na sua última foto
             GridConfig("BLOCO 1", "", 0.44, 0.54, Y_TOP_EV18, Y_BOT_EV18, 9, 4, ["A","B","C","D"], 1, COR_EVALBEE),
             GridConfig("BLOCO 2", "", 0.65, 0.75, Y_TOP_EV18, Y_BOT_EV18, 9, 4, ["A","B","C","D"], 10, COR_EVALBEE),
         ]
