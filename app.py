@@ -16,23 +16,52 @@ conf = TIPOS_PROVA[modelo]
 
 tab1, tab2 = st.tabs(["1. Gerador de PDF", "2. Leitura, Correção e Exportação"])
 
+# ====================================================================
+# ABA 1: GERADOR COM PERSONALIZAÇÃO (Títulos e Logos)
+# ====================================================================
 with tab1:
+    st.markdown("### 🎨 Personalização do Cabeçalho")
+    
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        custom_titulo = st.text_input("Título da Avaliação:", conf.titulo_prova)
+    with col_t2:
+        custom_sub = st.text_input("Etapa/Ano (Subtítulo):", conf.subtitulo)
+
+    st.markdown("**Logos (Opcional - Recomenda-se arquivos PNG com fundo transparente)**")
+    col_l1, col_l2, col_l3 = st.columns(3)
+    with col_l1:
+        logo_esq = st.file_uploader("Logo Esquerda", type=["png", "jpg"])
+    with col_l2:
+        logo_cen = st.file_uploader("Logo Centro", type=["png", "jpg"])
+    with col_l3:
+        logo_dir = st.file_uploader("Logo Direita", type=["png", "jpg"])
+
+    st.markdown("---")
+    
     col1, col2 = st.columns(2)
     with col1:
         fmt = st.radio("Formato de Saída:", ["PDF", "PNG", "JPEG"], horizontal=True)
     with col2:
         st.write("")
-        if st.button("🚀 Gerar Arquivo em Branco"):
+        if st.button("🚀 Gerar Arquivo Pronto para Impressão"):
+            # Empacota as logos para enviar ao gerador
+            logos_dict = {
+                'esq': logo_esq,
+                'cen': logo_cen,
+                'dir': logo_dir
+            }
+            
             ext = fmt.split()[0].lower()
             fn = f"Gabarito_{modelo}.{ext}"
             
             success = False
             if ext == "pdf":
-                gerar_pdf(conf, fn)
+                gerar_pdf(conf, fn, custom_titulo, custom_sub, logos_dict)
                 mime = "application/pdf"
                 success = True
             else:
-                res = gerar_imagem_a4(conf, fn, ext)
+                res = gerar_imagem_a4(conf, fn, ext, custom_titulo, custom_sub, logos_dict)
                 if res:
                     mime = f"image/{ext}"
                     success = True
@@ -41,8 +70,11 @@ with tab1:
 
             if success and os.path.exists(fn):
                 with open(fn, "rb") as f:
-                    st.download_button(f"📥 Baixar {ext.upper()}", f, fn, mime)
+                    st.download_button(f"📥 Baixar Arquivo {ext.upper()}", f, fn, mime)
 
+# ====================================================================
+# ABA 2: LEITURA E CORREÇÃO (O motor original, inalterado)
+# ====================================================================
 with tab2:
     st.markdown("### 📝 Passo 1: Configurar Gabarito Oficial")
     
