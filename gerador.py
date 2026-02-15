@@ -20,37 +20,48 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     c.rect(W-m-s, m, s, s, fill=1, stroke=0)
     
     # ====================================================================
-    # TOPO CLEAN: Logos e Títulos alinhados e com respiro
+    # TOPO: LOGOS COM PROPORÇÃO UNIFORME
     # ====================================================================
     texto_titulo = titulo_custom if titulo_custom else conf.titulo_prova
     texto_subtitulo = subtitulo_custom if subtitulo_custom else conf.subtitulo
 
     if logos:
-        y_logo = H - 65   # Desce um pouco do topo do papel para respirar
-        h_logo = 40       # Tamanho elegante
-        
-        # Espaçamento simétrico perfeito (Caixas delimitadas para não baterem)
+        # Definição de uma "caixa padrão" para todas as logos terem a mesma proporção máxima
+        LOGO_BOX_W = 110  # Largura máxima uniforme para as três
+        LOGO_BOX_H = 45   # Altura máxima uniforme para as três
+        y_logo_pos = H - 70 # Posição Y uniforme
+
+        # Logo Esquerda
         if logos.get('esq'):
-            c.drawImage(ImageReader(logos['esq']), 70, y_logo, width=130, height=h_logo, preserveAspectRatio=True, mask='auto')
+            # Posição X=80 (afastado da âncora esquerda)
+            c.drawImage(ImageReader(logos['esq']), 80, y_logo_pos, width=LOGO_BOX_W, height=LOGO_BOX_H, preserveAspectRatio=True, mask='auto')
+        
+        # Logo Central
         if logos.get('cen'):
-            c.drawImage(ImageReader(logos['cen']), (W/2) - 80, y_logo, width=160, height=h_logo, preserveAspectRatio=True, mask='auto')
+            # Cálculo para centralizar a caixa padrão exatamente no meio da folha
+            x_cen = (W / 2) - (LOGO_BOX_W / 2)
+            c.drawImage(ImageReader(logos['cen']), x_cen, y_logo_pos, width=LOGO_BOX_W, height=LOGO_BOX_H, preserveAspectRatio=True, mask='auto')
+        
+        # Logo Direita
         if logos.get('dir'):
-            c.drawImage(ImageReader(logos['dir']), W - 200, y_logo, width=130, height=h_logo, preserveAspectRatio=True, mask='auto')
+            # Cálculo simétrico para ficar na mesma distância da borda direita que a esquerda
+            x_dir = W - 80 - LOGO_BOX_W
+            c.drawImage(ImageReader(logos['dir']), x_dir, y_logo_pos, width=LOGO_BOX_W, height=LOGO_BOX_H, preserveAspectRatio=True, mask='auto')
             
-    # Títulos descem para não embolar com as logos
+    # Títulos (Posição mantida da versão anterior, com respiro)
     c.setFillColor(HexColor("#2980b9"))
     c.setFont("Helvetica-Bold", 16)
-    c.drawCentredString(W/2, H - 90, texto_titulo)
+    c.drawCentredString(W/2, H - 95, texto_titulo)
     c.setFillColor(colors.black)
     c.setFont("Helvetica", 12)
-    c.drawCentredString(W/2, H - 105, texto_subtitulo)
+    c.drawCentredString(W/2, H - 110, texto_subtitulo)
     # ====================================================================
     
     # ====================================================================
-    # CABEÇALHO (Movido suavemente para baixo para manter o design clean)
+    # CABEÇALHO (Mantido na posição rebaixada e clean)
     # ====================================================================
     c.setStrokeColor(colors.black); c.setLineWidth(0.5); c.setFont("Helvetica-Bold", 9)
-    y = H - 130  # Antes era 110. Descer 20px resolveu todo o aperto!
+    y = H - 135  # Ajuste fino para dar mais 5px de respiro do título
     
     c.drawString(m, y, "UNIDADE DE ENSINO:"); c.line(m+100, y-2, W-m, y-2)
     y -= 25
@@ -68,7 +79,7 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     c.drawString(m+10, y+2, "INSTRUÇÕES: 1. Use caneta azul ou preta. 2. Preencha totalmente a bolinha. 3. Não rasure.")
     
     # ====================================================================
-    # GABARITO: O SEU CÓDIGO INTOCÁVEL DAQUI PARA BAIXO
+    # GABARITO: INTOCÁVEL
     # ====================================================================
     for g in conf.grids:
         x1 = g.x_start * W
