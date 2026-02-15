@@ -2,24 +2,24 @@ import cv2
 import numpy as np
 from layout_samar import ConfiguracaoProva, GridConfig
 
-def encontrar_ancoras_globais(thresh):
+def encontrar_ancoras_globais(thresh, is_evalbee=False):
     cnts, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     h, w = thresh.shape
     candidatos = []
     
     for c in cnts:
         area = cv2.contourArea(c)
-        # Filtro de área muito mais permissivo para aceitar as âncoras menores do Evalbee
-        if area < (w * h * 0.0002) or area > (w * h * 0.1): continue
+        # Se for Evalbee, a sensibilidade fica extrema para achar os quadradinhos menores
+        min_area = (w * h * 0.00005) if is_evalbee else (w * h * 0.001)
+        if area < min_area or area > (w * h * 0.05): continue
         
         hull = cv2.convexHull(c)
         solidez = area / float(cv2.contourArea(hull)) if cv2.contourArea(hull) > 0 else 0
-        
         x, y, bw, bh = cv2.boundingRect(c)
         ar = bw / float(bh)
         
-        # Aceita quadrados e retângulos (Evalbee usa retângulos)
-        if solidez > 0.8 and 0.2 <= ar <= 5.0:
+        # Aceita quadrados perfeitos (SAMAR e Evalbee)
+        if solidez > 0.7 and 0.5 <= ar <= 2.0:
             M = cv2.moments(c)
             if M["m00"] != 0:
                 cx = int(M["m10"] / M["m00"])
@@ -28,12 +28,11 @@ def encontrar_ancoras_globais(thresh):
                 
     if len(candidatos) < 4: return None
     
-    # A MÁGICA: Busca a âncora MAIS PRÓXIMA dos 4 cantos extremos da imagem.
-    # Isso impede que retângulos no meio da folha (como os do Evalbee) sejam confundidos com âncoras.
-    pt_tl = min(candidatos, key=lambda item: item[0] + item[1])[:2]                 # Topo Esquerdo
-    pt_tr = min(candidatos, key=lambda item: (w - item[0]) + item[1])[:2]           # Topo Direito
-    pt_bl = min(candidatos, key=lambda item: item[0] + (h - item[1]))[:2]           # Base Esquerda
-    pt_br = min(candidatos, key=lambda item: (w - item[0]) + (h - item[1]))[:2]     # Base Direita
+    # Busca os marcadores extremos (Funciona para as quinas da página ou quinas do Grid Evalbee)
+    pt_tl = min(candidatos, key=lambda item: item[0] + item[1])[:2]
+    pt_tr = min(candidatos, key=lambda item: (w - item[0]) + item[1])[:2]
+    pt_bl = min(candidatos, key=lambda item: item[0] + (h - item[1]))[:2]
+    pt_br = min(candidatos, key=lambda item: (w - item[0]) + (h - item[1]))[:2]
     
     return np.array([pt_tl, pt_tr, pt_br, pt_bl], dtype="float32")
 
@@ -42,28 +41,34 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
     else: gray = img
     
     W_FINAL, H_FINAL = conf.REF_W, conf.REF_H
+    is_evalbee = "EVALBEE" in conf.titulo_prova.upper()
     
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     _, thresh_ancoras = cv2.threshold(blurred, 120, 255, cv2.THRESH_BINARY_INV)
     
-    rect = encontrar_ancoras_globais(thresh_ancoras)
+    rect = encontrar_ancoras_globais(thresh_ancoras, is_evalbee)
     
     if rect is not None:
-        # Previne distorções: aplica a margem exata dependendo da origem do gabarito
-        if "EVALBEE" in conf.titulo_prova.upper():
-            m_x = W_FINAL * 0.04
-            m_y = H_FINAL * 0.03
+        if is_evalbee:
+            # MAGIA EVALBEE: Trava a área das questões num retângulo fixo, matando a distorção!
+            dst = np.array([
+                [W_FINAL * 0.05, H_FINAL * 0.30],
+                [W_FINAL * 0.95, H_FINAL * 0.30],
+                [W_FINAL * 0.95, H_FINAL * 0.95],
+                [W_FINAL * 0.05, H_FINAL * 0.95]
+            ], dtype="float32")
         else:
-            m_x = W_FINAL * 0.07
-            m_y = W_FINAL * 0.07
+            # LÓGICA NATIVA SAMAR INTOCADA
+            m_px = W_FINAL * conf.MARGIN_PCT
+            s_px = W_FINAL * 0.04 
+            offset = m_px + (s_px / 2.0)
+            dst = np.array([
+                [offset, offset],
+                [W_FINAL - offset, offset],
+                [W_FINAL - offset, H_FINAL - offset],
+                [offset, H_FINAL - offset]
+            ], dtype="float32")
             
-        dst = np.array([
-            [m_x, m_y],
-            [W_FINAL - m_x, m_y],
-            [W_FINAL - m_x, H_FINAL - m_y],
-            [m_x, H_FINAL - m_y]
-        ], dtype="float32")
-        
         M = cv2.getPerspectiveTransform(rect, dst)
         warped = cv2.warpPerspective(gray, M, (W_FINAL, H_FINAL))
     else:
@@ -95,7 +100,6 @@ def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug, gabarito=No
     
     res_bloco = {}
     
-    # --- FREQUÊNCIA ---
     if grid.labels == ["D", "U"]:
         freq_res = ["0", "0"]
         for c_idx, cx in enumerate(centros_x):
@@ -114,7 +118,6 @@ def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug, gabarito=No
                 
         return "".join(freq_res), {}
 
-    # --- QUESTÕES ---
     for r_idx, cy in enumerate(centros_y):
         tintas = []
         for cx in centros_x:
