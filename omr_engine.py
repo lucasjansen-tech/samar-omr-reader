@@ -43,8 +43,7 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
     # A SOLUÇÃO: SE FOR EVALBEE, APENAS PEGA A IMAGEM COMO É
     # =======================================================
     if is_evalbee:
-        # Pega a imagem do jeito que está e apenas ajusta para o tamanho A4.
-        # Zero distorções, cortes ou achatamentos!
+        # Pega a imagem do jeito que está e ajusta para A4 de forma "flat".
         warped = cv2.resize(gray, (W_FINAL, H_FINAL))
     else:
         # LÓGICA NATIVA SAMAR (Mantida intocada)
@@ -67,7 +66,7 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
         else:
             warped = cv2.resize(gray, (W_FINAL, H_FINAL))
             
-    # Aplica o Filtro OTSU para identificar a tinta
+    # Filtro OTSU
     blur_warp = cv2.GaussianBlur(warped, (3, 3), 0)
     _, binaria = cv2.threshold(blur_warp, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
     kernel = np.ones((2,2), np.uint8)
