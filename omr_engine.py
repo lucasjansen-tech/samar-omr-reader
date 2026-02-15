@@ -16,7 +16,6 @@ def encontrar_ancoras_globais(thresh):
         x, y, bw, bh = cv2.boundingRect(c)
         ar = bw / float(bh)
         
-        # Filtro exigente: Queremos quadrados sólidos
         if solidez > 0.8 and 0.5 <= ar <= 1.5:
             M = cv2.moments(c)
             if M["m00"] != 0:
@@ -24,14 +23,9 @@ def encontrar_ancoras_globais(thresh):
                 cy = int(M["m01"] / M["m00"])
                 candidatos.append([cx, cy, area])
                 
-    # Ordena pelos maiores e pega no máximo os 4 mais nítidos
     candidatos = sorted(candidatos, key=lambda item: item[2], reverse=True)[:4]
+    if len(candidatos) < 3: return None
     
-    if len(candidatos) < 3: return None # Muito rasgado/ilegível, impossível salvar
-    
-    # ---------------------------------------------------------
-    # BLINDAGEM: REGENERAÇÃO DE ÂNCORAS CORTADAS
-    # ---------------------------------------------------------
     meio_x, meio_y = w / 2, h / 2
     tl, tr, bl, br = None, None, None, None
     
@@ -41,7 +35,6 @@ def encontrar_ancoras_globais(thresh):
         elif cx < meio_x and cy > meio_y: bl = [cx, cy]
         elif cx > meio_x and cy > meio_y: br = [cx, cy]
         
-    # Se achamos apenas 3, o robô calcula por vetor a posição exata da 4ª âncora invisível!
     if len(candidatos) == 3:
         if not br and tl and tr and bl: br = [tr[0] + bl[0] - tl[0], tr[1] + bl[1] - tl[1]]
         elif not bl and tl and tr and br: bl = [tl[0] + br[0] - tr[0], tl[1] + br[1] - tr[1]]
@@ -59,10 +52,8 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
     
     W_FINAL, H_FINAL = conf.REF_W, conf.REF_H
     
-    # Busca de âncoras nativa
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     _, thresh_ancoras = cv2.threshold(blurred, 120, 255, cv2.THRESH_BINARY_INV)
-    
     rect = encontrar_ancoras_globais(thresh_ancoras)
     
     if rect is not None:
@@ -82,40 +73,23 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
     else:
         warped = cv2.resize(gray, (W_FINAL, H_FINAL))
         
-    # ---------------------------------------------------------
-    # BLINDAGEM: ANTI-INVERSÃO INFALÍVEL
-    # ---------------------------------------------------------
-    # Tira um Raio-X bruto apenas para comparar a massa de tinta.
+    # ANTI-INVERSÃO INFALÍVEL
     _, orient_thresh = cv2.threshold(warped, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
-    
-    # Isola o topo (onde ficam os logos gigantes RAPOSA/SAMAR)
     top_zone = orient_thresh[int(H_FINAL*0.02):int(H_FINAL*0.15), int(W_FINAL*0.1):int(W_FINAL*0.9)]
-    # Isola o rodapé extremo (que é um deserto branco na nossa prova)
     bot_zone = orient_thresh[int(H_FINAL*0.85):int(H_FINAL*0.98), int(W_FINAL*0.1):int(W_FINAL*0.9)]
     
-    tinta_top = cv2.countNonZero(top_zone)
-    tinta_bot = cv2.countNonZero(bot_zone)
-    
-    # Se o deserto de papel branco tiver mais tinta que o logo, a prova está de cabeça para baixo!
-    if tinta_bot > tinta_top:
+    if cv2.countNonZero(bot_zone) > cv2.countNonZero(top_zone):
         warped = cv2.rotate(warped, cv2.ROTATE_180)
         
-    # ---------------------------------------------------------
-    # BLINDAGEM: FILTRO ANTI-WHATSAPP E ANTI-VAZAMENTO
-    # ---------------------------------------------------------
-    # Filtro Bilateral limpa o chiado de JPG/WhatsApp preservando o círculo perfeito da bolinha
+    # LIMPEZA DE WHATSAPP E VAZAMENTOS
     blur_warp = cv2.bilateralFilter(warped, d=9, sigmaColor=75, sigmaSpace=75)
-    
-    # Volta para o nosso sensor original (OTSU puro) que lê os cartões com precisão absurda
     _, binaria = cv2.threshold(blur_warp, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
     
-    # Raspador morfológico: apaga impressões fracas que vazaram do verso da folha
     k_size = max(2, int(W_FINAL * 0.002))
     kernel = np.ones((k_size, k_size), np.uint8)
     binaria = cv2.morphologyEx(binaria, cv2.MORPH_OPEN, kernel)
     
     return cv2.cvtColor(warped, cv2.COLOR_GRAY2BGR), binaria, W_FINAL, H_FINAL
-
 
 def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug, gabarito=None):
     x1 = grid.x_start * w_img
@@ -130,10 +104,8 @@ def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug, gabarito=No
     
     centros_x = [int(x1 + (c * cell_w) + (cell_w / 2)) for c in range(grid.cols)]
     centros_y = [int(y1 + (r * cell_h) + (cell_h / 2)) for r in range(grid.rows)]
-    
     raio = int(min(cell_w, cell_h) * 0.18) 
     area_roi = (raio * 2) ** 2
-    
     res_bloco = {}
     
     if grid.labels == ["D", "U"]:
@@ -147,11 +119,9 @@ def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug, gabarito=No
             
             idx_max = np.argmax(votos)
             max_tinta = max(votos)
-            
             if max_tinta > (area_roi * 0.25):
                 freq_res[c_idx] = str(idx_max)
                 cv2.circle(img_debug, (cx, centros_y[idx_max]), int(raio), (255, 0, 0), -1)
-                
         return "".join(freq_res), {}
 
     for r_idx, cy in enumerate(centros_y):
@@ -174,28 +144,20 @@ def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug, gabarito=No
             if len(marcadas) == 0:
                 res_bloco[q_num] = "."
                 for cx in centros_x: cv2.circle(img_debug, (cx, cy), 2, (150, 150, 150), -1)
-                
             elif len(marcadas) == 1:
                 idx_max = marcadas[0]
                 letra = grid.labels[idx_max]
                 res_bloco[q_num] = letra
-                
                 cor = (0, 255, 0) 
-                if resp_oficial in ["NULA", "X"]:
-                    cor = (255, 200, 0) 
-                elif gabarito and letra != resp_oficial:
-                    cor = (0, 0, 255) 
-                    
+                if resp_oficial in ["NULA", "X"]: cor = (255, 200, 0) 
+                elif gabarito and letra != resp_oficial: cor = (0, 0, 255) 
                 cv2.circle(img_debug, (centros_x[idx_max], cy), int(raio), cor, 3)
-                
             else:
                 res_bloco[q_num] = "*" 
                 cor = (255, 200, 0) if resp_oficial in ["NULA", "X"] else (0, 140, 255)
-                for idx in marcadas:
-                    cv2.circle(img_debug, (centros_x[idx], cy), int(raio), cor, 3)
+                for idx in marcadas: cv2.circle(img_debug, (centros_x[idx], cy), int(raio), cor, 3)
 
     return None, res_bloco
-
 
 def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None, offset_x=0, offset_y=0):
     vis, binaria, w, h = alinhar_imagem(img, conf)
@@ -209,30 +171,25 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None, offset_x=0, 
     if gabarito:
         acertos = 0
         detalhes_correcao = {}
-        
         for q_num_int, resp_lida in final["respostas"].items():
             resp_oficial = gabarito.get(q_num_int, ".")
             status = "Em Branco"
-            
             if resp_oficial in ["NULA", "X"]:
                 status = "Correto (Anulada)"
                 acertos += 1
             else:
-                if resp_lida == "*":
-                    status = "Múltiplas Marcações" 
+                if resp_lida == "*": status = "Múltiplas Marcações" 
                 elif resp_lida != ".":
                     if resp_lida == resp_oficial:
                         status = "Correto"
                         acertos += 1
-                    else:
-                        status = "Incorreto"
+                    else: status = "Incorreto"
             
             detalhes_correcao[q_num_int] = {
                 "Lida": "Múltiplas" if resp_lida == "*" else resp_lida,
                 "Gabarito": resp_oficial,
                 "Status": status
             }
-            
         final["total_acertos"] = acertos
         final["correcao_detalhada"] = detalhes_correcao
         
