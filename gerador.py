@@ -12,7 +12,7 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     m = W * conf.MARGIN_PCT
     s = 30
     
-    # Âncoras (Intocáveis)
+    # Âncoras
     c.setFillColor(colors.black)
     c.rect(m, H-m-s, s, s, fill=1, stroke=0)
     c.rect(W-m-s, H-m-s, s, s, fill=1, stroke=0)
@@ -20,48 +20,38 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     c.rect(W-m-s, m, s, s, fill=1, stroke=0)
     
     # ====================================================================
-    # TOPO: LOGOS COM PROPORÇÃO UNIFORME
+    # TOPO: LOGOS E TÍTULOS COM MUITO MAIS RESPIRO
     # ====================================================================
     texto_titulo = titulo_custom if titulo_custom else conf.titulo_prova
     texto_subtitulo = subtitulo_custom if subtitulo_custom else conf.subtitulo
 
     if logos:
-        # Definição de uma "caixa padrão" para todas as logos terem a mesma proporção máxima
-        LOGO_BOX_W = 110  # Largura máxima uniforme para as três
-        LOGO_BOX_H = 45   # Altura máxima uniforme para as três
-        y_logo_pos = H - 70 # Posição Y uniforme
+        LOGO_BOX_W = 120  
+        LOGO_BOX_H = 45   
+        y_logo_pos = H - 85 # Desceu bastante em relação ao topo da folha
 
-        # Logo Esquerda
         if logos.get('esq'):
-            # Posição X=80 (afastado da âncora esquerda)
             c.drawImage(ImageReader(logos['esq']), 80, y_logo_pos, width=LOGO_BOX_W, height=LOGO_BOX_H, preserveAspectRatio=True, mask='auto')
-        
-        # Logo Central
         if logos.get('cen'):
-            # Cálculo para centralizar a caixa padrão exatamente no meio da folha
             x_cen = (W / 2) - (LOGO_BOX_W / 2)
             c.drawImage(ImageReader(logos['cen']), x_cen, y_logo_pos, width=LOGO_BOX_W, height=LOGO_BOX_H, preserveAspectRatio=True, mask='auto')
-        
-        # Logo Direita
         if logos.get('dir'):
-            # Cálculo simétrico para ficar na mesma distância da borda direita que a esquerda
             x_dir = W - 80 - LOGO_BOX_W
             c.drawImage(ImageReader(logos['dir']), x_dir, y_logo_pos, width=LOGO_BOX_W, height=LOGO_BOX_H, preserveAspectRatio=True, mask='auto')
             
-    # Títulos (Posição mantida da versão anterior, com respiro)
+    # Títulos rebaixados acompanhando o espaço
     c.setFillColor(HexColor("#2980b9"))
     c.setFont("Helvetica-Bold", 16)
-    c.drawCentredString(W/2, H - 95, texto_titulo)
+    c.drawCentredString(W/2, H - 110, texto_titulo)
     c.setFillColor(colors.black)
     c.setFont("Helvetica", 12)
-    c.drawCentredString(W/2, H - 110, texto_subtitulo)
-    # ====================================================================
+    c.drawCentredString(W/2, H - 125, texto_subtitulo)
     
     # ====================================================================
-    # CABEÇALHO (Mantido na posição rebaixada e clean)
+    # CABEÇALHO DO ALUNO REBAIXADO
     # ====================================================================
     c.setStrokeColor(colors.black); c.setLineWidth(0.5); c.setFont("Helvetica-Bold", 9)
-    y = H - 135  # Ajuste fino para dar mais 5px de respiro do título
+    y = H - 155  # Desceu bastante para afastar do título!
     
     c.drawString(m, y, "UNIDADE DE ENSINO:"); c.line(m+100, y-2, W-m, y-2)
     y -= 25
@@ -79,7 +69,7 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     c.drawString(m+10, y+2, "INSTRUÇÕES: 1. Use caneta azul ou preta. 2. Preencha totalmente a bolinha. 3. Não rasure.")
     
     # ====================================================================
-    # GABARITO: INTOCÁVEL
+    # GABARITO (Intocável)
     # ====================================================================
     for g in conf.grids:
         x1 = g.x_start * W
