@@ -2,6 +2,7 @@ import os
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
+from reportlab.lib import colors
 from pdf2image import convert_from_path
 
 def gerar_pdf(conf, filename, titulo_custom=None, subtitulo_custom=None, logos=None):
@@ -20,7 +21,6 @@ def gerar_pdf(conf, filename, titulo_custom=None, subtitulo_custom=None, logos=N
     c.rect(w - offset - s_px, offset, s_px, s_px, fill=1) # Bottom-Right
 
     # 2. Inserção de Logos Dinâmicas
-    # Se você upar apenas no Centro, a logo fica grande tipo "Banner"
     y_logo = h * 0.89
     if logos:
         if logos.get('esq'):
@@ -34,12 +34,14 @@ def gerar_pdf(conf, filename, titulo_custom=None, subtitulo_custom=None, logos=N
     texto_titulo = titulo_custom if titulo_custom else conf.titulo_prova
     texto_subtitulo = subtitulo_custom if subtitulo_custom else conf.subtitulo
 
+    c.setFillColorRGB(0, 0, 0)
     c.setFont("Helvetica-Bold", 14)
     c.drawCentredString(w / 2.0, h * 0.85, texto_titulo)
     c.setFont("Helvetica-Bold", 11)
     c.drawCentredString(w / 2.0, h * 0.83, texto_subtitulo)
 
     # 4. Cabeçalho Visual (Caixa Escola e Instruções)
+    c.setStrokeColorRGB(0, 0, 0)
     c.setLineWidth(1)
     c.rect(w * 0.08, h * 0.76, w * 0.84, h * 0.05) # Caixa principal
     c.line(w * 0.08, h * 0.785, w * 0.92, h * 0.785) # Divisória horizontal
@@ -65,18 +67,49 @@ def gerar_pdf(conf, filename, titulo_custom=None, subtitulo_custom=None, logos=N
     c.drawString(w * 0.08, h * 0.615, "NOME DO ALUNO:")
     c.line(w * 0.26, h * 0.615, w * 0.92, h * 0.615)
 
-    # 5. Grids (A mágica do gabarito começa daqui pra baixo)
+    # 5. Grids com CORES e QUADROS DE SEPARAÇÃO
     for grid in conf.grids:
         x1 = grid.x_start * w
         x2 = grid.x_end * w
         y1_pdf = h - (grid.y_end * h)
         y2_pdf = h - (grid.y_start * h)
+        
+        # Converte o código Hexadecimal da matéria para o pincel do gerador
+        cor_materia = colors.HexColor(grid.cor_hex)
 
+        # -------------------------------------------------------------
+        # DESENHA O QUADRO DE SEPARAÇÃO (Bounding Box Colorido)
+        # -------------------------------------------------------------
+        c.setStrokeColor(cor_materia)
+        c.setLineWidth(1.2)
+        
+        # Margens confortáveis para abraçar as bolinhas e os números
+        box_x = x1 - 20
+        box_w = (x2 - x1) + 30
+        box_y = y1_pdf - 25
+        box_h = (y2_pdf - y1_pdf) + 50
+        
+        # Quadro especial mais enxuto para a Frequência
+        if grid.labels == ["D", "U"]:
+            box_x = x1 - 15
+            box_w = (x2 - x1) + 25
+            
+        # Desenha o quadro com cantos levemente arredondados
+        c.roundRect(box_x, box_y, box_w, box_h, 4, stroke=1, fill=0)
+
+        # -------------------------------------------------------------
+        # TEXTOS DO CABEÇALHO DO BLOCO (Coloridos)
+        # -------------------------------------------------------------
+        c.setFillColor(cor_materia)
         c.setFont("Helvetica-Bold", 9)
         c.drawCentredString((x1+x2)/2, y2_pdf + 10, grid.titulo)
         if grid.texto_extra:
-            c.setFont("Helvetica", 8)
+            c.setFont("Helvetica-Bold", 8)
             c.drawCentredString((x1+x2)/2, y2_pdf + 0, grid.texto_extra)
+
+        # Retorna o pincel para PRETO e CINZA para imprimir as alternativas
+        c.setFillColorRGB(0, 0, 0)
+        c.setStrokeColorRGB(0.4, 0.4, 0.4)
 
         cell_w = (x2 - x1) / grid.cols
         cell_h = (y2_pdf - y1_pdf) / grid.rows
@@ -99,7 +132,6 @@ def gerar_pdf(conf, filename, titulo_custom=None, subtitulo_custom=None, logos=N
                 c.drawString(x1 - 15, cy - 3, str(row))
 
             c.setLineWidth(1)
-            c.setStrokeColorRGB(0.4, 0.4, 0.4)
             for col in range(grid.cols):
                 cx = x1 + (col * cell_w) + (cell_w / 2)
                 c.circle(cx, cy, raio, stroke=1, fill=0)
