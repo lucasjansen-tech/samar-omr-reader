@@ -11,29 +11,55 @@ import os
 st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
 st.title("🖨️ Sistema SAMAR - Leitura OMR Inteligente")
 
-# Volta ao menu simples e seguro
 modelo = st.selectbox("Selecione o Modelo de Prova:", list(TIPOS_PROVA.keys()))
 conf = TIPOS_PROVA[modelo]
 
 tab1, tab2 = st.tabs(["1. Gerador de PDF", "2. Leitura, Correção e Exportação"])
 
+# --- ABA 1: GERADOR COM CUSTOMIZAÇÃO ---
 with tab1:
+    st.markdown("### 🎨 Personalização do Cabeçalho")
+    
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        custom_titulo = st.text_input("Título da Avaliação:", conf.titulo_prova)
+    with col_t2:
+        custom_sub = st.text_input("Etapa/Ano (Subtítulo):", conf.subtitulo)
+
+    st.markdown("**Logos (Opcional - Recomenda-se fundo transparente PNG)**")
+    col_l1, col_l2, col_l3 = st.columns(3)
+    with col_l1:
+        logo_esq = st.file_uploader("Logo Esquerda (ex: Prefeitura)", type=["png", "jpg"])
+    with col_l2:
+        logo_cen = st.file_uploader("Logo Centro (ex: Secretaria)", type=["png", "jpg"])
+    with col_l3:
+        logo_dir = st.file_uploader("Logo Direita (ex: SAMAR)", type=["png", "jpg"])
+
+    st.markdown("---")
+    
     col1, col2 = st.columns(2)
     with col1:
         fmt = st.radio("Formato de Saída:", ["PDF", "PNG", "JPEG"], horizontal=True)
     with col2:
         st.write("")
-        if st.button("🚀 Gerar Arquivo em Branco"):
+        if st.button("🚀 Gerar Arquivo Pronto para Impressão"):
+            # Pacote de Logos
+            logos_dict = {
+                'esq': logo_esq,
+                'cen': logo_cen,
+                'dir': logo_dir
+            }
+            
             ext = fmt.split()[0].lower()
             fn = f"Gabarito_{modelo}.{ext}"
             
             success = False
             if ext == "pdf":
-                gerar_pdf(conf, fn)
+                gerar_pdf(conf, fn, custom_titulo, custom_sub, logos_dict)
                 mime = "application/pdf"
                 success = True
             else:
-                res = gerar_imagem_a4(conf, fn, ext)
+                res = gerar_imagem_a4(conf, fn, ext, custom_titulo, custom_sub, logos_dict)
                 if res:
                     mime = f"image/{ext}"
                     success = True
@@ -44,6 +70,7 @@ with tab1:
                 with open(fn, "rb") as f:
                     st.download_button(f"📥 Baixar {ext.upper()}", f, fn, mime)
 
+# --- ABA 2: LEITURA E CORREÇÃO (Intocada) ---
 with tab2:
     st.markdown("### 📝 Passo 1: Configurar Gabarito Oficial")
     
