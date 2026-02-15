@@ -16,7 +16,7 @@ def encontrar_ancoras_globais(thresh):
         x, y, bw, bh = cv2.boundingRect(c)
         ar = bw / float(bh)
         
-        # Filtro exigente: Queremos quadrados sólidos
+        # Filtro exigente: Queremos quadrados sólidos (Âncoras SAMAR)
         if solidez > 0.8 and 0.5 <= ar <= 1.5:
             M = cv2.moments(c)
             if M["m00"] != 0:
@@ -35,21 +35,19 @@ def encontrar_ancoras_globais(thresh):
     meio_x, meio_y = w / 2, h / 2
     tl, tr, bl, br = None, None, None, None
     
-    # Classifica os candidatos encontrados nos 4 cantos
     for cx, cy, _ in candidatos:
         if cx < meio_x and cy < meio_y: tl = [cx, cy]
         elif cx > meio_x and cy < meio_y: tr = [cx, cy]
         elif cx < meio_x and cy > meio_y: bl = [cx, cy]
         elif cx > meio_x and cy > meio_y: br = [cx, cy]
         
-    # Se achamos apenas 3, o robô calcula por vetor a posição exata do 4º ponto invisível!
+    # Se achamos apenas 3, o robô calcula por vetor a posição exata da 4ª âncora
     if len(candidatos) == 3:
         if not br and tl and tr and bl: br = [tr[0] + bl[0] - tl[0], tr[1] + bl[1] - tl[1]]
         elif not bl and tl and tr and br: bl = [tl[0] + br[0] - tr[0], tl[1] + br[1] - tr[1]]
         elif not tr and tl and bl and br: tr = [tl[0] + br[0] - bl[0], tl[1] + br[1] - bl[1]]
         elif not tl and tr and bl and br: tl = [tr[0] + bl[0] - br[0], tr[1] + bl[1] - br[1]]
 
-    # Se agora temos os 4, avançamos. Se não, a página está fora do padrão.
     if tl and tr and bl and br:
         return np.array([tl, tr, br, bl], dtype="float32")
         
@@ -61,7 +59,7 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
     
     W_FINAL, H_FINAL = conf.REF_W, conf.REF_H
     
-    # Busca de âncoras (Usa blur normal apenas para achar os blocos pretos gigantes)
+    # Busca de âncoras
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     _, thresh_ancoras = cv2.threshold(blurred, 120, 255, cv2.THRESH_BINARY_INV)
     
@@ -82,42 +80,37 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
         M = cv2.getPerspectiveTransform(rect, dst)
         warped = cv2.warpPerspective(gray, M, (W_FINAL, H_FINAL))
     else:
-        # Fallback de segurança se nenhuma âncora for achada
         warped = cv2.resize(gray, (W_FINAL, H_FINAL))
         
     # ---------------------------------------------------------
-    # BLINDAGEM 1: ANTI-INVERSÃO (Página de cabeça para baixo)
-    # ---------------------------------------------------------
-    # Analisamos o top 15% (Cabeçalho) e bottom 15% (Rodapé).
-    # Como o cabeçalho tem o logo do SAMAR/SEMED, ele obrigatoriamente é mais escuro.
-    top_zone = warped[0:int(H_FINAL*0.15), 0:W_FINAL]
-    bot_zone = warped[int(H_FINAL*0.85):H_FINAL, 0:W_FINAL]
-    
-    area_total_zone = W_FINAL * int(H_FINAL*0.15)
-    tinta_top = area_total_zone - cv2.countNonZero(cv2.threshold(top_zone, 127, 255, cv2.THRESH_BINARY)[1])
-    tinta_bot = area_total_zone - cv2.countNonZero(cv2.threshold(bot_zone, 127, 255, cv2.THRESH_BINARY)[1])
-    
-    # Se o rodapé estiver mais manchado que o cabeçalho, a folha está invertida 180º!
-    if tinta_bot > tinta_top:
-        warped = cv2.rotate(warped, cv2.ROTATE_180)
-        
-    # ---------------------------------------------------------
     # BLINDAGEM 3 e 4: FILTRO BILATERAL + ADAPTATIVE THRESHOLD
+    # (Visão Noturna ativada ANTES da anti-inversão)
     # ---------------------------------------------------------
-    # Bilateral: Remove sujeira/chiado de WhatsApp preservando a borda afiada da bolinha
     blur_warp = cv2.bilateralFilter(warped, d=9, sigmaColor=75, sigmaSpace=75)
-    
-    # Adaptive Threshold: Imunidade a sombras de celular e flashes estourados. 
-    # Analisa a cor em blocos de 51x51 pixels em vez da folha inteira.
     binaria = cv2.adaptiveThreshold(
         blur_warp, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 51, 15
     )
+        
+    # ---------------------------------------------------------
+    # BLINDAGEM 1: ANTI-INVERSÃO IMUNE A SOMBRAS
+    # ---------------------------------------------------------
+    # Cortamos uma margem de segurança de 5% para ignorar as âncoras na contagem.
+    # Analisamos do topo (5% a 25%) onde ficam os logos pesados da prefeitura,
+    # e comparamos com o rodapé (75% a 95%) que é praticamente vazio.
+    top_zone = binaria[int(H_FINAL*0.05):int(H_FINAL*0.25), int(W_FINAL*0.05):int(W_FINAL*0.95)]
+    bot_zone = binaria[int(H_FINAL*0.75):int(H_FINAL*0.95), int(W_FINAL*0.05):int(W_FINAL*0.95)]
     
+    tinta_top = cv2.countNonZero(top_zone)
+    tinta_bot = cv2.countNonZero(bot_zone)
+    
+    # Se o rodapé tem mais tinta que os logos, a prova está inegavelmente de ponta-cabeça!
+    if tinta_bot > (tinta_top * 1.1): # 10% de margem de segurança
+        warped = cv2.rotate(warped, cv2.ROTATE_180)
+        binaria = cv2.rotate(binaria, cv2.ROTATE_180)
+        
     # ---------------------------------------------------------
     # BLINDAGEM 5: ANTI-VAZAMENTO DINÂMICO
     # ---------------------------------------------------------
-    # O tamanho do "apagador" de sujeira se adapta à resolução da foto upada.
-    # Isso apaga traços finos (impressão que vaza do verso) e deixa só a caneta.
     k_size = max(2, int(W_FINAL * 0.0025))
     kernel = np.ones((k_size, k_size), np.uint8)
     binaria = cv2.morphologyEx(binaria, cv2.MORPH_OPEN, kernel)
@@ -126,7 +119,6 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
 
 
 def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug, gabarito=None):
-    # A matemática de leitura continua absolutamente idêntica!
     x1 = grid.x_start * w_img
     x2 = grid.x_end * w_img
     y1 = grid.y_start * h_img
