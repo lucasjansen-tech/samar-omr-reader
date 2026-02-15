@@ -53,26 +53,6 @@ Y_TOP_EV44 = 0.48
 Y_BOT_EV44 = 0.73
 H_EV44 = Y_BOT_EV44 - Y_TOP_EV44
 
-# =========================================================
-# EVALBEE 18 QUESTÕES (CALIBRAÇÃO MATEMÁTICA EXATA)
-# =========================================================
-# Bloco 1A e 2A (Perfeitos na imagem)
-Y_TOP_PT1 = 0.635  
-Y_BOT_PT1 = 0.725  
-
-# Matemática da linha: (0.725 - 0.635) / 5 questões = 0.018 por linha.
-# O "salto" das letras A B C D tem a altura exata de 1 linha (0.018).
-# Logo, a PT2 começa em: 0.725 + 0.018 = 0.743
-# Como a PT2 tem 4 questões (6,7,8,9), a altura é: 4 * 0.018 = 0.072.
-# Logo, a PT2 termina em: 0.743 + 0.072 = 0.815
-Y_TOP_PT2 = 0.743  
-Y_BOT_PT2 = 0.815  
-
-# A Frequência tem 10 números (0 a 9). Ela começa na altura exata da 
-# Questão 1 e termina na altura exata da Questão 9.
-Y_TOP_FREQ = 0.635
-Y_BOT_FREQ = 0.815
-
 TIPOS_PROVA = {
     # ---------------------------------------------------------
     # PADRÕES NATIVOS (SISTEMA SAMAR)
@@ -138,20 +118,24 @@ TIPOS_PROVA = {
         ]
     ),
 
+    # =========================================================
+    # CALIBRAÇÃO CIRÚRGICA: EVALBEE 18 QUESTÕES
+    # Baseado EXCLUSIVAMENTE nas suas caixas vermelhas.
+    # =========================================================
     "EVALBEE_18_Questoes": ConfiguracaoProva(
         titulo_prova="GABARITO EVALBEE",
         subtitulo="Ensino Fundamental I - 1º ao 3º Ano",
         grids=[
-            # FREQ deslocada para a direita (0.22 a 0.28) e usando as coordenadas matemáticas exatas de altura
-            GridConfig("FREQ.", "", 0.22, 0.28, Y_TOP_FREQ, Y_BOT_FREQ, 10, 2, ["D", "U"], 0, COR_EVALBEE),
+            # FREQ: Eixo X movido rigorosamente para a direita (0.24 a 0.30) para excluir os números impressos
+            GridConfig("FREQ.", "", 0.24, 0.30, 0.615, 0.845, 10, 2, ["D", "U"], 0, COR_EVALBEE),
             
-            # BLOCO 1 (Intocável na Parte 1, Corrigido com a matemática na Parte 2)
-            GridConfig("BLOCO 1A", "", 0.44, 0.55, Y_TOP_PT1, Y_BOT_PT1, 5, 4, ["A","B","C","D"], 1, COR_EVALBEE), 
-            GridConfig("BLOCO 1B", "", 0.44, 0.55, Y_TOP_PT2, Y_BOT_PT2, 4, 4, ["A","B","C","D"], 6, COR_EVALBEE), 
+            # BLOCO 1
+            GridConfig("BLOCO 1A", "", 0.44, 0.55, 0.635, 0.725, 5, 4, ["A","B","C","D"], 1, COR_EVALBEE), 
+            GridConfig("BLOCO 1B", "", 0.44, 0.55, 0.775, 0.845, 4, 4, ["A","B","C","D"], 6, COR_EVALBEE), 
             
-            # BLOCO 2 (Intocável na Parte 1, Corrigido com a matemática na Parte 2)
-            GridConfig("BLOCO 2A", "", 0.65, 0.76, Y_TOP_PT1, Y_BOT_PT1, 5, 4, ["A","B","C","D"], 10, COR_EVALBEE), 
-            GridConfig("BLOCO 2B", "", 0.65, 0.76, Y_TOP_PT2, Y_BOT_PT2, 4, 4, ["A","B","C","D"], 15, COR_EVALBEE), 
+            # BLOCO 2
+            GridConfig("BLOCO 2A", "", 0.65, 0.76, 0.635, 0.725, 5, 4, ["A","B","C","D"], 10, COR_EVALBEE), 
+            GridConfig("BLOCO 2B", "", 0.65, 0.76, 0.775, 0.845, 4, 4, ["A","B","C","D"], 15, COR_EVALBEE), 
         ]
     )
 }
