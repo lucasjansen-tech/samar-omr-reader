@@ -9,7 +9,7 @@ def encontrar_ancoras_globais(thresh, is_evalbee=False):
     
     for c in cnts:
         area = cv2.contourArea(c)
-        # Se for Evalbee, a sensibilidade fica extrema para achar os quadradinhos menores
+        # O Evalbee tem marcadores menores. O filtro se ajusta a isso.
         min_area = (w * h * 0.00005) if is_evalbee else (w * h * 0.001)
         if area < min_area or area > (w * h * 0.05): continue
         
@@ -18,7 +18,6 @@ def encontrar_ancoras_globais(thresh, is_evalbee=False):
         x, y, bw, bh = cv2.boundingRect(c)
         ar = bw / float(bh)
         
-        # Aceita quadrados perfeitos (SAMAR e Evalbee)
         if solidez > 0.7 and 0.5 <= ar <= 2.0:
             M = cv2.moments(c)
             if M["m00"] != 0:
@@ -28,7 +27,7 @@ def encontrar_ancoras_globais(thresh, is_evalbee=False):
                 
     if len(candidatos) < 4: return None
     
-    # Busca os marcadores extremos (Funciona para as quinas da página ou quinas do Grid Evalbee)
+    # Busca a âncora MAIS PRÓXIMA dos 4 cantos extremos. Ignora sujeiras no meio da folha.
     pt_tl = min(candidatos, key=lambda item: item[0] + item[1])[:2]
     pt_tr = min(candidatos, key=lambda item: (w - item[0]) + item[1])[:2]
     pt_bl = min(candidatos, key=lambda item: item[0] + (h - item[1]))[:2]
@@ -49,25 +48,17 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
     rect = encontrar_ancoras_globais(thresh_ancoras, is_evalbee)
     
     if rect is not None:
-        if is_evalbee:
-            # MAGIA EVALBEE: Trava a área das questões num retângulo fixo, matando a distorção!
-            dst = np.array([
-                [W_FINAL * 0.05, H_FINAL * 0.30],
-                [W_FINAL * 0.95, H_FINAL * 0.30],
-                [W_FINAL * 0.95, H_FINAL * 0.95],
-                [W_FINAL * 0.05, H_FINAL * 0.95]
-            ], dtype="float32")
-        else:
-            # LÓGICA NATIVA SAMAR INTOCADA
-            m_px = W_FINAL * conf.MARGIN_PCT
-            s_px = W_FINAL * 0.04 
-            offset = m_px + (s_px / 2.0)
-            dst = np.array([
-                [offset, offset],
-                [W_FINAL - offset, offset],
-                [W_FINAL - offset, H_FINAL - offset],
-                [offset, H_FINAL - offset]
-            ], dtype="float32")
+        # FIM DA DISTORÇÃO: Ambos os modelos (Samar e Evalbee) são enquadrados perfeitamente
+        # respeitando os cantos reais da folha.
+        m_px = W_FINAL * conf.MARGIN_PCT
+        m_py = H_FINAL * conf.MARGIN_PCT
+        
+        dst = np.array([
+            [m_px, m_py],
+            [W_FINAL - m_px, m_py],
+            [W_FINAL - m_px, H_FINAL - m_py],
+            [m_px, H_FINAL - m_py]
+        ], dtype="float32")
             
         M = cv2.getPerspectiveTransform(rect, dst)
         warped = cv2.warpPerspective(gray, M, (W_FINAL, H_FINAL))
