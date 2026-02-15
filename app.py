@@ -11,21 +11,13 @@ import os
 st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
 st.title("🖨️ Sistema SAMAR - Leitura OMR Inteligente")
 
-# --- NOVO: ESCOLHA DA ORIGEM DO GABARITO ---
-origem = st.radio("Origem do Gabarito:", ["Gerado pelo Sistema SAMAR", "Importado do Evalbee"], horizontal=True)
-
-# Filtra as opções do Selectbox baseado na origem escolhida
-opcoes_modelo = [k for k in TIPOS_PROVA.keys() if ("EVALBEE" in k) == ("Evalbee" in origem)]
-modelo = st.selectbox("Selecione o Modelo de Prova:", opcoes_modelo)
+# Volta ao menu simples e seguro
+modelo = st.selectbox("Selecione o Modelo de Prova:", list(TIPOS_PROVA.keys()))
 conf = TIPOS_PROVA[modelo]
 
 tab1, tab2 = st.tabs(["1. Gerador de PDF", "2. Leitura, Correção e Exportação"])
 
-# --- ABA 1: GERADOR ---
 with tab1:
-    if "Evalbee" in origem:
-        st.warning("⚠️ **Aviso:** Você selecionou o padrão Evalbee. O gerador abaixo criará um esboço de testes. Para provas reais no padrão Evalbee, utilize o PDF gerado diretamente pelo aplicativo deles.")
-        
     col1, col2 = st.columns(2)
     with col1:
         fmt = st.radio("Formato de Saída:", ["PDF", "PNG", "JPEG"], horizontal=True)
@@ -52,7 +44,6 @@ with tab1:
                 with open(fn, "rb") as f:
                     st.download_button(f"📥 Baixar {ext.upper()}", f, fn, mime)
 
-# --- ABA 2: LEITURA, CORREÇÃO E EXPORTAÇÃO ---
 with tab2:
     st.markdown("### 📝 Passo 1: Configurar Gabarito Oficial")
     
@@ -61,8 +52,6 @@ with tab2:
                         horizontal=True)
     
     gab_oficial = {}
-    
-    # Descobre o total de questões baseado na configuração escolhida
     total_questoes = int(modelo.split('_')[1])
     blocos = len([g for g in conf.grids if g.questao_inicial > 0])
     questoes_por_bloco = total_questoes // blocos if blocos > 0 else 0
@@ -111,7 +100,6 @@ with tab2:
                 if img.ndim == 2: img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
                 else: img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
                 
-                # O motor é o mesmo, ele só usa as novas coordenadas do Evalbee
                 res, vis, _ = processar_gabarito(img, conf, gab_oficial)
                 
                 freq = res.get("frequencia", "00")
