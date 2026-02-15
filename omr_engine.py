@@ -19,9 +19,7 @@ def encontrar_ancoras_globais(thresh):
         if solidez > 0.7 and 0.5 <= ar <= 2.0:
             M = cv2.moments(c)
             if M["m00"] != 0:
-                cx = int(M["m10"] / M["m00"])
-                cy = int(M["m01"] / M["m00"])
-                candidatos.append((cx, cy, area))
+                candidatos.append((int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]), area))
                 
     if len(candidatos) < 4: return None
     
@@ -37,16 +35,15 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
     else: gray = img
     
     W_FINAL, H_FINAL = conf.REF_W, conf.REF_H
+    
+    # === AQUI ESTÁ A SEPARAÇÃO ABSOLUTA DOS PADRÕES ===
     is_evalbee = "EVALBEE" in conf.titulo_prova.upper()
     
-    # =======================================================
-    # A SOLUÇÃO: SE FOR EVALBEE, APENAS PEGA A IMAGEM COMO É
-    # =======================================================
     if is_evalbee:
-        # Pega a imagem do jeito que está e ajusta para A4 de forma "flat".
+        # SE FOR EVALBEE: Nenhuma distorção, nenhum corte. Apenas redimensiona para o tamanho A4.
         warped = cv2.resize(gray, (W_FINAL, H_FINAL))
     else:
-        # LÓGICA NATIVA SAMAR (Mantida intocada)
+        # SE FOR SAMAR (Nativo): Aplica a distorção para corrigir a foto baseada nas âncoras.
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
         _, thresh_ancoras = cv2.threshold(blurred, 120, 255, cv2.THRESH_BINARY_INV)
         rect = encontrar_ancoras_globais(thresh_ancoras)
@@ -66,7 +63,7 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
         else:
             warped = cv2.resize(gray, (W_FINAL, H_FINAL))
             
-    # Filtro OTSU
+    # Filtro OTSU (Inteligência de leitura de bolinhas) continua igual para ambos
     blur_warp = cv2.GaussianBlur(warped, (3, 3), 0)
     _, binaria = cv2.threshold(blur_warp, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
     kernel = np.ones((2,2), np.uint8)
