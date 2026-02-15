@@ -1,100 +1,110 @@
-import os
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.colors import HexColor
+from layout_samar import ConfiguracaoProva
 from pdf2image import convert_from_path
+import os
+
+def desenhar_layout_grid(c, conf: ConfiguracaoProva):
+    W, H = A4
+    m = W * conf.MARGIN_PCT
+    s = 30
+    
+    # Âncoras
+    c.setFillColor(colors.black)
+    c.rect(m, H-m-s, s, s, fill=1, stroke=0)
+    c.rect(W-m-s, H-m-s, s, s, fill=1, stroke=0)
+    c.rect(m, m, s, s, fill=1, stroke=0)
+    c.rect(W-m-s, m, s, s, fill=1, stroke=0)
+    
+    # Cabeçalho
+    c.setFillColor(HexColor("#2980b9"))
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(W/2, H - 50, conf.titulo_prova)
+    c.setFillColor(colors.black)
+    c.setFont("Helvetica", 12)
+    c.drawCentredString(W/2, H - 70, conf.subtitulo)
+    
+    c.setStrokeColor(colors.black); c.setLineWidth(0.5); c.setFont("Helvetica-Bold", 9)
+    y = H - 110
+    c.drawString(m, y, "UNIDADE DE ENSINO:"); c.line(m+100, y-2, W-m, y-2)
+    y -= 25
+    c.drawString(m, y, "ANO:"); c.line(m+30, y-2, m+150, y-2)
+    c.drawString(m+160, y, "TURMA:"); c.line(m+200, y-2, m+300, y-2)
+    c.drawString(m+310, y, "TURNO:"); c.line(m+350, y-2, W-m, y-2)
+    y -= 25
+    c.drawString(m, y, "ALUNO:"); c.line(m+40, y-2, W-m, y-2)
+    
+    # Instruções
+    y -= 35
+    c.setStrokeColor(HexColor("#e67e22"))
+    c.rect(m, y-10, W-(2*m), 25, stroke=1, fill=0)
+    c.setFillColor(colors.black); c.setFont("Helvetica", 8)
+    c.drawString(m+10, y+2, "INSTRUÇÕES: 1. Use caneta azul ou preta. 2. Preencha totalmente a bolinha. 3. Não rasure.")
+    
+    for g in conf.grids:
+        x1 = g.x_start * W
+        w_g = (g.x_end - g.x_start) * W
+        y_top = H - (g.y_start * H)
+        h_g = (g.y_end - g.y_start) * H
+        
+        c.setFillColor(HexColor(g.cor_hex))
+        c.roundRect(x1, y_top + 45, w_g, 20, 4, fill=1, stroke=0)
+        c.setFillColor(colors.white); c.setFont("Helvetica-Bold", 10)
+        c.drawCentredString(x1 + w_g/2, y_top + 51, g.titulo)
+        
+        if g.texto_extra:
+            c.setFillColor(HexColor(g.cor_hex)); c.setFont("Helvetica-Bold", 7)
+            c.drawCentredString(x1 + w_g/2, y_top + 32, g.texto_extra)
+        
+        cell_h = h_g / g.rows
+        cell_w = w_g / g.cols
+        c.setFillColor(colors.black); c.setStrokeColor(colors.black)
+        
+        if g.labels:
+            for i, lbl in enumerate(g.labels):
+                cx = x1 + (i * cell_w) + (cell_w/2)
+                c.setFont("Helvetica-Bold", 9)
+                c.drawCentredString(cx, y_top + 12, lbl)
+
+        for r in range(g.rows):
+            cy = y_top - (r * cell_h) - (cell_h/2)
+            y_box_bot = y_top - ((r+1) * cell_h)
+            
+            c.setStrokeColor(colors.lightgrey); c.setLineWidth(0.5)
+            c.rect(x1, y_box_bot, w_g, cell_h, stroke=1, fill=0)
+            
+            c.setFillColor(colors.black)
+            if g.questao_inicial > 0:
+                c.setFont("Helvetica-Bold", 9)
+                c.drawRightString(x1 - 5, cy - 3, f"{g.questao_inicial+r:02d}")
+            elif g.labels == ["D", "U"]:
+                c.setFont("Helvetica", 9)
+                c.drawRightString(x1 - 5, cy - 3, str(r))
+
+            for col in range(g.cols):
+                cx = x1 + (col * cell_w) + (cell_w/2)
+                c.setStrokeColor(colors.black); c.setLineWidth(1)
+                c.circle(cx, cy, 7, stroke=1, fill=0)
+                if g.questao_inicial > 0:
+                    c.setFont("Helvetica", 6)
+                    c.drawCentredString(cx, cy - 2, g.labels[col])
 
 def gerar_pdf(conf, filename):
     c = canvas.Canvas(filename, pagesize=A4)
-    w, h = A4
-
-    # 1. Âncoras do Sistema SAMAR
-    m_pct = conf.MARGIN_PCT
-    s_px = w * 0.04
-    offset = w * m_pct
-
-    c.setFillColorRGB(0, 0, 0)
-    c.rect(offset, h - offset - s_px, s_px, s_px, fill=1) # Top-Left
-    c.rect(w - offset - s_px, h - offset - s_px, s_px, s_px, fill=1) # Top-Right
-    c.rect(offset, offset, s_px, s_px, fill=1) # Bottom-Left
-    c.rect(w - offset - s_px, offset, s_px, s_px, fill=1) # Bottom-Right
-
-    # 2. Títulos Oficiais do SAMAR
-    c.setFont("Helvetica-Bold", 14)
-    c.drawCentredString(w / 2.0, h * 0.88, conf.titulo_prova)
-    c.setFont("Helvetica", 12)
-    c.drawCentredString(w / 2.0, h * 0.85, conf.subtitulo)
-
-    # 3. Cabeçalho de Identificação (Estável e com espaço)
-    c.setFont("Helvetica-Bold", 10)
-    
-    # Linha 1
-    c.drawString(w * 0.1, h * 0.78, "ESCOLA:")
-    c.line(w * 0.18, h * 0.78, w * 0.9, h * 0.78)
-
-    # Linha 2
-    c.drawString(w * 0.1, h * 0.74, "ALUNO:")
-    c.line(w * 0.17, h * 0.74, w * 0.65, h * 0.74)
-    c.drawString(w * 0.68, h * 0.74, "TURMA:")
-    c.line(w * 0.75, h * 0.74, w * 0.9, h * 0.74)
-
-    # Linha 3
-    c.drawString(w * 0.1, h * 0.70, "DATA: ______ / ______ / ________")
-
-    # 4. Desenho dos Grids (Coordenadas Nativas)
-    for grid in conf.grids:
-        x1 = grid.x_start * w
-        x2 = grid.x_end * w
-        y1_pdf = h - (grid.y_end * h)
-        y2_pdf = h - (grid.y_start * h)
-
-        c.setFillColorRGB(0, 0, 0)
-        c.setFont("Helvetica-Bold", 9)
-        c.drawCentredString((x1+x2)/2, y2_pdf + 10, grid.titulo)
-        if grid.texto_extra:
-            c.setFont("Helvetica", 8)
-            c.drawCentredString((x1+x2)/2, y2_pdf + 0, grid.texto_extra)
-
-        cell_w = (x2 - x1) / grid.cols
-        cell_h = (y2_pdf - y1_pdf) / grid.rows
-        raio = min(cell_w, cell_h) * 0.25
-
-        c.setFont("Helvetica", 8)
-        for col in range(grid.cols):
-            cx = x1 + (col * cell_w) + (cell_w / 2)
-            c.drawCentredString(cx, y2_pdf - 8, grid.labels[col])
-
-        c.setStrokeColorRGB(0.4, 0.4, 0.4)
-        for row in range(grid.rows):
-            cy = y2_pdf - (row * cell_h) - (cell_h / 2) - 15
-
-            if grid.questao_inicial > 0:
-                q_num = grid.questao_inicial + row
-                c.setFont("Helvetica-Bold", 8)
-                c.drawString(x1 - 15, cy - 3, str(q_num))
-            else:
-                c.setFont("Helvetica-Bold", 8)
-                c.drawString(x1 - 15, cy - 3, str(row))
-
-            c.setLineWidth(1)
-            for col in range(grid.cols):
-                cx = x1 + (col * cell_w) + (cell_w / 2)
-                c.circle(cx, cy, raio, stroke=1, fill=0)
-
+    desenhar_layout_grid(c, conf)
     c.save()
+    return filename
 
-def gerar_imagem_a4(conf, filename, ext):
-    pdf_tmp = "temp_gen.pdf"
-    gerar_pdf(conf, pdf_tmp)
+def gerar_imagem_a4(conf, filename_saida, formato="png"):
+    temp_pdf = "temp_gabarito.pdf"
+    gerar_pdf(conf, temp_pdf)
     try:
-        pages = convert_from_path(pdf_tmp, dpi=200)
-        if pages:
-            if ext.lower() == "png":
-                pages[0].save(filename, "PNG")
-            else:
-                pages[0].save(filename, "JPEG")
-            os.remove(pdf_tmp)
-            return True
-    except Exception as e:
-        print(e)
-    if os.path.exists(pdf_tmp): os.remove(pdf_tmp)
-    return False
+        imagens = convert_from_path(temp_pdf, dpi=300)
+        if imagens:
+            img = imagens[0]
+            img.save(filename_saida, formato.upper())
+            if os.path.exists(temp_pdf): os.remove(temp_pdf)
+            return filename_saida
+    except: return None
