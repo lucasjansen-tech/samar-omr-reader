@@ -3,6 +3,7 @@ from typing import List
 
 COR_AZUL = "#2980b9"
 COR_LARANJA = "#e67e22"
+COR_EVALBEE = "#555555" # Cor neutra para os blocos Evalbee
 
 @dataclass
 class GridConfig:
@@ -27,24 +28,34 @@ class ConfiguracaoProva:
     REF_H = 1754
     MARGIN_PCT = 0.05 
 
-# --- GEOMETRIA BLINDADA (Validada) ---
+# =========================================================
+# GEOMETRIA: SISTEMA SAMAR (GERADO NATIVAMENTE)
+# =========================================================
 Y_TOP = 0.35
 Y_BOT = 0.85 
-
 ALTURA_BLOCO = Y_BOT - Y_TOP
 
-# --- CÁLCULOS DE SINCRONIA DA FREQUÊNCIA ---
-# A altura da Frequência muda dependendo de quantas linhas tem a prova,
-# para que os números de 0 a 9 fiquem perfeitamente alinhados com as questões.
-Y_END_FREQ_13 = Y_TOP + ((ALTURA_BLOCO / 13) * 10) # Para prova de 52 (13 por bloco)
-Y_END_FREQ_11 = Y_TOP + ((ALTURA_BLOCO / 11) * 10) # Para prova de 44 (11 por bloco)
-Y_END_FREQ_09 = Y_BOT # Para prova de 18 (9 por bloco, a freq de 10 ocupa tudo)
+Y_END_FREQ_13 = Y_TOP + ((ALTURA_BLOCO / 13) * 10) 
+Y_END_FREQ_11 = Y_TOP + ((ALTURA_BLOCO / 11) * 10) 
+Y_END_FREQ_09 = Y_BOT 
+
+# =========================================================
+# GEOMETRIA: PADRÃO EVALBEE
+# (As bolinhas no Evalbee começam um pouco mais abaixo devido ao cabeçalho maior)
+# =========================================================
+Y_TOP_EV = 0.45
+Y_BOT_EV = 0.88
+ALTURA_BLOCO_EV = Y_BOT_EV - Y_TOP_EV
+
+Y_END_FREQ_13_EV = Y_TOP_EV + ((ALTURA_BLOCO_EV / 13) * 10)
+Y_END_FREQ_11_EV = Y_TOP_EV + ((ALTURA_BLOCO_EV / 11) * 10)
+Y_END_FREQ_09_EV = Y_BOT_EV
 
 TIPOS_PROVA = {
     # ---------------------------------------------------------
-    # 1. PADRÃO 52 QUESTÕES (7º ao 9º Ano)
+    # PADRÕES NATIVOS (SISTEMA SAMAR)
     # ---------------------------------------------------------
-    "52_Questoes": ConfiguracaoProva(
+    "SAMAR_52_Questoes": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental II - 7º ao 9º Ano",
         grids=[
@@ -56,10 +67,7 @@ TIPOS_PROVA = {
         ]
     ),
 
-    # ---------------------------------------------------------
-    # 2. PADRÃO 44 QUESTÕES (Ex: 4º ao 6º Ano) - 11 por bloco
-    # ---------------------------------------------------------
-    "44_Questoes": ConfiguracaoProva(
+    "SAMAR_44_Questoes": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental - 4º ao 6º Ano",
         grids=[
@@ -71,17 +79,50 @@ TIPOS_PROVA = {
         ]
     ),
 
-    # ---------------------------------------------------------
-    # 3. PADRÃO 18 QUESTÕES (Ex: 1º ao 3º Ano) - 9 por bloco
-    # ---------------------------------------------------------
-    "18_Questoes": ConfiguracaoProva(
+    "SAMAR_18_Questoes": ConfiguracaoProva(
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental I - 1º ao 3º Ano",
         grids=[
-            # Como são apenas 2 blocos de matérias, eles foram mais centralizados na página
             GridConfig("FREQ.", "", 0.15, 0.22, Y_TOP, Y_END_FREQ_09, 10, 2, ["D", "U"], 0, COR_LARANJA),
             GridConfig("BLOCO 1", "LÍNGUA PORTUGUESA", 0.32, 0.52, Y_TOP, Y_BOT, 9, 4, ["A","B","C","D"], 1, COR_AZUL),
             GridConfig("BLOCO 2", "MATEMÁTICA", 0.58, 0.78, Y_TOP, Y_BOT, 9, 4, ["A","B","C","D"], 10, COR_LARANJA),
+        ]
+    ),
+
+    # ---------------------------------------------------------
+    # PADRÕES IMPORTADOS DO EVALBEE
+    # ---------------------------------------------------------
+    "EVALBEE_52_Questoes": ConfiguracaoProva(
+        titulo_prova="GABARITO EVALBEE",
+        subtitulo="Ensino Fundamental II - 7º ao 9º Ano",
+        grids=[
+            GridConfig("FREQ.", "", 0.08, 0.16, Y_TOP_EV, Y_END_FREQ_13_EV, 10, 2, ["D", "U"], 0, COR_EVALBEE),
+            GridConfig("BLOCO 1", "", 0.20, 0.36, Y_TOP_EV, Y_BOT_EV, 13, 4, ["A","B","C","D"], 1, COR_EVALBEE),
+            GridConfig("BLOCO 2", "", 0.40, 0.56, Y_TOP_EV, Y_BOT_EV, 13, 4, ["A","B","C","D"], 14, COR_EVALBEE),
+            GridConfig("BLOCO 3", "", 0.60, 0.76, Y_TOP_EV, Y_BOT_EV, 13, 4, ["A","B","C","D"], 27, COR_EVALBEE),
+            GridConfig("BLOCO 4", "", 0.80, 0.96, Y_TOP_EV, Y_BOT_EV, 13, 4, ["A","B","C","D"], 40, COR_EVALBEE),
+        ]
+    ),
+
+    "EVALBEE_44_Questoes": ConfiguracaoProva(
+        titulo_prova="GABARITO EVALBEE",
+        subtitulo="Ensino Fundamental - 4º ao 6º Ano",
+        grids=[
+            GridConfig("FREQ.", "", 0.08, 0.16, Y_TOP_EV, Y_END_FREQ_11_EV, 10, 2, ["D", "U"], 0, COR_EVALBEE),
+            GridConfig("BLOCO 1", "", 0.20, 0.36, Y_TOP_EV, Y_BOT_EV, 11, 4, ["A","B","C","D"], 1, COR_EVALBEE),
+            GridConfig("BLOCO 2", "", 0.40, 0.56, Y_TOP_EV, Y_BOT_EV, 11, 4, ["A","B","C","D"], 12, COR_EVALBEE),
+            GridConfig("BLOCO 3", "", 0.60, 0.76, Y_TOP_EV, Y_BOT_EV, 11, 4, ["A","B","C","D"], 23, COR_EVALBEE),
+            GridConfig("BLOCO 4", "", 0.80, 0.96, Y_TOP_EV, Y_BOT_EV, 11, 4, ["A","B","C","D"], 34, COR_EVALBEE),
+        ]
+    ),
+
+    "EVALBEE_18_Questoes": ConfiguracaoProva(
+        titulo_prova="GABARITO EVALBEE",
+        subtitulo="Ensino Fundamental I - 1º ao 3º Ano",
+        grids=[
+            GridConfig("FREQ.", "", 0.20, 0.28, Y_TOP_EV, Y_END_FREQ_09_EV, 10, 2, ["D", "U"], 0, COR_EVALBEE),
+            GridConfig("BLOCO 1", "", 0.35, 0.55, Y_TOP_EV, Y_BOT_EV, 9, 4, ["A","B","C","D"], 1, COR_EVALBEE),
+            GridConfig("BLOCO 2", "", 0.65, 0.85, Y_TOP_EV, Y_BOT_EV, 9, 4, ["A","B","C","D"], 10, COR_EVALBEE),
         ]
     )
 }
