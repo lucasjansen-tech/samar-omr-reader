@@ -28,10 +28,12 @@ class ConfiguracaoProva:
     MARGIN_PCT = 0.05 
 
 # =========================================================
-# GEOMETRIA: SISTEMA SAMAR NATIVO (INTOCADA E VALIDADA)
+# GEOMETRIA: SISTEMA SAMAR NATIVO (AJUSTADO)
 # =========================================================
-Y_TOP = 0.35
-Y_BOT = 0.85 
+# Y_TOP desceu de 0.35 para 0.44 para dar espaço ao super cabeçalho e logos.
+# Y_BOT esticou de 0.85 para 0.92 para as bolinhas não espremerem no meio da página.
+Y_TOP = 0.44  
+Y_BOT = 0.92  
 ALTURA_BLOCO = Y_BOT - Y_TOP
 
 Y_END_FREQ_13 = Y_TOP + ((ALTURA_BLOCO / 13) * 10) 
