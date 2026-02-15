@@ -11,10 +11,11 @@ import os
 st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
 st.title("🖨️ Sistema SAMAR - Leitura OMR Inteligente")
 
+# Seleção Limpa e Exclusiva do SAMAR
 modelo = st.selectbox("Selecione o Modelo de Prova:", list(TIPOS_PROVA.keys()))
 conf = TIPOS_PROVA[modelo]
 
-tab1, tab2 = st.tabs(["1. Gerador de PDF", "2. Leitura, Correção e Exportação"])
+tab1, tab2 = st.tabs(["1. Gerador de PDF Personalizado", "2. Leitura e Correção"])
 
 # --- ABA 1: GERADOR COM CUSTOMIZAÇÃO ---
 with tab1:
@@ -26,12 +27,12 @@ with tab1:
     with col_t2:
         custom_sub = st.text_input("Etapa/Ano (Subtítulo):", conf.subtitulo)
 
-    st.markdown("**Logos (Opcional - Recomenda-se fundo transparente PNG)**")
+    st.markdown("**Logos (Opcional - Recomenda-se arquivos PNG com fundo transparente)**")
     col_l1, col_l2, col_l3 = st.columns(3)
     with col_l1:
-        logo_esq = st.file_uploader("Logo Esquerda (ex: Prefeitura)", type=["png", "jpg"])
+        logo_esq = st.file_uploader("Logo Esquerda (ex: RAPOSA)", type=["png", "jpg"])
     with col_l2:
-        logo_cen = st.file_uploader("Logo Centro (ex: Secretaria)", type=["png", "jpg"])
+        logo_cen = st.file_uploader("Logo Centro (ex: SEMED)", type=["png", "jpg"])
     with col_l3:
         logo_dir = st.file_uploader("Logo Direita (ex: SAMAR)", type=["png", "jpg"])
 
@@ -43,7 +44,6 @@ with tab1:
     with col2:
         st.write("")
         if st.button("🚀 Gerar Arquivo Pronto para Impressão"):
-            # Pacote de Logos
             logos_dict = {
                 'esq': logo_esq,
                 'cen': logo_cen,
@@ -68,9 +68,9 @@ with tab1:
 
             if success and os.path.exists(fn):
                 with open(fn, "rb") as f:
-                    st.download_button(f"📥 Baixar {ext.upper()}", f, fn, mime)
+                    st.download_button(f"📥 Baixar Arquivo {ext.upper()}", f, fn, mime)
 
-# --- ABA 2: LEITURA E CORREÇÃO (Intocada) ---
+# --- ABA 2: LEITURA E CORREÇÃO (INTOCADA E PERFEITA) ---
 with tab2:
     st.markdown("### 📝 Passo 1: Configurar Gabarito Oficial")
     
