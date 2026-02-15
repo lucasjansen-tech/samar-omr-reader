@@ -53,13 +53,15 @@ Y_TOP_EV44 = 0.48
 Y_BOT_EV44 = 0.73
 H_EV44 = Y_BOT_EV44 - Y_TOP_EV44
 
-# --- EVALBEE 18 QUESTÕES (Calibração Fina baseada na imagem) ---
-# Subimos o eixo Y (de 0.620 para 0.605) para parar de "cortar" o topo das bolinhas
-Y_TOP_PT1 = 0.605  # Linhas 1 a 5
-Y_BOT_PT1 = 0.715  
+# --- EVALBEE 18 QUESTÕES (CALIBRAÇÃO CIRÚRGICA - CAIXAS VERMELHAS) ---
+# Extraído exatamente da sua imagem com as bolinhas pintadas
+Y_TOP_FREQ  = 0.60
+Y_BOT_GERAL = 0.82  # Todos os blocos (Freq, PT1B e PT2B) terminam rigorosamente aqui
 
-Y_TOP_PT2 = 0.755  # Linhas 6 a 9 (Acompanhando a subida)
-Y_BOT_PT2 = 0.845  
+Y_TOP_PT1 = 0.62   # Início das questões 1 a 5
+Y_BOT_PT1 = 0.71   # Fim das questões 1 a 5
+
+Y_TOP_PT2 = 0.75   # Início das questões 6 a 9 (após o salto)
 
 TIPOS_PROVA = {
     # ---------------------------------------------------------
@@ -130,16 +132,16 @@ TIPOS_PROVA = {
         titulo_prova="GABARITO EVALBEE",
         subtitulo="Ensino Fundamental I - 1º ao 3º Ano",
         grids=[
-            # FREQ deslocado para a direita (0.21 a 0.28) para enquadrar perfeitamente e movido para cima
-            GridConfig("FREQ.", "", 0.21, 0.28, 0.605, 0.845, 10, 2, ["D", "U"], 0, COR_EVALBEE),
+            # FREQ mais estreita (0.23 a 0.27) e terminando exatamente com a linha 9/18
+            GridConfig("FREQ.", "", 0.23, 0.27, Y_TOP_FREQ, Y_BOT_GERAL, 10, 2, ["D", "U"], 0, COR_EVALBEE),
             
-            # BLOCO 1 movido suavemente para a direita (0.445 a 0.555) e para cima
-            GridConfig("BLOCO 1A", "", 0.445, 0.555, Y_TOP_PT1, Y_BOT_PT1, 5, 4, ["A","B","C","D"], 1, COR_EVALBEE), 
-            GridConfig("BLOCO 1B", "", 0.445, 0.555, Y_TOP_PT2, Y_BOT_PT2, 4, 4, ["A","B","C","D"], 6, COR_EVALBEE), 
+            # BLOCO 1 mais estreito (0.45 a 0.55)
+            GridConfig("BLOCO 1A", "", 0.45, 0.55, Y_TOP_PT1, Y_BOT_PT1, 5, 4, ["A","B","C","D"], 1, COR_EVALBEE), 
+            GridConfig("BLOCO 1B", "", 0.45, 0.55, Y_TOP_PT2, Y_BOT_GERAL, 4, 4, ["A","B","C","D"], 6, COR_EVALBEE), 
             
-            # BLOCO 2 movido suavemente para a direita (0.655 a 0.765) e para cima
-            GridConfig("BLOCO 2A", "", 0.655, 0.765, Y_TOP_PT1, Y_BOT_PT1, 5, 4, ["A","B","C","D"], 10, COR_EVALBEE), 
-            GridConfig("BLOCO 2B", "", 0.655, 0.765, Y_TOP_PT2, Y_BOT_PT2, 4, 4, ["A","B","C","D"], 15, COR_EVALBEE), 
+            # BLOCO 2 mais estreito (0.66 a 0.76)
+            GridConfig("BLOCO 2A", "", 0.66, 0.76, Y_TOP_PT1, Y_BOT_PT1, 5, 4, ["A","B","C","D"], 10, COR_EVALBEE), 
+            GridConfig("BLOCO 2B", "", 0.66, 0.76, Y_TOP_PT2, Y_BOT_GERAL, 4, 4, ["A","B","C","D"], 15, COR_EVALBEE), 
         ]
     )
 }
