@@ -28,11 +28,10 @@ class ConfiguracaoProva:
     MARGIN_PCT = 0.05 
 
 # =========================================================
-# GEOMETRIA: SISTEMA SAMAR NATIVO (AJUSTADO)
+# GEOMETRIA: SISTEMA SAMAR NATIVO (A BUILD ESTÁVEL)
 # =========================================================
-# Y_TOP em 0.44 garante que o bloco comece ABAIXO do cabeçalho
-Y_TOP = 0.44  
-Y_BOT = 0.92  
+Y_TOP = 0.35
+Y_BOT = 0.85 
 ALTURA_BLOCO = Y_BOT - Y_TOP
 
 Y_END_FREQ_13 = Y_TOP + ((ALTURA_BLOCO / 13) * 10) 
