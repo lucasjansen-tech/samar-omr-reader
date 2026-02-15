@@ -2,15 +2,14 @@ import cv2
 import numpy as np
 from layout_samar import ConfiguracaoProva, GridConfig
 
-def encontrar_ancoras_globais(thresh, is_evalbee=False):
+def encontrar_ancoras_globais(thresh):
     cnts, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     h, w = thresh.shape
     candidatos = []
     
     for c in cnts:
         area = cv2.contourArea(c)
-        min_area = (w * h * 0.00005) if is_evalbee else (w * h * 0.001)
-        if area < min_area or area > (w * h * 0.05): continue
+        if area < (w * h * 0.001) or area > (w * h * 0.05): continue
         
         hull = cv2.convexHull(c)
         solidez = area / float(cv2.contourArea(hull)) if cv2.contourArea(hull) > 0 else 0
@@ -26,7 +25,6 @@ def encontrar_ancoras_globais(thresh, is_evalbee=False):
                 
     if len(candidatos) < 4: return None
     
-    # Encontra as âncoras extremas
     pt_tl = min(candidatos, key=lambda item: item[0] + item[1])[:2]
     pt_tr = min(candidatos, key=lambda item: (w - item[0]) + item[1])[:2]
     pt_bl = min(candidatos, key=lambda item: item[0] + (h - item[1]))[:2]
@@ -41,23 +39,20 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
     W_FINAL, H_FINAL = conf.REF_W, conf.REF_H
     is_evalbee = "EVALBEE" in conf.titulo_prova.upper()
     
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    _, thresh_ancoras = cv2.threshold(blurred, 120, 255, cv2.THRESH_BINARY_INV)
-    
-    rect = encontrar_ancoras_globais(thresh_ancoras, is_evalbee)
-    
-    if rect is not None:
-        if is_evalbee:
-            # FIM DO ACHATAMENTO: As âncoras do Evalbee formam um retângulo que começa em 58% da folha.
-            # Mapeamos para essas proporções reais, forçando a página toda a ficar reta em tela cheia!
-            dst = np.array([
-                [W_FINAL * 0.08, H_FINAL * 0.58], # Top-Left do bloco
-                [W_FINAL * 0.92, H_FINAL * 0.58], # Top-Right do bloco
-                [W_FINAL * 0.92, H_FINAL * 0.95], # Bottom-Right
-                [W_FINAL * 0.08, H_FINAL * 0.95]  # Bottom-Left
-            ], dtype="float32")
-        else:
-            # LÓGICA NATIVA DO SAMAR (Intocada)
+    # =======================================================
+    # A SOLUÇÃO: SE FOR EVALBEE, APENAS PEGA A IMAGEM COMO É
+    # =======================================================
+    if is_evalbee:
+        # Pega a imagem do jeito que está e apenas ajusta para o tamanho A4.
+        # Zero distorções, cortes ou achatamentos!
+        warped = cv2.resize(gray, (W_FINAL, H_FINAL))
+    else:
+        # LÓGICA NATIVA SAMAR (Mantida intocada)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        _, thresh_ancoras = cv2.threshold(blurred, 120, 255, cv2.THRESH_BINARY_INV)
+        rect = encontrar_ancoras_globais(thresh_ancoras)
+        
+        if rect is not None:
             m_px = W_FINAL * conf.MARGIN_PCT
             s_px = W_FINAL * 0.04 
             offset = m_px + (s_px / 2.0)
@@ -67,12 +62,12 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
                 [W_FINAL - offset, H_FINAL - offset],
                 [offset, H_FINAL - offset]
             ], dtype="float32")
+            M = cv2.getPerspectiveTransform(rect, dst)
+            warped = cv2.warpPerspective(gray, M, (W_FINAL, H_FINAL))
+        else:
+            warped = cv2.resize(gray, (W_FINAL, H_FINAL))
             
-        M = cv2.getPerspectiveTransform(rect, dst)
-        warped = cv2.warpPerspective(gray, M, (W_FINAL, H_FINAL))
-    else:
-        warped = cv2.resize(gray, (W_FINAL, H_FINAL))
-        
+    # Aplica o Filtro OTSU para identificar a tinta
     blur_warp = cv2.GaussianBlur(warped, (3, 3), 0)
     _, binaria = cv2.threshold(blur_warp, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
     kernel = np.ones((2,2), np.uint8)
