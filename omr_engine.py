@@ -4,60 +4,77 @@ from layout_samar import ConfiguracaoProva, GridConfig
 
 def encontrar_ancoras_globais(thresh):
     cnts, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    candidatos = []
     h, w = thresh.shape
+    candidatos = []
+    
     for c in cnts:
         area = cv2.contourArea(c)
-        if area < 100 or area > (w*h*0.1): continue
-        approx = cv2.approxPolyDP(c, 0.04 * cv2.arcLength(c, True), True)
-        if len(approx) == 4:
-            _, _, bw, bh = cv2.boundingRect(approx)
-            ar = bw / float(bh)
-            if 0.7 <= ar <= 1.3:
-                M = cv2.moments(c)
-                if M["m00"] != 0:
-                    candidatos.append([int(M["m10"]/M["m00"]), int(M["m01"]/M["m00"])])
+        # Filtro de área muito mais permissivo para aceitar as âncoras menores do Evalbee
+        if area < (w * h * 0.0002) or area > (w * h * 0.1): continue
+        
+        hull = cv2.convexHull(c)
+        solidez = area / float(cv2.contourArea(hull)) if cv2.contourArea(hull) > 0 else 0
+        
+        x, y, bw, bh = cv2.boundingRect(c)
+        ar = bw / float(bh)
+        
+        # Aceita quadrados e retângulos (Evalbee usa retângulos)
+        if solidez > 0.8 and 0.2 <= ar <= 5.0:
+            M = cv2.moments(c)
+            if M["m00"] != 0:
+                cx = int(M["m10"] / M["m00"])
+                cy = int(M["m01"] / M["m00"])
+                candidatos.append((cx, cy, area))
+                
     if len(candidatos) < 4: return None
-    pts = np.array(candidatos, dtype="float32")
-    s = pts.sum(axis=1); d = np.diff(pts, axis=1)
-    return np.array([pts[np.argmin(s)], pts[np.argmin(d)], pts[np.argmax(s)], pts[np.argmax(d)]], dtype="float32")
+    
+    # A MÁGICA: Busca a âncora MAIS PRÓXIMA dos 4 cantos extremos da imagem.
+    # Isso impede que retângulos no meio da folha (como os do Evalbee) sejam confundidos com âncoras.
+    pt_tl = min(candidatos, key=lambda item: item[0] + item[1])[:2]                 # Topo Esquerdo
+    pt_tr = min(candidatos, key=lambda item: (w - item[0]) + item[1])[:2]           # Topo Direito
+    pt_bl = min(candidatos, key=lambda item: item[0] + (h - item[1]))[:2]           # Base Esquerda
+    pt_br = min(candidatos, key=lambda item: (w - item[0]) + (h - item[1]))[:2]     # Base Direita
+    
+    return np.array([pt_tl, pt_tr, pt_br, pt_bl], dtype="float32")
 
 def alinhar_imagem(img, conf: ConfiguracaoProva):
     if len(img.shape) == 3: gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else: gray = img
     
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    _, thresh_ancoras = cv2.threshold(blurred, 100, 255, cv2.THRESH_BINARY_INV)
-    rect = encontrar_ancoras_globais(thresh_ancoras)
-    
     W_FINAL, H_FINAL = conf.REF_W, conf.REF_H
     
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    _, thresh_ancoras = cv2.threshold(blurred, 120, 255, cv2.THRESH_BINARY_INV)
+    
+    rect = encontrar_ancoras_globais(thresh_ancoras)
+    
     if rect is not None:
-        m_px = W_FINAL * conf.MARGIN_PCT
-        s_px = W_FINAL * 0.04 
-        offset = m_px + (s_px / 2.0)
-        
+        # Previne distorções: aplica a margem exata dependendo da origem do gabarito
+        if "EVALBEE" in conf.titulo_prova.upper():
+            m_x = W_FINAL * 0.04
+            m_y = H_FINAL * 0.03
+        else:
+            m_x = W_FINAL * 0.07
+            m_y = W_FINAL * 0.07
+            
         dst = np.array([
-            [offset, offset],
-            [W_FINAL - offset, offset],
-            [W_FINAL - offset, H_FINAL - offset],
-            [offset, H_FINAL - offset]
+            [m_x, m_y],
+            [W_FINAL - m_x, m_y],
+            [W_FINAL - m_x, H_FINAL - m_y],
+            [m_x, H_FINAL - m_y]
         ], dtype="float32")
         
         M = cv2.getPerspectiveTransform(rect, dst)
         warped = cv2.warpPerspective(gray, M, (W_FINAL, H_FINAL))
+    else:
+        warped = cv2.resize(gray, (W_FINAL, H_FINAL))
         
-        blur_warp = cv2.GaussianBlur(warped, (3, 3), 0)
-        _, binaria = cv2.threshold(blur_warp, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
-        kernel = np.ones((2,2), np.uint8)
-        binaria = cv2.morphologyEx(binaria, cv2.MORPH_OPEN, kernel)
-        
-        return cv2.cvtColor(warped, cv2.COLOR_GRAY2BGR), binaria, W_FINAL, H_FINAL
+    blur_warp = cv2.GaussianBlur(warped, (3, 3), 0)
+    _, binaria = cv2.threshold(blur_warp, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+    kernel = np.ones((2,2), np.uint8)
+    binaria = cv2.morphologyEx(binaria, cv2.MORPH_OPEN, kernel)
     
-    r = cv2.resize(gray, (W_FINAL, H_FINAL))
-    br = cv2.GaussianBlur(r, (3, 3), 0)
-    _, rt = cv2.threshold(br, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
-    return cv2.cvtColor(r, cv2.COLOR_GRAY2BGR), rt, W_FINAL, H_FINAL
+    return cv2.cvtColor(warped, cv2.COLOR_GRAY2BGR), binaria, W_FINAL, H_FINAL
 
 def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug, gabarito=None):
     x1 = grid.x_start * w_img
@@ -97,7 +114,7 @@ def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug, gabarito=No
                 
         return "".join(freq_res), {}
 
-    # --- QUESTÕES (COM TRAVA ANTI-RASURA) ---
+    # --- QUESTÕES ---
     for r_idx, cy in enumerate(centros_y):
         tintas = []
         for cx in centros_x:
@@ -107,8 +124,6 @@ def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug, gabarito=No
         marcadas = []
         max_tinta_linha = max(tintas) if tintas else 0
         
-        # Só considera as bolinhas que têm pelo menos 25% de tinta 
-        # E que têm pelo menos 60% da força da bolinha mais escura (Filtro Anti-Borrão/Rasura)
         for idx, tinta in enumerate(tintas):
             if tinta > (area_roi * 0.25) and tinta > (max_tinta_linha * 0.60):
                 marcadas.append(idx)
@@ -118,32 +133,25 @@ def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug, gabarito=No
             resp_oficial = gabarito.get(q_num, ".") if gabarito else "."
             
             if len(marcadas) == 0:
-                # Nenhuma marcação válida
                 res_bloco[q_num] = "."
                 for cx in centros_x: cv2.circle(img_debug, (cx, cy), 2, (150, 150, 150), -1)
                 
             elif len(marcadas) == 1:
-                # Uma única marcação perfeita
                 idx_max = marcadas[0]
                 letra = grid.labels[idx_max]
                 res_bloco[q_num] = letra
                 
-                # Cores de Correção
-                cor = (0, 255, 0) # Verde = Correto
+                cor = (0, 255, 0) 
                 if resp_oficial in ["NULA", "X"]:
-                    cor = (255, 200, 0) # Azul Celeste = Anulada (Ponto dado)
+                    cor = (255, 200, 0) 
                 elif gabarito and letra != resp_oficial:
-                    cor = (0, 0, 255) # Vermelho = Errado
+                    cor = (0, 0, 255) 
                     
                 cv2.circle(img_debug, (centros_x[idx_max], cy), int(raio), cor, 3)
                 
             else:
-                # Múltiplas Marcações!
-                res_bloco[q_num] = "*" # Asterisco representa múltiplas escolhas
-                
-                # Se for anulada, pinta de azul, senão pinta de Laranja (Aviso de Rasura)
+                res_bloco[q_num] = "*" 
                 cor = (255, 200, 0) if resp_oficial in ["NULA", "X"] else (0, 140, 255)
-                
                 for idx in marcadas:
                     cv2.circle(img_debug, (centros_x[idx], cy), int(raio), cor, 3)
 
@@ -158,7 +166,6 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None, offset_x=0, 
         if g.labels == ["D", "U"]: final["frequencia"] = f_val
         else: final["respostas"].update(r_dict)
             
-    # --- ANÁLISE DE DADOS E CORREÇÃO AUTOMÁTICA ---
     if gabarito:
         acertos = 0
         detalhes_correcao = {}
@@ -167,13 +174,12 @@ def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None, offset_x=0, 
             resp_oficial = gabarito.get(q_num_int, ".")
             status = "Em Branco"
             
-            # Lógica de Correção
             if resp_oficial in ["NULA", "X"]:
                 status = "Correto (Anulada)"
                 acertos += 1
             else:
                 if resp_lida == "*":
-                    status = "Múltiplas Marcações" # Conta como erro automaticamente
+                    status = "Múltiplas Marcações" 
                 elif resp_lida != ".":
                     if resp_lida == resp_oficial:
                         status = "Correto"
