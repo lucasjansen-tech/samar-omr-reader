@@ -20,54 +20,52 @@ def gerar_pdf(conf, filename, titulo_custom=None, subtitulo_custom=None, logos=N
     c.rect(w - offset - s_px, offset, s_px, s_px, fill=1) # Bottom-Right
 
     # 2. Inserção de Logos Dinâmicas
-    y_logo = h * 0.895
-    h_logo = h * 0.05
-    w_logo = w * 0.18
-
+    # Se você upar apenas no Centro, a logo fica grande tipo "Banner"
+    y_logo = h * 0.89
     if logos:
         if logos.get('esq'):
-            c.drawImage(ImageReader(logos['esq']), w * 0.10, y_logo, width=w_logo, height=h_logo, preserveAspectRatio=True, mask='auto')
+            c.drawImage(ImageReader(logos['esq']), w * 0.08, y_logo, width=w*0.18, height=h*0.06, preserveAspectRatio=True, mask='auto')
         if logos.get('cen'):
-            c.drawImage(ImageReader(logos['cen']), w * 0.41, y_logo, width=w_logo, height=h_logo, preserveAspectRatio=True, mask='auto')
+            c.drawImage(ImageReader(logos['cen']), w * 0.30, y_logo, width=w*0.40, height=h*0.06, preserveAspectRatio=True, mask='auto')
         if logos.get('dir'):
-            c.drawImage(ImageReader(logos['dir']), w * 0.72, y_logo, width=w_logo, height=h_logo, preserveAspectRatio=True, mask='auto')
+            c.drawImage(ImageReader(logos['dir']), w * 0.74, y_logo, width=w*0.18, height=h*0.06, preserveAspectRatio=True, mask='auto')
 
     # 3. Títulos Dinâmicos
     texto_titulo = titulo_custom if titulo_custom else conf.titulo_prova
     texto_subtitulo = subtitulo_custom if subtitulo_custom else conf.subtitulo
 
-    c.setFont("Helvetica-Bold", 12)
-    c.drawCentredString(w / 2.0, h * 0.865, texto_titulo)
-    c.setFont("Helvetica-Bold", 10)
-    c.drawCentredString(w / 2.0, h * 0.850, texto_subtitulo)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawCentredString(w / 2.0, h * 0.85, texto_titulo)
+    c.setFont("Helvetica-Bold", 11)
+    c.drawCentredString(w / 2.0, h * 0.83, texto_subtitulo)
 
-    # 4. Cabeçalho Visual (Idêntico ao SAMAR original)
+    # 4. Cabeçalho Visual (Caixa Escola e Instruções)
     c.setLineWidth(1)
-    c.rect(w * 0.08, h * 0.77, w * 0.84, h * 0.06) # Caixa principal
-    c.line(w * 0.08, h * 0.80, w * 0.92, h * 0.80) # Divisória horizontal
-    c.line(w * 0.50, h * 0.77, w * 0.50, h * 0.80) # Divisória vertical Turma/Data
+    c.rect(w * 0.08, h * 0.76, w * 0.84, h * 0.05) # Caixa principal
+    c.line(w * 0.08, h * 0.785, w * 0.92, h * 0.785) # Divisória horizontal
+    c.line(w * 0.55, h * 0.76, w * 0.55, h * 0.785) # Divisória vertical Turma/Data
 
-    c.setFont("Helvetica-Bold", 9)
-    c.drawString(w * 0.09, h * 0.81, "ESCOLA:")
-    c.drawString(w * 0.09, h * 0.78, "TURMA:")
-    c.drawString(w * 0.51, h * 0.78, "DATA: ______ / ______ / _________")
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(w * 0.09, h * 0.793, "ESCOLA:")
+    c.drawString(w * 0.09, h * 0.768, "TURMA:")
+    c.drawString(w * 0.56, h * 0.768, "DATA: ______ / ______ / _________")
 
     # Instruções
-    c.drawString(w * 0.08, h * 0.74, "Caro(a) aluno(a),")
+    c.drawString(w * 0.08, h * 0.73, "Caro(a) aluno(a),")
     c.setFont("Helvetica", 9)
-    c.drawString(w * 0.08, h * 0.725, "Sua participação neste Simulado é muito importante para avançarmos na qualidade da educação da nossa escola.")
-    c.drawString(w * 0.08, h * 0.710, "Para melhor utilização deste cartão-resposta, segue orientações para preenchimento:")
-    c.drawString(w * 0.12, h * 0.695, "• Use a caneta esferográfica azul ou preta para assinalar uma única resposta para cada questão,")
-    c.drawString(w * 0.12, h * 0.680, "  preenchendo totalmente o círculo e tomando cuidado para não ultrapassar o espaço delimitado.")
+    c.drawString(w * 0.08, h * 0.715, "Sua participação neste Simulado é muito importante para avançarmos na qualidade da educação da nossa escola.")
+    c.drawString(w * 0.08, h * 0.700, "Para melhor utilização deste cartão-resposta, segue orientações para preenchimento:")
+    c.drawString(w * 0.12, h * 0.685, "• Use a caneta esferográfica azul ou preta para assinalar uma única resposta para cada questão,")
+    c.drawString(w * 0.12, h * 0.670, "  preenchendo totalmente o círculo e tomando cuidado para não ultrapassar o espaço delimitado.")
     
     c.setFont("Helvetica-Bold", 9)
-    c.drawString(w * 0.12, h * 0.665, "Marcação CORRETA: ( • )        Marcação INCORRETA: ( X ) ( / )")
+    c.drawString(w * 0.12, h * 0.650, "Marcação CORRETA: ( • )        Marcação INCORRETA: ( X ) ( / )")
 
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(w * 0.08, h * 0.635, "NOME DO ALUNO:")
-    c.line(w * 0.25, h * 0.635, w * 0.92, h * 0.635)
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(w * 0.08, h * 0.615, "NOME DO ALUNO:")
+    c.line(w * 0.26, h * 0.615, w * 0.92, h * 0.615)
 
-    # 5. Grids (Intocável)
+    # 5. Grids (A mágica do gabarito começa daqui pra baixo)
     for grid in conf.grids:
         x1 = grid.x_start * w
         x2 = grid.x_end * w
