@@ -28,7 +28,7 @@ class ConfiguracaoProva:
     MARGIN_PCT = 0.05 
 
 # =========================================================
-# GEOMETRIA: SISTEMA SAMAR NATIVO
+# GEOMETRIA: SISTEMA SAMAR NATIVO (INTOCADA E VALIDADA)
 # =========================================================
 Y_TOP = 0.35
 Y_BOT = 0.85 
