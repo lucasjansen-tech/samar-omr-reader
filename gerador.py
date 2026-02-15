@@ -20,36 +20,38 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     c.rect(W-m-s, m, s, s, fill=1, stroke=0)
     
     # ====================================================================
-    # TOPO: LOGOS E TÍTULOS (Ajustados para não cobrir as âncoras)
+    # TOPO CLEAN: Logos e Títulos alinhados e com respiro
     # ====================================================================
     texto_titulo = titulo_custom if titulo_custom else conf.titulo_prova
     texto_subtitulo = subtitulo_custom if subtitulo_custom else conf.subtitulo
 
     if logos:
-        y_logo = H - 65   # Altura segura no topo
-        h_logo = 45
-        w_logo = W * 0.18
+        y_logo = H - 65   # Desce um pouco do topo do papel para respirar
+        h_logo = 40       # Tamanho elegante
         
-        # X=110 afasta a logo da âncora esquerda que termina no pixel 92
+        # Espaçamento simétrico perfeito (Caixas delimitadas para não baterem)
         if logos.get('esq'):
-            c.drawImage(ImageReader(logos['esq']), 110, y_logo, width=w_logo, height=h_logo, preserveAspectRatio=True, mask='auto')
+            c.drawImage(ImageReader(logos['esq']), 70, y_logo, width=130, height=h_logo, preserveAspectRatio=True, mask='auto')
         if logos.get('cen'):
-            c.drawImage(ImageReader(logos['cen']), (W/2) - (w_logo/2), y_logo, width=w_logo, height=h_logo, preserveAspectRatio=True, mask='auto')
+            c.drawImage(ImageReader(logos['cen']), (W/2) - 80, y_logo, width=160, height=h_logo, preserveAspectRatio=True, mask='auto')
         if logos.get('dir'):
-            c.drawImage(ImageReader(logos['dir']), W - 110 - w_logo, y_logo, width=w_logo, height=h_logo, preserveAspectRatio=True, mask='auto')
+            c.drawImage(ImageReader(logos['dir']), W - 200, y_logo, width=130, height=h_logo, preserveAspectRatio=True, mask='auto')
             
-    # Títulos rebaixados em 30 pixels para não baterem na logo central
+    # Títulos descem para não embolar com as logos
     c.setFillColor(HexColor("#2980b9"))
     c.setFont("Helvetica-Bold", 16)
-    c.drawCentredString(W/2, H - 80, texto_titulo)
+    c.drawCentredString(W/2, H - 90, texto_titulo)
     c.setFillColor(colors.black)
     c.setFont("Helvetica", 12)
-    c.drawCentredString(W/2, H - 95, texto_subtitulo)
+    c.drawCentredString(W/2, H - 105, texto_subtitulo)
     # ====================================================================
     
-    # Cabeçalho (O seu código exato a partir do H - 110)
+    # ====================================================================
+    # CABEÇALHO (Movido suavemente para baixo para manter o design clean)
+    # ====================================================================
     c.setStrokeColor(colors.black); c.setLineWidth(0.5); c.setFont("Helvetica-Bold", 9)
-    y = H - 110
+    y = H - 130  # Antes era 110. Descer 20px resolveu todo o aperto!
+    
     c.drawString(m, y, "UNIDADE DE ENSINO:"); c.line(m+100, y-2, W-m, y-2)
     y -= 25
     c.drawString(m, y, "ANO:"); c.line(m+30, y-2, m+150, y-2)
@@ -65,7 +67,9 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     c.setFillColor(colors.black); c.setFont("Helvetica", 8)
     c.drawString(m+10, y+2, "INSTRUÇÕES: 1. Use caneta azul ou preta. 2. Preencha totalmente a bolinha. 3. Não rasure.")
     
-    # GABARITO (O seu loop intocável)
+    # ====================================================================
+    # GABARITO: O SEU CÓDIGO INTOCÁVEL DAQUI PARA BAIXO
+    # ====================================================================
     for g in conf.grids:
         x1 = g.x_start * W
         w_g = (g.x_end - g.x_start) * W
@@ -115,7 +119,6 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
                     c.setFont("Helvetica", 6)
                     c.drawCentredString(cx, cy - 2, g.labels[col])
 
-# Funções de Chamada Atualizadas
 def gerar_pdf(conf, filename, titulo_custom=None, subtitulo_custom=None, logos=None):
     c = canvas.Canvas(filename, pagesize=A4)
     desenhar_layout_grid(c, conf, titulo_custom, subtitulo_custom, logos)
