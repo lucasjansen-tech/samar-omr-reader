@@ -11,13 +11,21 @@ import os
 st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
 st.title("🖨️ Sistema SAMAR - Leitura OMR Inteligente")
 
-modelo = st.selectbox("Modelo de Prova:", list(TIPOS_PROVA.keys()))
+# --- NOVO: ESCOLHA DA ORIGEM DO GABARITO ---
+origem = st.radio("Origem do Gabarito:", ["Gerado pelo Sistema SAMAR", "Importado do Evalbee"], horizontal=True)
+
+# Filtra as opções do Selectbox baseado na origem escolhida
+opcoes_modelo = [k for k in TIPOS_PROVA.keys() if ("EVALBEE" in k) == ("Evalbee" in origem)]
+modelo = st.selectbox("Selecione o Modelo de Prova:", opcoes_modelo)
 conf = TIPOS_PROVA[modelo]
 
 tab1, tab2 = st.tabs(["1. Gerador de PDF", "2. Leitura, Correção e Exportação"])
 
 # --- ABA 1: GERADOR ---
 with tab1:
+    if "Evalbee" in origem:
+        st.warning("⚠️ **Aviso:** Você selecionou o padrão Evalbee. O gerador abaixo criará um esboço de testes. Para provas reais no padrão Evalbee, utilize o PDF gerado diretamente pelo aplicativo deles.")
+        
     col1, col2 = st.columns(2)
     with col1:
         fmt = st.radio("Formato de Saída:", ["PDF", "PNG", "JPEG"], horizontal=True)
@@ -54,11 +62,16 @@ with tab2:
     
     gab_oficial = {}
     
+    # Descobre o total de questões baseado na configuração escolhida
+    total_questoes = int(modelo.split('_')[1])
+    blocos = len([g for g in conf.grids if g.questao_inicial > 0])
+    questoes_por_bloco = total_questoes // blocos if blocos > 0 else 0
+    
     if "Texto Rápido" in modo_gab:
         st.info("💡 **Dica:** Digite 'X' ou 'N' para sinalizar uma Questão Nula (Todos ganham ponto).")
         gabarito_str = st.text_input(
-            "Cole as respostas sem espaços (Ex: ABCDABCD...):", 
-            value="A" * 52
+            f"Cole as {total_questoes} respostas sem espaços (Ex: ABCDABCD...):", 
+            value="A" * total_questoes
         ).upper().strip()
         
         q_count = 1
@@ -67,12 +80,12 @@ with tab2:
                 gab_oficial[q_count] = "NULA" if char in ["X", "N"] else char
                 q_count += 1
     else:
-        cols = st.columns(4)
-        for bloco in range(4):
+        cols = st.columns(blocos)
+        for bloco in range(blocos):
             with cols[bloco]:
                 st.markdown(f"**Bloco {bloco+1}**")
-                for q in range(13):
-                    q_num = (bloco * 13) + q + 1
+                for q in range(questoes_por_bloco):
+                    q_num = (bloco * questoes_por_bloco) + q + 1
                     gab_oficial[q_num] = st.selectbox(
                         f"Q.{q_num:02d}", 
                         ["A", "B", "C", "D", "NULA"], 
@@ -98,13 +111,14 @@ with tab2:
                 if img.ndim == 2: img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
                 else: img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
                 
+                # O motor é o mesmo, ele só usa as novas coordenadas do Evalbee
                 res, vis, _ = processar_gabarito(img, conf, gab_oficial)
                 
                 freq = res.get("frequencia", "00")
                 acertos = res.get("total_acertos", 0)
                 
                 aluno_dados = {"Frequencia": freq}
-                for q_num in range(1, 53):
+                for q_num in range(1, total_questoes + 1):
                     resp_str = res["respostas"].get(q_num, ".")
                     aluno_dados[f"Q{q_num:02d}"] = "Múltiplas" if resp_str == "*" else resp_str
                 aluno_dados["Total_Acertos"] = acertos
