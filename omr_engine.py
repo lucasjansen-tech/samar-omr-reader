@@ -16,7 +16,7 @@ def encontrar_ancoras_globais(thresh):
         x, y, bw, bh = cv2.boundingRect(c)
         ar = bw / float(bh)
         
-        # Filtro exigente: Queremos quadrados sólidos (Âncoras SAMAR)
+        # Filtro exigente: Queremos quadrados sólidos
         if solidez > 0.8 and 0.5 <= ar <= 1.5:
             M = cv2.moments(c)
             if M["m00"] != 0:
@@ -30,7 +30,7 @@ def encontrar_ancoras_globais(thresh):
     if len(candidatos) < 3: return None # Muito rasgado/ilegível, impossível salvar
     
     # ---------------------------------------------------------
-    # BLINDAGEM 2: REGENERAÇÃO DE ÂNCORAS CORTADAS
+    # BLINDAGEM: REGENERAÇÃO DE ÂNCORAS CORTADAS
     # ---------------------------------------------------------
     meio_x, meio_y = w / 2, h / 2
     tl, tr, bl, br = None, None, None, None
@@ -41,7 +41,7 @@ def encontrar_ancoras_globais(thresh):
         elif cx < meio_x and cy > meio_y: bl = [cx, cy]
         elif cx > meio_x and cy > meio_y: br = [cx, cy]
         
-    # Se achamos apenas 3, o robô calcula por vetor a posição exata da 4ª âncora
+    # Se achamos apenas 3, o robô calcula por vetor a posição exata da 4ª âncora invisível!
     if len(candidatos) == 3:
         if not br and tl and tr and bl: br = [tr[0] + bl[0] - tl[0], tr[1] + bl[1] - tl[1]]
         elif not bl and tl and tr and br: bl = [tl[0] + br[0] - tr[0], tl[1] + br[1] - tr[1]]
@@ -59,7 +59,7 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
     
     W_FINAL, H_FINAL = conf.REF_W, conf.REF_H
     
-    # Busca de âncoras
+    # Busca de âncoras nativa
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     _, thresh_ancoras = cv2.threshold(blurred, 120, 255, cv2.THRESH_BINARY_INV)
     
@@ -83,35 +83,34 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
         warped = cv2.resize(gray, (W_FINAL, H_FINAL))
         
     # ---------------------------------------------------------
-    # BLINDAGEM 3 e 4: FILTRO BILATERAL + ADAPTATIVE THRESHOLD
-    # (Visão Noturna ativada ANTES da anti-inversão)
+    # BLINDAGEM: ANTI-INVERSÃO INFALÍVEL
     # ---------------------------------------------------------
-    blur_warp = cv2.bilateralFilter(warped, d=9, sigmaColor=75, sigmaSpace=75)
-    binaria = cv2.adaptiveThreshold(
-        blur_warp, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 51, 15
-    )
-        
-    # ---------------------------------------------------------
-    # BLINDAGEM 1: ANTI-INVERSÃO IMUNE A SOMBRAS
-    # ---------------------------------------------------------
-    # Cortamos uma margem de segurança de 5% para ignorar as âncoras na contagem.
-    # Analisamos do topo (5% a 25%) onde ficam os logos pesados da prefeitura,
-    # e comparamos com o rodapé (75% a 95%) que é praticamente vazio.
-    top_zone = binaria[int(H_FINAL*0.05):int(H_FINAL*0.25), int(W_FINAL*0.05):int(W_FINAL*0.95)]
-    bot_zone = binaria[int(H_FINAL*0.75):int(H_FINAL*0.95), int(W_FINAL*0.05):int(W_FINAL*0.95)]
+    # Tira um Raio-X bruto apenas para comparar a massa de tinta.
+    _, orient_thresh = cv2.threshold(warped, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+    
+    # Isola o topo (onde ficam os logos gigantes RAPOSA/SAMAR)
+    top_zone = orient_thresh[int(H_FINAL*0.02):int(H_FINAL*0.15), int(W_FINAL*0.1):int(W_FINAL*0.9)]
+    # Isola o rodapé extremo (que é um deserto branco na nossa prova)
+    bot_zone = orient_thresh[int(H_FINAL*0.85):int(H_FINAL*0.98), int(W_FINAL*0.1):int(W_FINAL*0.9)]
     
     tinta_top = cv2.countNonZero(top_zone)
     tinta_bot = cv2.countNonZero(bot_zone)
     
-    # Se o rodapé tem mais tinta que os logos, a prova está inegavelmente de ponta-cabeça!
-    if tinta_bot > (tinta_top * 1.1): # 10% de margem de segurança
+    # Se o deserto de papel branco tiver mais tinta que o logo, a prova está de cabeça para baixo!
+    if tinta_bot > tinta_top:
         warped = cv2.rotate(warped, cv2.ROTATE_180)
-        binaria = cv2.rotate(binaria, cv2.ROTATE_180)
         
     # ---------------------------------------------------------
-    # BLINDAGEM 5: ANTI-VAZAMENTO DINÂMICO
+    # BLINDAGEM: FILTRO ANTI-WHATSAPP E ANTI-VAZAMENTO
     # ---------------------------------------------------------
-    k_size = max(2, int(W_FINAL * 0.0025))
+    # Filtro Bilateral limpa o chiado de JPG/WhatsApp preservando o círculo perfeito da bolinha
+    blur_warp = cv2.bilateralFilter(warped, d=9, sigmaColor=75, sigmaSpace=75)
+    
+    # Volta para o nosso sensor original (OTSU puro) que lê os cartões com precisão absurda
+    _, binaria = cv2.threshold(blur_warp, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+    
+    # Raspador morfológico: apaga impressões fracas que vazaram do verso da folha
+    k_size = max(2, int(W_FINAL * 0.002))
     kernel = np.ones((k_size, k_size), np.uint8)
     binaria = cv2.morphologyEx(binaria, cv2.MORPH_OPEN, kernel)
     
