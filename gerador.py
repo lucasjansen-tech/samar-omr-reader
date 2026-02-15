@@ -2,7 +2,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.colors import HexColor
-from reportlab.lib.utils import ImageReader  # <-- Injetado para as logos
+from reportlab.lib.utils import ImageReader  # <-- Inserido apenas para ler as imagens das logos
 from layout_samar import ConfiguracaoProva
 from pdf2image import convert_from_path
 import os
@@ -19,14 +19,11 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     c.rect(m, m, s, s, fill=1, stroke=0)
     c.rect(W-m-s, m, s, s, fill=1, stroke=0)
     
-    # ====================================================================
-    # INÍCIO DA INJEÇÃO: LOGOS E TÍTULOS DINÂMICOS
-    # ====================================================================
-    texto_titulo = titulo_custom if titulo_custom else conf.titulo_prova
-    texto_subtitulo = subtitulo_custom if subtitulo_custom else conf.subtitulo
-
+    # ---------------------------------------------------------
+    # INJEÇÃO: LOGOS (Não altera a geometria de nada abaixo)
+    # ---------------------------------------------------------
     if logos:
-        y_logo = H - 75   # Posição segura no topo para não empurrar os quadros
+        y_logo = H - 85  # Posição segura para ficar alinhado ao lado do cabeçalho
         h_logo = 45
         w_logo = W * 0.18
         if logos.get('esq'):
@@ -35,15 +32,20 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
             c.drawImage(ImageReader(logos['cen']), W * 0.35, y_logo, width=W*0.30, height=h_logo, preserveAspectRatio=True, mask='auto')
         if logos.get('dir'):
             c.drawImage(ImageReader(logos['dir']), W - m - w_logo, y_logo, width=w_logo, height=h_logo, preserveAspectRatio=True, mask='auto')
-    # ====================================================================
+
+    # ---------------------------------------------------------
+    # INJEÇÃO: TÍTULOS DINÂMICOS
+    # ---------------------------------------------------------
+    texto_titulo = titulo_custom if titulo_custom else conf.titulo_prova
+    texto_subtitulo = subtitulo_custom if subtitulo_custom else conf.subtitulo
     
-    # Cabeçalho (Exatamente o seu código, apenas usando as variáveis de texto)
+    # Cabeçalho
     c.setFillColor(HexColor("#2980b9"))
     c.setFont("Helvetica-Bold", 16)
-    c.drawCentredString(W/2, H - 50, texto_titulo)
+    c.drawCentredString(W/2, H - 50, texto_titulo) # <-- Usa a variável customizada
     c.setFillColor(colors.black)
     c.setFont("Helvetica", 12)
-    c.drawCentredString(W/2, H - 70, texto_subtitulo)
+    c.drawCentredString(W/2, H - 70, texto_subtitulo) # <-- Usa a variável customizada
     
     c.setStrokeColor(colors.black); c.setLineWidth(0.5); c.setFont("Helvetica-Bold", 9)
     y = H - 110
@@ -62,9 +64,6 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     c.setFillColor(colors.black); c.setFont("Helvetica", 8)
     c.drawString(m+10, y+2, "INSTRUÇÕES: 1. Use caneta azul ou preta. 2. Preencha totalmente a bolinha. 3. Não rasure.")
     
-    # ====================================================================
-    # GABARITO: O SEU CÓDIGO INTOCÁVEL DAQUI PARA BAIXO
-    # ====================================================================
     for g in conf.grids:
         x1 = g.x_start * W
         w_g = (g.x_end - g.x_start) * W
@@ -114,9 +113,7 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
                     c.setFont("Helvetica", 6)
                     c.drawCentredString(cx, cy - 2, g.labels[col])
 
-# ====================================================================
-# FUNÇÕES DE CHAMADA (Agora aceitam os parâmetros de customização)
-# ====================================================================
+# <-- Funções abaixo atualizadas para repassar as logos e os títulos -->
 def gerar_pdf(conf, filename, titulo_custom=None, subtitulo_custom=None, logos=None):
     c = canvas.Canvas(filename, pagesize=A4)
     desenhar_layout_grid(c, conf, titulo_custom, subtitulo_custom, logos)
