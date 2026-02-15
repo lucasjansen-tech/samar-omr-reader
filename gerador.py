@@ -2,7 +2,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.colors import HexColor
-from reportlab.lib.utils import ImageReader  # <-- Inserido apenas para ler as imagens das logos
+from reportlab.lib.utils import ImageReader
 from layout_samar import ConfiguracaoProva
 from pdf2image import convert_from_path
 import os
@@ -12,41 +12,42 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     m = W * conf.MARGIN_PCT
     s = 30
     
-    # Âncoras
+    # Âncoras (Intocáveis)
     c.setFillColor(colors.black)
     c.rect(m, H-m-s, s, s, fill=1, stroke=0)
     c.rect(W-m-s, H-m-s, s, s, fill=1, stroke=0)
     c.rect(m, m, s, s, fill=1, stroke=0)
     c.rect(W-m-s, m, s, s, fill=1, stroke=0)
     
-    # ---------------------------------------------------------
-    # INJEÇÃO: LOGOS (Não altera a geometria de nada abaixo)
-    # ---------------------------------------------------------
-    if logos:
-        y_logo = H - 85  # Posição segura para ficar alinhado ao lado do cabeçalho
-        h_logo = 45
-        w_logo = W * 0.18
-        if logos.get('esq'):
-            c.drawImage(ImageReader(logos['esq']), m, y_logo, width=w_logo, height=h_logo, preserveAspectRatio=True, mask='auto')
-        if logos.get('cen'):
-            c.drawImage(ImageReader(logos['cen']), W * 0.35, y_logo, width=W*0.30, height=h_logo, preserveAspectRatio=True, mask='auto')
-        if logos.get('dir'):
-            c.drawImage(ImageReader(logos['dir']), W - m - w_logo, y_logo, width=w_logo, height=h_logo, preserveAspectRatio=True, mask='auto')
-
-    # ---------------------------------------------------------
-    # INJEÇÃO: TÍTULOS DINÂMICOS
-    # ---------------------------------------------------------
+    # ====================================================================
+    # TOPO: LOGOS E TÍTULOS (Ajustados para não cobrir as âncoras)
+    # ====================================================================
     texto_titulo = titulo_custom if titulo_custom else conf.titulo_prova
     texto_subtitulo = subtitulo_custom if subtitulo_custom else conf.subtitulo
-    
-    # Cabeçalho
+
+    if logos:
+        y_logo = H - 65   # Altura segura no topo
+        h_logo = 45
+        w_logo = W * 0.18
+        
+        # X=110 afasta a logo da âncora esquerda que termina no pixel 92
+        if logos.get('esq'):
+            c.drawImage(ImageReader(logos['esq']), 110, y_logo, width=w_logo, height=h_logo, preserveAspectRatio=True, mask='auto')
+        if logos.get('cen'):
+            c.drawImage(ImageReader(logos['cen']), (W/2) - (w_logo/2), y_logo, width=w_logo, height=h_logo, preserveAspectRatio=True, mask='auto')
+        if logos.get('dir'):
+            c.drawImage(ImageReader(logos['dir']), W - 110 - w_logo, y_logo, width=w_logo, height=h_logo, preserveAspectRatio=True, mask='auto')
+            
+    # Títulos rebaixados em 30 pixels para não baterem na logo central
     c.setFillColor(HexColor("#2980b9"))
     c.setFont("Helvetica-Bold", 16)
-    c.drawCentredString(W/2, H - 50, texto_titulo) # <-- Usa a variável customizada
+    c.drawCentredString(W/2, H - 80, texto_titulo)
     c.setFillColor(colors.black)
     c.setFont("Helvetica", 12)
-    c.drawCentredString(W/2, H - 70, texto_subtitulo) # <-- Usa a variável customizada
+    c.drawCentredString(W/2, H - 95, texto_subtitulo)
+    # ====================================================================
     
+    # Cabeçalho (O seu código exato a partir do H - 110)
     c.setStrokeColor(colors.black); c.setLineWidth(0.5); c.setFont("Helvetica-Bold", 9)
     y = H - 110
     c.drawString(m, y, "UNIDADE DE ENSINO:"); c.line(m+100, y-2, W-m, y-2)
@@ -64,6 +65,7 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     c.setFillColor(colors.black); c.setFont("Helvetica", 8)
     c.drawString(m+10, y+2, "INSTRUÇÕES: 1. Use caneta azul ou preta. 2. Preencha totalmente a bolinha. 3. Não rasure.")
     
+    # GABARITO (O seu loop intocável)
     for g in conf.grids:
         x1 = g.x_start * W
         w_g = (g.x_end - g.x_start) * W
@@ -113,7 +115,7 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
                     c.setFont("Helvetica", 6)
                     c.drawCentredString(cx, cy - 2, g.labels[col])
 
-# <-- Funções abaixo atualizadas para repassar as logos e os títulos -->
+# Funções de Chamada Atualizadas
 def gerar_pdf(conf, filename, titulo_custom=None, subtitulo_custom=None, logos=None):
     c = canvas.Canvas(filename, pagesize=A4)
     desenhar_layout_grid(c, conf, titulo_custom, subtitulo_custom, logos)
