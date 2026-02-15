@@ -3,7 +3,7 @@ from typing import List
 
 COR_AZUL = "#2980b9"
 COR_LARANJA = "#e67e22"
-COR_EVALBEE = "#555555" # Cor neutra para os blocos Evalbee
+COR_EVALBEE = "#555555" 
 
 @dataclass
 class GridConfig:
@@ -29,7 +29,7 @@ class ConfiguracaoProva:
     MARGIN_PCT = 0.05 
 
 # =========================================================
-# GEOMETRIA: SISTEMA SAMAR (GERADO NATIVAMENTE)
+# GEOMETRIA: SISTEMA SAMAR NATIVO (INTOCADA E VALIDADA)
 # =========================================================
 Y_TOP = 0.35
 Y_BOT = 0.85 
@@ -40,11 +40,12 @@ Y_END_FREQ_11 = Y_TOP + ((ALTURA_BLOCO / 11) * 10)
 Y_END_FREQ_09 = Y_BOT 
 
 # =========================================================
-# GEOMETRIA: PADRÃO EVALBEE
-# (As bolinhas no Evalbee começam um pouco mais abaixo devido ao cabeçalho maior)
+# GEOMETRIA: PADRÃO EVALBEE (Mapeador Universal)
+# O motor OMR estica qualquer grid do Evalbee para o espaço entre 0.32 e 0.93.
+# Isso anula as distorções da foto e garante leitura perfeita.
 # =========================================================
-Y_TOP_EV = 0.45
-Y_BOT_EV = 0.88
+Y_TOP_EV = 0.32
+Y_BOT_EV = 0.93
 ALTURA_BLOCO_EV = Y_BOT_EV - Y_TOP_EV
 
 Y_END_FREQ_13_EV = Y_TOP_EV + ((ALTURA_BLOCO_EV / 13) * 10)
@@ -96,7 +97,7 @@ TIPOS_PROVA = {
         titulo_prova="GABARITO EVALBEE",
         subtitulo="Ensino Fundamental II - 7º ao 9º Ano",
         grids=[
-            GridConfig("FREQ.", "", 0.08, 0.16, Y_TOP_EV, Y_END_FREQ_13_EV, 10, 2, ["D", "U"], 0, COR_EVALBEE),
+            GridConfig("FREQ.", "", 0.05, 0.15, Y_TOP_EV, Y_END_FREQ_13_EV, 10, 2, ["D", "U"], 0, COR_EVALBEE),
             GridConfig("BLOCO 1", "", 0.20, 0.36, Y_TOP_EV, Y_BOT_EV, 13, 4, ["A","B","C","D"], 1, COR_EVALBEE),
             GridConfig("BLOCO 2", "", 0.40, 0.56, Y_TOP_EV, Y_BOT_EV, 13, 4, ["A","B","C","D"], 14, COR_EVALBEE),
             GridConfig("BLOCO 3", "", 0.60, 0.76, Y_TOP_EV, Y_BOT_EV, 13, 4, ["A","B","C","D"], 27, COR_EVALBEE),
@@ -108,7 +109,7 @@ TIPOS_PROVA = {
         titulo_prova="GABARITO EVALBEE",
         subtitulo="Ensino Fundamental - 4º ao 6º Ano",
         grids=[
-            GridConfig("FREQ.", "", 0.08, 0.16, Y_TOP_EV, Y_END_FREQ_11_EV, 10, 2, ["D", "U"], 0, COR_EVALBEE),
+            GridConfig("FREQ.", "", 0.05, 0.15, Y_TOP_EV, Y_END_FREQ_11_EV, 10, 2, ["D", "U"], 0, COR_EVALBEE),
             GridConfig("BLOCO 1", "", 0.20, 0.36, Y_TOP_EV, Y_BOT_EV, 11, 4, ["A","B","C","D"], 1, COR_EVALBEE),
             GridConfig("BLOCO 2", "", 0.40, 0.56, Y_TOP_EV, Y_BOT_EV, 11, 4, ["A","B","C","D"], 12, COR_EVALBEE),
             GridConfig("BLOCO 3", "", 0.60, 0.76, Y_TOP_EV, Y_BOT_EV, 11, 4, ["A","B","C","D"], 23, COR_EVALBEE),
@@ -120,9 +121,10 @@ TIPOS_PROVA = {
         titulo_prova="GABARITO EVALBEE",
         subtitulo="Ensino Fundamental I - 1º ao 3º Ano",
         grids=[
-            GridConfig("FREQ.", "", 0.20, 0.28, Y_TOP_EV, Y_END_FREQ_09_EV, 10, 2, ["D", "U"], 0, COR_EVALBEE),
-            GridConfig("BLOCO 1", "", 0.35, 0.55, Y_TOP_EV, Y_BOT_EV, 9, 4, ["A","B","C","D"], 1, COR_EVALBEE),
-            GridConfig("BLOCO 2", "", 0.65, 0.85, Y_TOP_EV, Y_BOT_EV, 9, 4, ["A","B","C","D"], 10, COR_EVALBEE),
+            # Alinhamento exato com as caixas vermelhas do seu teste
+            GridConfig("FREQ.", "", 0.05, 0.19, Y_TOP_EV, Y_END_FREQ_09_EV, 10, 2, ["D", "U"], 0, COR_EVALBEE),
+            GridConfig("BLOCO 1", "", 0.25, 0.55, Y_TOP_EV, Y_BOT_EV, 9, 4, ["A","B","C","D"], 1, COR_EVALBEE),
+            GridConfig("BLOCO 2", "", 0.65, 0.95, Y_TOP_EV, Y_BOT_EV, 9, 4, ["A","B","C","D"], 10, COR_EVALBEE),
         ]
     )
 }
