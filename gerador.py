@@ -1,15 +1,14 @@
+import os
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
 from pdf2image import convert_from_path
-import os
-import io
 
 def gerar_pdf(conf, filename, titulo_custom=None, subtitulo_custom=None, logos=None):
     c = canvas.Canvas(filename, pagesize=A4)
     w, h = A4
 
-    # 1. Âncoras do Sistema SAMAR (Intocáveis)
+    # 1. Âncoras do Sistema SAMAR
     m_pct = conf.MARGIN_PCT
     s_px = w * 0.04
     offset = w * m_pct
@@ -20,44 +19,55 @@ def gerar_pdf(conf, filename, titulo_custom=None, subtitulo_custom=None, logos=N
     c.rect(offset, offset, s_px, s_px, fill=1) # Bottom-Left
     c.rect(w - offset - s_px, offset, s_px, s_px, fill=1) # Bottom-Right
 
-    # 2. Inserção das Logos (Se enviadas)
-    y_logo = h * 0.85
-    h_logo = h * 0.07
-    w_logo = w * 0.20
+    # 2. Inserção de Logos Dinâmicas
+    y_logo = h * 0.895
+    h_logo = h * 0.05
+    w_logo = w * 0.18
 
     if logos:
-        # ImageReader aceita o arquivo vindo direto do painel do Streamlit
         if logos.get('esq'):
-            c.drawImage(ImageReader(logos['esq']), w * 0.1, y_logo, width=w_logo, height=h_logo, preserveAspectRatio=True, mask='auto')
+            c.drawImage(ImageReader(logos['esq']), w * 0.10, y_logo, width=w_logo, height=h_logo, preserveAspectRatio=True, mask='auto')
         if logos.get('cen'):
-            c.drawImage(ImageReader(logos['cen']), w * 0.40, y_logo, width=w_logo, height=h_logo, preserveAspectRatio=True, mask='auto')
+            c.drawImage(ImageReader(logos['cen']), w * 0.41, y_logo, width=w_logo, height=h_logo, preserveAspectRatio=True, mask='auto')
         if logos.get('dir'):
-            c.drawImage(ImageReader(logos['dir']), w * 0.70, y_logo, width=w_logo, height=h_logo, preserveAspectRatio=True, mask='auto')
+            c.drawImage(ImageReader(logos['dir']), w * 0.72, y_logo, width=w_logo, height=h_logo, preserveAspectRatio=True, mask='auto')
 
     # 3. Títulos Dinâmicos
-    t_prova = titulo_custom if titulo_custom else conf.titulo_prova
-    s_prova = subtitulo_custom if subtitulo_custom else conf.subtitulo
+    texto_titulo = titulo_custom if titulo_custom else conf.titulo_prova
+    texto_subtitulo = subtitulo_custom if subtitulo_custom else conf.subtitulo
 
-    c.setFont("Helvetica-Bold", 14)
-    c.drawCentredString(w / 2.0, h * 0.80, t_prova)
-    c.setFont("Helvetica", 12)
-    c.drawCentredString(w / 2.0, h * 0.78, s_prova)
-
-    # 4. Cabeçalho de Identificação (Linhas para o aluno preencher)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawCentredString(w / 2.0, h * 0.865, texto_titulo)
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(w * 0.1, h * 0.72, "NOME DO ALUNO:")
-    c.line(w * 0.26, h * 0.72, w * 0.9, h * 0.72)
-    
-    c.drawString(w * 0.1, h * 0.69, "ESCOLA:")
-    c.line(w * 0.17, h * 0.69, w * 0.45, h * 0.69)
-    
-    c.drawString(w * 0.5, h * 0.69, "TURMA:")
-    c.line(w * 0.57, h * 0.69, w * 0.7, h * 0.69)
-    
-    c.drawString(w * 0.75, h * 0.69, "DATA:")
-    c.line(w * 0.82, h * 0.69, w * 0.9, h * 0.69)
+    c.drawCentredString(w / 2.0, h * 0.850, texto_subtitulo)
 
-    # 5. Grade de Questões (A matemática já validada do layout_samar)
+    # 4. Cabeçalho Visual (Idêntico ao SAMAR original)
+    c.setLineWidth(1)
+    c.rect(w * 0.08, h * 0.77, w * 0.84, h * 0.06) # Caixa principal
+    c.line(w * 0.08, h * 0.80, w * 0.92, h * 0.80) # Divisória horizontal
+    c.line(w * 0.50, h * 0.77, w * 0.50, h * 0.80) # Divisória vertical Turma/Data
+
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(w * 0.09, h * 0.81, "ESCOLA:")
+    c.drawString(w * 0.09, h * 0.78, "TURMA:")
+    c.drawString(w * 0.51, h * 0.78, "DATA: ______ / ______ / _________")
+
+    # Instruções
+    c.drawString(w * 0.08, h * 0.74, "Caro(a) aluno(a),")
+    c.setFont("Helvetica", 9)
+    c.drawString(w * 0.08, h * 0.725, "Sua participação neste Simulado é muito importante para avançarmos na qualidade da educação da nossa escola.")
+    c.drawString(w * 0.08, h * 0.710, "Para melhor utilização deste cartão-resposta, segue orientações para preenchimento:")
+    c.drawString(w * 0.12, h * 0.695, "• Use a caneta esferográfica azul ou preta para assinalar uma única resposta para cada questão,")
+    c.drawString(w * 0.12, h * 0.680, "  preenchendo totalmente o círculo e tomando cuidado para não ultrapassar o espaço delimitado.")
+    
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(w * 0.12, h * 0.665, "Marcação CORRETA: ( • )        Marcação INCORRETA: ( X ) ( / )")
+
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(w * 0.08, h * 0.635, "NOME DO ALUNO:")
+    c.line(w * 0.25, h * 0.635, w * 0.92, h * 0.635)
+
+    # 5. Grids (Intocável)
     for grid in conf.grids:
         x1 = grid.x_start * w
         x2 = grid.x_end * w
@@ -98,9 +108,9 @@ def gerar_pdf(conf, filename, titulo_custom=None, subtitulo_custom=None, logos=N
 
     c.save()
 
-def gerar_imagem_a4(conf, filename, ext, titulo=None, subtitulo=None, logos=None):
+def gerar_imagem_a4(conf, filename, ext, titulo_custom=None, subtitulo_custom=None, logos=None):
     pdf_tmp = "temp_gen.pdf"
-    gerar_pdf(conf, pdf_tmp, titulo, subtitulo, logos)
+    gerar_pdf(conf, pdf_tmp, titulo_custom, subtitulo_custom, logos)
     try:
         pages = convert_from_path(pdf_tmp, dpi=200)
         if pages:
