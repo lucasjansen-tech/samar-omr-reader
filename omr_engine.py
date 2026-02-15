@@ -9,7 +9,6 @@ def encontrar_ancoras_globais(thresh, is_evalbee=False):
     
     for c in cnts:
         area = cv2.contourArea(c)
-        # O Evalbee tem marcadores menores. O filtro se ajusta a isso.
         min_area = (w * h * 0.00005) if is_evalbee else (w * h * 0.001)
         if area < min_area or area > (w * h * 0.05): continue
         
@@ -27,7 +26,7 @@ def encontrar_ancoras_globais(thresh, is_evalbee=False):
                 
     if len(candidatos) < 4: return None
     
-    # Busca a âncora MAIS PRÓXIMA dos 4 cantos extremos. Ignora sujeiras no meio da folha.
+    # Encontra as âncoras extremas
     pt_tl = min(candidatos, key=lambda item: item[0] + item[1])[:2]
     pt_tr = min(candidatos, key=lambda item: (w - item[0]) + item[1])[:2]
     pt_bl = min(candidatos, key=lambda item: item[0] + (h - item[1]))[:2]
@@ -48,17 +47,26 @@ def alinhar_imagem(img, conf: ConfiguracaoProva):
     rect = encontrar_ancoras_globais(thresh_ancoras, is_evalbee)
     
     if rect is not None:
-        # FIM DA DISTORÇÃO: Ambos os modelos (Samar e Evalbee) são enquadrados perfeitamente
-        # respeitando os cantos reais da folha.
-        m_px = W_FINAL * conf.MARGIN_PCT
-        m_py = H_FINAL * conf.MARGIN_PCT
-        
-        dst = np.array([
-            [m_px, m_py],
-            [W_FINAL - m_px, m_py],
-            [W_FINAL - m_px, H_FINAL - m_py],
-            [m_px, H_FINAL - m_py]
-        ], dtype="float32")
+        if is_evalbee:
+            # FIM DO ACHATAMENTO: As âncoras do Evalbee formam um retângulo que começa em 58% da folha.
+            # Mapeamos para essas proporções reais, forçando a página toda a ficar reta em tela cheia!
+            dst = np.array([
+                [W_FINAL * 0.08, H_FINAL * 0.58], # Top-Left do bloco
+                [W_FINAL * 0.92, H_FINAL * 0.58], # Top-Right do bloco
+                [W_FINAL * 0.92, H_FINAL * 0.95], # Bottom-Right
+                [W_FINAL * 0.08, H_FINAL * 0.95]  # Bottom-Left
+            ], dtype="float32")
+        else:
+            # LÓGICA NATIVA DO SAMAR (Intocada)
+            m_px = W_FINAL * conf.MARGIN_PCT
+            s_px = W_FINAL * 0.04 
+            offset = m_px + (s_px / 2.0)
+            dst = np.array([
+                [offset, offset],
+                [W_FINAL - offset, offset],
+                [W_FINAL - offset, H_FINAL - offset],
+                [offset, H_FINAL - offset]
+            ], dtype="float32")
             
         M = cv2.getPerspectiveTransform(rect, dst)
         warped = cv2.warpPerspective(gray, M, (W_FINAL, H_FINAL))
