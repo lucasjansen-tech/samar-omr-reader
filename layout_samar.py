@@ -28,10 +28,11 @@ class ConfiguracaoProva:
     MARGIN_PCT = 0.05 
 
 # =========================================================
-# GEOMETRIA: SISTEMA SAMAR NATIVO (A BUILD ESTÁVEL)
+# GEOMETRIA: SISTEMA SAMAR NATIVO
 # =========================================================
-Y_TOP = 0.35
-Y_BOT = 0.85 
+# DESCEMOS O TOPO E O FUNDO PARA USAR O ESPAÇO VAZIO DO RODAPÉ
+Y_TOP = 0.41  # Antes era 0.35 (Liberou muito espaço no topo!)
+Y_BOT = 0.91  # Antes era 0.85 (Ocupou o vazio de baixo!)
 ALTURA_BLOCO = Y_BOT - Y_TOP
 
 Y_END_FREQ_13 = Y_TOP + ((ALTURA_BLOCO / 13) * 10) 
