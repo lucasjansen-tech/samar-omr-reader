@@ -20,7 +20,7 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     c.rect(W-m-s, m, s, s, fill=1, stroke=0)
     
     # ====================================================================
-    # TOPO: LOGOS E TÍTULOS COM MUITO MAIS RESPIRO
+    # TOPO: LOGOS E TÍTULOS 
     # ====================================================================
     texto_titulo = titulo_custom if titulo_custom else conf.titulo_prova
     texto_subtitulo = subtitulo_custom if subtitulo_custom else conf.subtitulo
@@ -28,7 +28,7 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     if logos:
         LOGO_BOX_W = 120  
         LOGO_BOX_H = 45   
-        y_logo_pos = H - 85 # Desceu bastante em relação ao topo da folha
+        y_logo_pos = H - 85 
 
         if logos.get('esq'):
             c.drawImage(ImageReader(logos['esq']), 80, y_logo_pos, width=LOGO_BOX_W, height=LOGO_BOX_H, preserveAspectRatio=True, mask='auto')
@@ -39,7 +39,6 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
             x_dir = W - 80 - LOGO_BOX_W
             c.drawImage(ImageReader(logos['dir']), x_dir, y_logo_pos, width=LOGO_BOX_W, height=LOGO_BOX_H, preserveAspectRatio=True, mask='auto')
             
-    # Títulos rebaixados acompanhando o espaço
     c.setFillColor(HexColor("#2980b9"))
     c.setFont("Helvetica-Bold", 16)
     c.drawCentredString(W/2, H - 110, texto_titulo)
@@ -48,10 +47,10 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     c.drawCentredString(W/2, H - 125, texto_subtitulo)
     
     # ====================================================================
-    # CABEÇALHO DO ALUNO REBAIXADO
+    # CABEÇALHO 
     # ====================================================================
     c.setStrokeColor(colors.black); c.setLineWidth(0.5); c.setFont("Helvetica-Bold", 9)
-    y = H - 155  # Desceu bastante para afastar do título!
+    y = H - 155 
     
     c.drawString(m, y, "UNIDADE DE ENSINO:"); c.line(m+100, y-2, W-m, y-2)
     y -= 25
@@ -69,7 +68,7 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     c.drawString(m+10, y+2, "INSTRUÇÕES: 1. Use caneta azul ou preta. 2. Preencha totalmente a bolinha. 3. Não rasure.")
     
     # ====================================================================
-    # GABARITO (Intocável)
+    # GABARITO E GRIDS
     # ====================================================================
     for g in conf.grids:
         x1 = g.x_start * W
@@ -95,6 +94,11 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
                 cx = x1 + (i * cell_w) + (cell_w/2)
                 c.setFont("Helvetica-Bold", 9)
                 c.drawCentredString(cx, y_top + 12, lbl)
+                
+                # ADICIONA OS QUADRADINHOS DE REFERÊNCIA (Para o aluno escrever a Frequência)
+                if g.labels == ["D", "U"]:
+                    c.setStrokeColor(colors.black); c.setLineWidth(0.5)
+                    c.rect(cx - 7, y_top + 22, 14, 14, stroke=1, fill=0)
 
         for r in range(g.rows):
             cy = y_top - (r * cell_h) - (cell_h/2)
@@ -116,9 +120,14 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
                 cx = x1 + (col * cell_w) + (cell_w/2)
                 c.setStrokeColor(colors.black); c.setLineWidth(1)
                 c.circle(cx, cy, 7, stroke=1, fill=0)
+                
+                # ADICIONA A REFERÊNCIA DENTRO DA BOLINHA
                 if g.questao_inicial > 0:
                     c.setFont("Helvetica", 6)
                     c.drawCentredString(cx, cy - 2, g.labels[col])
+                elif g.labels == ["D", "U"]:
+                    c.setFont("Helvetica", 6)
+                    c.drawCentredString(cx, cy - 2, str(r)) # Imprime 0 a 9 dentro da bolinha de Frequência
 
 def gerar_pdf(conf, filename, titulo_custom=None, subtitulo_custom=None, logos=None):
     c = canvas.Canvas(filename, pagesize=A4)
