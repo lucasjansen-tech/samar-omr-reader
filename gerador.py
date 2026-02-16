@@ -20,7 +20,7 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     c.rect(W-m-s, m, s, s, fill=1, stroke=0)
     
     # ====================================================================
-    # TOPO: LOGOS E TÍTULOS 
+    # TOPO: LOGOS E TÍTULOS (Levemente subidos para dar respiro embaixo)
     # ====================================================================
     texto_titulo = titulo_custom if titulo_custom else conf.titulo_prova
     texto_subtitulo = subtitulo_custom if subtitulo_custom else conf.subtitulo
@@ -28,7 +28,7 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     if logos:
         LOGO_BOX_W = 120  
         LOGO_BOX_H = 45   
-        y_logo_pos = H - 85 
+        y_logo_pos = H - 65 
 
         if logos.get('esq'):
             c.drawImage(ImageReader(logos['esq']), 80, y_logo_pos, width=LOGO_BOX_W, height=LOGO_BOX_H, preserveAspectRatio=True, mask='auto')
@@ -41,16 +41,16 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
             
     c.setFillColor(HexColor("#2980b9"))
     c.setFont("Helvetica-Bold", 16)
-    c.drawCentredString(W/2, H - 110, texto_titulo)
+    c.drawCentredString(W/2, H - 90, texto_titulo)
     c.setFillColor(colors.black)
     c.setFont("Helvetica", 12)
-    c.drawCentredString(W/2, H - 125, texto_subtitulo)
+    c.drawCentredString(W/2, H - 105, texto_subtitulo)
     
     # ====================================================================
     # CABEÇALHO 
     # ====================================================================
     c.setStrokeColor(colors.black); c.setLineWidth(0.5); c.setFont("Helvetica-Bold", 9)
-    y = H - 155 
+    y = H - 130 
     
     c.drawString(m, y, "UNIDADE DE ENSINO:"); c.line(m+100, y-2, W-m, y-2)
     y -= 25
@@ -61,29 +61,31 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     c.drawString(m, y, "ALUNO:"); c.line(m+40, y-2, W-m, y-2)
     
     # ====================================================================
-    # INSTRUÇÕES SINTETIZADAS E VISUAIS
+    # INSTRUÇÕES SINTETIZADAS E VISUAIS (Caixa folgada com mais respiro)
     # ====================================================================
-    y_inst = y - 15
+    y_inst = y - 20
     c.setStrokeColor(HexColor("#e67e22"))
-    c.rect(m, y_inst - 60, W-(2*m), 70, stroke=1, fill=0) # Caixa laranja maior
+    
+    # Caixa mais alta (85px) para as letras respirarem, bem longe do gabarito!
+    c.rect(m, y_inst - 70, W-(2*m), 85, stroke=1, fill=0) 
     
     c.setFillColor(colors.black)
     c.setFont("Helvetica-Bold", 8)
-    c.drawString(m+10, y_inst - 5, "INSTRUÇÕES PARA PREENCHIMENTO:")
+    c.drawString(m+10, y_inst + 3, "INSTRUÇÕES PARA PREENCHIMENTO:")
     
     c.setFont("Helvetica", 8)
-    c.drawString(m+10, y_inst - 17, "• Caro(a) aluno(a), sua participação é muito importante para avançarmos na qualidade da educação da nossa escola.")
-    c.drawString(m+10, y_inst - 29, "• Use caneta esferográfica azul ou preta. Escolha apenas uma opção por questão e preencha totalmente o círculo.")
-    c.drawString(m+10, y_inst - 41, "• Não rasure o cartão. Em hipótese nenhuma haverá outro cartão-resposta para substituição.")
+    c.drawString(m+10, y_inst - 11, "• Caro(a) aluno(a), sua participação é muito importante para avançarmos na qualidade da educação da nossa escola.")
+    c.drawString(m+10, y_inst - 25, "• Use caneta esferográfica azul ou preta. Escolha apenas uma opção por questão e preencha totalmente o círculo.")
+    c.drawString(m+10, y_inst - 39, "• Não rasure o cartão. Em hipótese nenhuma haverá outro cartão-resposta para substituição.")
     
-    # Exemplos Visuais
+    # Exemplos Visuais bem distribuídos na base da caixa
     c.setFont("Helvetica-Bold", 8)
-    c.drawString(m+10, y_inst - 53, "Marcação CORRETA:")
-    c.circle(m+105, y_inst - 50, 4, fill=1, stroke=0) # Bolinha preta
+    c.drawString(m+10, y_inst - 55, "Marcação CORRETA:")
+    c.circle(m+105, y_inst - 52, 4, fill=1, stroke=0) # Bolinha preta
     
-    c.drawString(m+130, y_inst - 53, "Marcação INCORRETA:")
+    c.drawString(m+130, y_inst - 55, "Marcação INCORRETA:")
     
-    cy_m = y_inst - 50
+    cy_m = y_inst - 52
     c.setStrokeColor(colors.black); c.setLineWidth(0.5)
     
     # Desenhando X
@@ -102,7 +104,7 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     c.circle(cx, cy_m, 1, fill=1, stroke=0)
     
     # ====================================================================
-    # GABARITO E GRIDS (Intocável)
+    # GABARITO E GRIDS (Intocável - Ouro)
     # ====================================================================
     for g in conf.grids:
         x1 = g.x_start * W
