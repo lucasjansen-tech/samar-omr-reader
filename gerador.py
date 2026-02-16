@@ -60,15 +60,49 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     y -= 25
     c.drawString(m, y, "ALUNO:"); c.line(m+40, y-2, W-m, y-2)
     
-    # Instruções
-    y -= 35
+    # ====================================================================
+    # INSTRUÇÕES SINTETIZADAS E VISUAIS
+    # ====================================================================
+    y_inst = y - 15
     c.setStrokeColor(HexColor("#e67e22"))
-    c.rect(m, y-10, W-(2*m), 25, stroke=1, fill=0)
-    c.setFillColor(colors.black); c.setFont("Helvetica", 8)
-    c.drawString(m+10, y+2, "INSTRUÇÕES: 1. Use caneta azul ou preta. 2. Preencha totalmente a bolinha. 3. Não rasure.")
+    c.rect(m, y_inst - 60, W-(2*m), 70, stroke=1, fill=0) # Caixa laranja maior
+    
+    c.setFillColor(colors.black)
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(m+10, y_inst - 5, "INSTRUÇÕES PARA PREENCHIMENTO:")
+    
+    c.setFont("Helvetica", 8)
+    c.drawString(m+10, y_inst - 17, "• Caro(a) aluno(a), sua participação é muito importante para avançarmos na qualidade da educação da nossa escola.")
+    c.drawString(m+10, y_inst - 29, "• Use caneta esferográfica azul ou preta. Escolha apenas uma opção por questão e preencha totalmente o círculo.")
+    c.drawString(m+10, y_inst - 41, "• Não rasure o cartão. Em hipótese nenhuma haverá outro cartão-resposta para substituição.")
+    
+    # Exemplos Visuais
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(m+10, y_inst - 53, "Marcação CORRETA:")
+    c.circle(m+105, y_inst - 50, 4, fill=1, stroke=0) # Bolinha preta
+    
+    c.drawString(m+130, y_inst - 53, "Marcação INCORRETA:")
+    
+    cy_m = y_inst - 50
+    c.setStrokeColor(colors.black); c.setLineWidth(0.5)
+    
+    # Desenhando X
+    cx = m+235
+    c.circle(cx, cy_m, 4, fill=0, stroke=1)
+    c.line(cx-2, cy_m-2, cx+2, cy_m+2); c.line(cx-2, cy_m+2, cx+2, cy_m-2)
+    
+    # Desenhando Check (V)
+    cx += 15
+    c.circle(cx, cy_m, 4, fill=0, stroke=1)
+    c.line(cx-2, cy_m, cx-1, cy_m-2); c.line(cx-1, cy_m-2, cx+3, cy_m+2)
+    
+    # Desenhando Ponto
+    cx += 15
+    c.circle(cx, cy_m, 4, fill=0, stroke=1)
+    c.circle(cx, cy_m, 1, fill=1, stroke=0)
     
     # ====================================================================
-    # GABARITO E GRIDS
+    # GABARITO E GRIDS (Intocável)
     # ====================================================================
     for g in conf.grids:
         x1 = g.x_start * W
@@ -127,7 +161,7 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
                     c.drawCentredString(cx, cy - 2, g.labels[col])
                 elif g.labels == ["D", "U"]:
                     c.setFont("Helvetica", 6)
-                    c.drawCentredString(cx, cy - 2, str(r)) # Imprime 0 a 9 dentro da bolinha de Frequência
+                    c.drawCentredString(cx, cy - 2, str(r)) 
 
 def gerar_pdf(conf, filename, titulo_custom=None, subtitulo_custom=None, logos=None):
     c = canvas.Canvas(filename, pagesize=A4)
