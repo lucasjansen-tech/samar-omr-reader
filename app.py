@@ -72,7 +72,7 @@ with tab1:
                     st.download_button(f"📥 Baixar Arquivo {ext.upper()}", f, fn, mime)
 
 # ====================================================================
-# ABA 2: LEITURA E CORREÇÃO 
+# ABA 2: LEITURA, CORREÇÃO E ANÁLISE ESTATÍSTICA
 # ====================================================================
 with tab2:
     st.markdown("### 📝 Passo 1: Configurar Gabarito Oficial")
@@ -86,6 +86,18 @@ with tab2:
     blocos = len([g for g in conf.grids if g.questao_inicial > 0])
     questoes_por_bloco = total_questoes // blocos if blocos > 0 else 0
     
+    # Mapeamento inteligente de Disciplinas baseado na Planta Baixa
+    mapa_disciplinas = {}
+    total_por_disciplina = {}
+    for g in conf.grids:
+        if g.questao_inicial > 0:
+            disc = g.texto_extra if g.texto_extra else "Geral"
+            if disc not in total_por_disciplina:
+                total_por_disciplina[disc] = 0
+            total_por_disciplina[disc] += g.rows
+            for r in range(g.rows):
+                mapa_disciplinas[g.questao_inicial + r] = disc
+
     if "Texto Rápido" in modo_gab:
         st.info("💡 **Dica:** Digite 'X' ou 'N' para sinalizar uma Questão Nula (Todos ganham ponto).")
         gabarito_str = st.text_input(
@@ -136,21 +148,37 @@ with tab2:
                 acertos = res.get("total_acertos", 0)
                 
                 aluno_dados = {"Frequencia": freq}
+                acertos_disciplina = {disc: 0 for disc in total_por_disciplina}
                 
                 # =========================================================
-                # INJEÇÃO BINÁRIA PARA A CALCULADORA DE DADOS
+                # EXPORTAÇÃO BINÁRIA + CÁLCULO DE DISCIPLINAS
                 # =========================================================
                 for q_num in range(1, total_questoes + 1):
-                    # 1. Pega a letra que o aluno marcou
+                    # 1. Letra Marcada
                     resp_str = res["respostas"].get(q_num, ".")
                     aluno_dados[f"Letra_Q{q_num:02d}"] = "Múltiplas" if resp_str == "*" else resp_str
                     
-                    # 2. Transforma em Binário (1 = Acerto, 0 = Erro)
+                    # 2. Binário (1 = Acerto, 0 = Erro)
                     status = res.get("correcao_detalhada", {}).get(q_num, {}).get("Status", "")
-                    aluno_dados[f"Q{q_num:02d}"] = 1 if "Correto" in status else 0
-                # =========================================================
+                    is_correct = 1 if "Correto" in status else 0
+                    aluno_dados[f"Q{q_num:02d}"] = is_correct
+                    
+                    # 3. Contabiliza acertos por disciplina
+                    disc = mapa_disciplinas.get(q_num)
+                    if disc and is_correct:
+                        acertos_disciplina[disc] += 1
                 
-                aluno_dados["Total_Acertos"] = acertos
+                # =========================================================
+                # FECHAMENTO DOS TOTAIS E PERCENTUAIS
+                # =========================================================
+                aluno_dados["Total_Acertos_Geral"] = acertos
+                aluno_dados["%_Acerto_Geral"] = round((acertos / total_questoes) * 100, 2) if total_questoes > 0 else 0
+                
+                for disc, total in total_por_disciplina.items():
+                    qtd_acertos = acertos_disciplina[disc]
+                    perc = (qtd_acertos / total) * 100 if total > 0 else 0
+                    aluno_dados[f"Acertos_{disc.replace(' ', '_')}"] = qtd_acertos
+                    aluno_dados[f"%_{disc.replace(' ', '_')}"] = round(perc, 2)
                 
                 resultados_lote.append(aluno_dados)
                 
@@ -162,7 +190,11 @@ with tab2:
                     
                 with c2:
                     st.info(f"**ID do Aluno (Frequência):** {freq}")
-                    st.success(f"**Pontuação:** {acertos} / {len(gab_oficial)} Acertos")
+                    st.success(f"**Pontuação Geral:** {acertos} / {len(gab_oficial)} Acertos ({aluno_dados['%_Acerto_Geral']}%)")
+                    
+                    # Exibe o mini-boletim por disciplina na tela também
+                    for disc in total_por_disciplina.keys():
+                        st.write(f"**{disc}:** {acertos_disciplina[disc]} / {total_por_disciplina[disc]} ({aluno_dados[f'%_{disc.replace(chr(32), chr(95))}']}%)")
                     
                     if "correcao_detalhada" in res:
                         with st.expander("Ver Correção Detalhada"):
@@ -191,7 +223,7 @@ with tab2:
             st.download_button(
                 label="📥 Baixar Dados Ordenados (CSV)",
                 data=csv_dados,
-                file_name="analise_samar_dados.csv",
+                file_name="analise_samar_dados_com_percentuais.csv",
                 mime="text/csv",
                 type="primary"
             )
