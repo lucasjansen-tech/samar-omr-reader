@@ -45,7 +45,6 @@ with tab1:
     with col2:
         st.write("")
         if st.button("🚀 Gerar Arquivo Pronto para Impressão"):
-            # Empacota as logos para enviar ao gerador
             logos_dict = {
                 'esq': logo_esq,
                 'cen': logo_cen,
@@ -73,7 +72,7 @@ with tab1:
                     st.download_button(f"📥 Baixar Arquivo {ext.upper()}", f, fn, mime)
 
 # ====================================================================
-# ABA 2: LEITURA E CORREÇÃO (O motor original, inalterado)
+# ABA 2: LEITURA E CORREÇÃO 
 # ====================================================================
 with tab2:
     st.markdown("### 📝 Passo 1: Configurar Gabarito Oficial")
@@ -137,9 +136,20 @@ with tab2:
                 acertos = res.get("total_acertos", 0)
                 
                 aluno_dados = {"Frequencia": freq}
+                
+                # =========================================================
+                # INJEÇÃO BINÁRIA PARA A CALCULADORA DE DADOS
+                # =========================================================
                 for q_num in range(1, total_questoes + 1):
+                    # 1. Pega a letra que o aluno marcou
                     resp_str = res["respostas"].get(q_num, ".")
-                    aluno_dados[f"Q{q_num:02d}"] = "Múltiplas" if resp_str == "*" else resp_str
+                    aluno_dados[f"Letra_Q{q_num:02d}"] = "Múltiplas" if resp_str == "*" else resp_str
+                    
+                    # 2. Transforma em Binário (1 = Acerto, 0 = Erro)
+                    status = res.get("correcao_detalhada", {}).get(q_num, {}).get("Status", "")
+                    aluno_dados[f"Q{q_num:02d}"] = 1 if "Correto" in status else 0
+                # =========================================================
+                
                 aluno_dados["Total_Acertos"] = acertos
                 
                 resultados_lote.append(aluno_dados)
