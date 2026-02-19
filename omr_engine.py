@@ -39,9 +39,9 @@ def processar_gabarito(image, conf, gabarito_oficial):
     pts = np.array([[x + w/2, y + h/2] for (x, y, w, h) in [cv2.boundingRect(a) for a in anchors]], dtype="float32")
     rect = order_points(pts)
 
-    # ====================================================================
-    # CORREÇÃO DO DRIFT: MAPEAMENTO MATEMÁTICO EXATO DO PDF PARA A IMAGEM
-    # ====================================================================
+    # =================
+    # CORREÇÃO DO DRIFT
+    # =================
     # Medidas exatas do A4 no gerador.py
     W_pdf = 595.276
     H_pdf = 841.890
@@ -164,3 +164,4 @@ def processar_gabarito(image, conf, gabarito_oficial):
     }
     
     return resultado_final, warped_color, None
+
