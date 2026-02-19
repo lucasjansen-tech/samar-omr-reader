@@ -7,7 +7,6 @@ from omr_engine import processar_gabarito
 import cv2
 import numpy as np
 import os
-import io
 
 st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
 
@@ -34,7 +33,7 @@ conf = TIPOS_PROVA[modelo]
 total_q_global = int(modelo.split('_')[1])
 ARQUIVO_TEMP = f"temp_transcricao_{modelo}.csv"
 
-# Mapeamento Dinâmico de Disciplinas (Usado pelo Robô e pela Correção Admin)
+# Mapeamento Dinâmico de Disciplinas
 mapa_disc_global = {}
 tot_disc_global = {}
 for g in conf.grids:
@@ -163,10 +162,10 @@ if perfil == "⚙️ Coordenação (Admin)":
                 df_export = df_export.sort_values(by='Ordem_Num', ascending=True, na_position='last').drop(columns=['Ordem_Num']) 
                 st.download_button("📥 Baixar CSV Corrigido", df_export.to_csv(index=False, sep=";"), f"samar_robo_{modelo}.csv", "text/csv", type="primary")
 
-    # --- NOVA ABA 4: MOTOR DE CORREÇÃO EM LOTE PARA CSVs DOS DIGITADORES ---
+    # --- ABA 4: MOTOR DE CORREÇÃO EM LOTE PARA CSVs ---
     with tab4:
         st.markdown("### 🛠️ Corretor de Arquivos Brutos (Digitadores)")
-        st.info("Pegue os arquivos '.csv' que os digitadores te enviaram, defina o Gabarito e deixe o sistema processar as notas e porcentagens de todo mundo.")
+        st.info("Pegue os arquivos '.csv' que os digitadores te enviaram, defina o Gabarito e deixe o sistema processar as notas e porcentagens.")
         
         st.markdown("#### 1. Gabarito Oficial da Turma/Escola")
         gabarito_admin = st.text_input(f"Letras do Gabarito Oficial ({total_q_global} questões):", value="A"*total_q_global, key="gab_t4").upper().strip()
@@ -176,23 +175,26 @@ if perfil == "⚙️ Coordenação (Admin)":
                 gab_dict_admin[i+1] = "NULA" if char in ["X", "N"] else char
 
         st.markdown("#### 2. Processar Lotes")
-        lote_bruto = st.file_uploader("Suba os arquivos 'samar_respostas_brutas.csv' gerados pela equipe:", type=["csv"], accept_multiple_files=True)
+        lote_bruto = st.file_uploader("Suba os arquivos 'respostas_brutas_turma.csv' gerados pela equipe:", type=["csv"], accept_multiple_files=True)
         
         if lote_bruto and st.button("⚙️ Corrigir Lotes e Gerar CSV Final"):
             todos_resultados = []
             
             for arq in lote_bruto:
                 df_bruto = pd.read_csv(arq, sep=";", dtype=str)
-                # Garante coluna nome
-                if "Nome_Aluno" not in df_bruto.columns: df_bruto["Nome_Aluno"] = ""
-                df_bruto["Nome_Aluno"] = df_bruto["Nome_Aluno"].fillna("")
+                # Garante que as colunas novas existam caso subam um CSV antigo
+                for col in ["Ano_Ensino", "Turma", "Nome_Aluno"]:
+                    if col not in df_bruto.columns: df_bruto[col] = ""
+                df_bruto = df_bruto.fillna("")
                 
                 for index, row in df_bruto.iterrows():
+                    aluno_ano = row["Ano_Ensino"]
+                    aluno_turma = row["Turma"]
                     aluno_f = row["Frequencia"]
                     aluno_nome = row["Nome_Aluno"]
                     respostas_brutas = row["Respostas_Brutas"]
                     
-                    aluno_processado = {"Frequencia": aluno_f, "Nome": aluno_nome}
+                    aluno_processado = {"Ano_Ensino": aluno_ano, "Turma": aluno_turma, "Frequencia": aluno_f, "Nome": aluno_nome}
                     acertos_geral = 0
                     acertos_disc = {disc: 0 for disc in tot_disc_global}
                     
@@ -219,23 +221,36 @@ if perfil == "⚙️ Coordenação (Admin)":
 
             if todos_resultados:
                 df_final_admin = pd.DataFrame(todos_resultados)
+                # Ordena por Ano, depois Turma, depois Frequência
                 df_final_admin['Ordem_Num'] = pd.to_numeric(df_final_admin['Frequencia'], errors='coerce')
-                df_final_admin = df_final_admin.sort_values(by='Ordem_Num', ascending=True, na_position='last').drop(columns=['Ordem_Num']) 
+                df_final_admin = df_final_admin.sort_values(by=['Ano_Ensino', 'Turma', 'Ordem_Num'], ascending=[True, True, True], na_position='last').drop(columns=['Ordem_Num']) 
                 
                 st.success(f"✅ Sucesso! {len(df_final_admin)} alunos foram corrigidos.")
                 st.download_button("📥 Baixar CSV Consolidado (Pronto para a Calculadora)", df_final_admin.to_csv(index=False, sep=";"), f"samar_dados_consolidados_{modelo}.csv", "text/csv", type="primary")
 
 else:
-    # Perfil Digitador (Burro e Ágil)
+    # Perfil Digitador (Apenas a Aba de Transcrição é visível)
     tab3 = st.tabs(["📝 Cartão-Resposta Digital"])[0]
 
 # ====================================================================
-# ABA 3 COMPARTILHADA: CARTÃO-RESPOSTA DIGITAL (DIGITAÇÃO BRUTA)
+# ABA 3 COMPARTILHADA: CARTÃO-RESPOSTA DIGITAL (ESPELHO DO GABARITO)
 # ====================================================================
 with tab3:
     st.markdown("### 🖱️ Transcrição do Aluno")
-    st.info("Nesta tela, você apenas transfere as marcações da folha para o sistema. As correções de notas serão feitas pela Coordenação posteriormente.")
+    st.info("Preencha os dados da Turma apenas uma vez. Eles ficarão gravados na memória até você iniciar uma nova turma.")
     
+    # 1. DADOS DA TURMA (Fixos e Memorizados) - Ficam FORA do formulário de limpeza
+    st.markdown("#### 1. Identificação da Turma")
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        ano_ensino = st.text_input("Ano de Ensino (Ex: 2º Ano):", placeholder="Ex: 2º Ano")
+    with col_t2:
+        turma_aluno = st.text_input("Turma (Ex: A):", placeholder="Ex: A")
+
+    st.markdown("---")
+    st.markdown("#### 2. Cartão do Aluno")
+    
+    # 2. DADOS DO ALUNO E CARTÃO - Ficam DENTRO do formulário (limpam a cada "Enter")
     with st.form("form_digitacao", clear_on_submit=True):
         nome_aluno = st.text_input("👤 Nome do Aluno (Opcional):", max_chars=100)
         
@@ -244,52 +259,69 @@ with tab3:
         with col_f1: freq_d = st.radio("Dezena (D):", ["0","1","2","3","4","5","6","7","8","9"], horizontal=True)
         with col_f2: freq_u = st.radio("Unidade (U):", ["0","1","2","3","4","5","6","7","8","9"], horizontal=True)
             
-        st.markdown("**📝 Respostas (Marcação)**")
-        cols_resp = st.columns(3) 
+        st.markdown("**📝 Respostas (Espelho do Gabarito)**")
+        
+        # Filtra apenas os blocos de questões (ignora a Frequência da planta baixa)
+        blocos_prova = [g for g in conf.grids if g.questao_inicial > 0]
+        cols_blocos = st.columns(len(blocos_prova)) # Cria uma coluna na tela para cada bloco do papel
         respostas_marcadas = {}
         
         opcoes_visuais = ["A", "B", "C", "D", "Branco", "Rasura"]
         mapa_valores = {"A":"A", "B":"B", "C":"C", "D":"D", "Branco":"-", "Rasura":"*"}
 
-        for q in range(1, total_q_global + 1):
-            col_idx = (q - 1) % 3
-            with cols_resp[col_idx]:
-                escolha = st.radio(f"Q.{q:02d}", options=opcoes_visuais, index=4, horizontal=True)
-                respostas_marcadas[q] = mapa_valores[escolha]
+        # Laço de repetição que desenha a tela exatamente igual à geometria do papel
+        for i, bloco in enumerate(blocos_prova):
+            with cols_blocos[i]:
+                st.markdown(f"**{bloco.titulo}**")
+                st.caption(bloco.texto_extra)
+                for r in range(bloco.rows):
+                    q = bloco.questao_inicial + r
+                    escolha = st.radio(f"Q.{q:02d}", options=opcoes_visuais, index=4, horizontal=True)
+                    respostas_marcadas[q] = mapa_valores[escolha]
             
         if st.form_submit_button("💾 Salvar Aluno e Avançar"):
-            nova_freq = freq_d + freq_u
-            resp_str = "".join([respostas_marcadas[q] for q in range(1, total_q_global + 1)])
-            novo_dado = {"Frequencia": nova_freq, "Nome_Aluno": nome_aluno, "Respostas_Brutas": resp_str}
-            
-            df_novo = pd.DataFrame([novo_dado])
-            if os.path.exists(ARQUIVO_TEMP): df_novo.to_csv(ARQUIVO_TEMP, mode='a', header=False, index=False, sep=";")
-            else: df_novo.to_csv(ARQUIVO_TEMP, index=False, sep=";")
-            st.success(f"✅ Aluno(a) salvo(a) com sucesso!")
+            if not ano_ensino or not turma_aluno:
+                st.error("⚠️ Atenção: Preencha o 'Ano de Ensino' e a 'Turma' na etapa 1 antes de salvar os alunos.")
+            else:
+                nova_freq = freq_d + freq_u
+                resp_str = "".join([respostas_marcadas[q] for q in range(1, total_q_global + 1)])
+                
+                novo_dado = {
+                    "Ano_Ensino": ano_ensino,
+                    "Turma": turma_aluno,
+                    "Frequencia": nova_freq, 
+                    "Nome_Aluno": nome_aluno, 
+                    "Respostas_Brutas": resp_str
+                }
+                
+                df_novo = pd.DataFrame([novo_dado])
+                if os.path.exists(ARQUIVO_TEMP): df_novo.to_csv(ARQUIVO_TEMP, mode='a', header=False, index=False, sep=";")
+                else: df_novo.to_csv(ARQUIVO_TEMP, index=False, sep=";")
+                st.success(f"✅ Aluno(a) salvo(a) com sucesso!")
 
     st.markdown("---")
     st.markdown("#### Fechamento da Turma")
     
     if os.path.exists(ARQUIVO_TEMP):
         df_temp = pd.read_csv(ARQUIVO_TEMP, sep=";", dtype=str)
-        if "Nome_Aluno" not in df_temp.columns: df_temp["Nome_Aluno"] = ""
-        df_temp["Nome_Aluno"] = df_temp["Nome_Aluno"].fillna("")
+        for col in ["Ano_Ensino", "Turma", "Nome_Aluno"]:
+            if col not in df_temp.columns: df_temp[col] = ""
+        df_temp = df_temp.fillna("")
         
         st.write(f"**Total de Alunos Digitados:** {len(df_temp)}")
-        st.dataframe(df_temp[["Frequencia", "Nome_Aluno", "Respostas_Brutas"]])
+        st.dataframe(df_temp[["Ano_Ensino", "Turma", "Frequencia", "Nome_Aluno", "Respostas_Brutas"]])
         
         col_exp1, col_exp2 = st.columns(2)
         with col_exp1:
-            # O DIGITADOR BAIXA APENAS O ARQUIVO CRU (SEM NOTAS)
             st.download_button(
                 label="📥 Baixar Dados da Turma (Entregar à Coordenação)", 
                 data=df_temp.to_csv(index=False, sep=";"), 
-                file_name=f"respostas_brutas_turma_{modelo}.csv", 
+                file_name=f"respostas_brutas_{ano_ensino.replace(' ', '_')}_Turma_{turma_aluno}_{modelo}.csv", 
                 mime="text/csv", 
                 type="primary"
             )
         with col_exp2:
-            if st.button("🗑️ Limpar Sessão Atual (Iniciar Nova Turma)"):
+            if st.button("🗑️ Limpar Sessão Atual (Iniciar Nova Turma/Ano)"):
                 os.remove(ARQUIVO_TEMP)
                 st.rerun()
     else:
