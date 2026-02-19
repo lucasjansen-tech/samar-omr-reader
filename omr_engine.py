@@ -1,196 +1,147 @@
 import cv2
 import numpy as np
-from layout_samar import ConfiguracaoProva, GridConfig
 
-def encontrar_ancoras_globais(thresh):
-    cnts, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    h, w = thresh.shape
-    candidatos = []
-    
-    for c in cnts:
-        area = cv2.contourArea(c)
-        if area < (w * h * 0.001) or area > (w * h * 0.05): continue
-        
-        hull = cv2.convexHull(c)
-        solidez = area / float(cv2.contourArea(hull)) if cv2.contourArea(hull) > 0 else 0
-        x, y, bw, bh = cv2.boundingRect(c)
-        ar = bw / float(bh)
-        
-        if solidez > 0.8 and 0.5 <= ar <= 1.5:
-            M = cv2.moments(c)
-            if M["m00"] != 0:
-                cx = int(M["m10"] / M["m00"])
-                cy = int(M["m01"] / M["m00"])
-                candidatos.append([cx, cy, area])
-                
-    candidatos = sorted(candidatos, key=lambda item: item[2], reverse=True)[:4]
-    if len(candidatos) < 3: return None
-    
-    meio_x, meio_y = w / 2, h / 2
-    tl, tr, bl, br = None, None, None, None
-    
-    for cx, cy, _ in candidatos:
-        if cx < meio_x and cy < meio_y: tl = [cx, cy]
-        elif cx > meio_x and cy < meio_y: tr = [cx, cy]
-        elif cx < meio_x and cy > meio_y: bl = [cx, cy]
-        elif cx > meio_x and cy > meio_y: br = [cx, cy]
-        
-    if len(candidatos) == 3:
-        if not br and tl and tr and bl: br = [tr[0] + bl[0] - tl[0], tr[1] + bl[1] - tl[1]]
-        elif not bl and tl and tr and br: bl = [tl[0] + br[0] - tr[0], tl[1] + br[1] - tr[1]]
-        elif not tr and tl and bl and br: tr = [tl[0] + br[0] - bl[0], tl[1] + br[1] - bl[1]]
-        elif not tl and tr and bl and br: tl = [tr[0] + bl[0] - br[0], tr[1] + bl[1] - br[1]]
+def order_points(pts):
+    rect = np.zeros((4, 2), dtype="float32")
+    s = pts.sum(axis=1)
+    rect[0] = pts[np.argmin(s)]
+    rect[2] = pts[np.argmax(s)]
+    diff = np.diff(pts, axis=1)
+    rect[1] = pts[np.argmin(diff)]
+    rect[3] = pts[np.argmax(diff)]
+    return rect
 
-    if tl and tr and bl and br:
-        return np.array([tl, tr, br, bl], dtype="float32")
-        
-    return None
+def processar_gabarito(image, conf, gabarito_oficial):
+    REF_W = conf.REF_W
+    REF_H = conf.REF_H
 
-def alinhar_imagem(img, conf: ConfiguracaoProva):
-    if len(img.shape) == 3: gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    else: gray = img
-    
-    W_FINAL, H_FINAL = conf.REF_W, conf.REF_H
-    
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    _, thresh_ancoras = cv2.threshold(blurred, 120, 255, cv2.THRESH_BINARY_INV)
-    rect = encontrar_ancoras_globais(thresh_ancoras)
+    thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 51, 15)
+
+    cnts, _ = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    anchors = []
     
-    if rect is not None:
-        m_px = W_FINAL * conf.MARGIN_PCT
-        s_px = W_FINAL * 0.04 
-        offset = m_px + (s_px / 2.0)
-        
-        dst = np.array([
-            [offset, offset],
-            [W_FINAL - offset, offset],
-            [W_FINAL - offset, H_FINAL - offset],
-            [offset, H_FINAL - offset]
-        ], dtype="float32")
-        
-        M = cv2.getPerspectiveTransform(rect, dst)
-        warped = cv2.warpPerspective(gray, M, (W_FINAL, H_FINAL))
-    else:
-        warped = cv2.resize(gray, (W_FINAL, H_FINAL))
-        
-    # ANTI-INVERSÃO INFALÍVEL
-    _, orient_thresh = cv2.threshold(warped, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
-    top_zone = orient_thresh[int(H_FINAL*0.02):int(H_FINAL*0.15), int(W_FINAL*0.1):int(W_FINAL*0.9)]
-    bot_zone = orient_thresh[int(H_FINAL*0.85):int(H_FINAL*0.98), int(W_FINAL*0.1):int(W_FINAL*0.9)]
+    # Encontra os quadrados das âncoras
+    for c in cnts:
+        peri = cv2.arcLength(c, True)
+        approx = cv2.approxPolyDP(c, 0.04 * peri, True)
+        if len(approx) == 4:
+            _, _, w, h = cv2.boundingRect(approx)
+            ar = w / float(h)
+            area = cv2.contourArea(c)
+            if 0.8 <= ar <= 1.2 and area > 400:
+                anchors.append(approx)
+
+    if len(anchors) < 4:
+        return {"erro": "Âncoras não encontradas. Certifique-se de que os quadrados das bordas estão visíveis."}, image, None
+
+    anchors = sorted(anchors, key=cv2.contourArea, reverse=True)[:4]
+    pts = np.array([[x + w/2, y + h/2] for (x, y, w, h) in [cv2.boundingRect(a) for a in anchors]], dtype="float32")
+    rect = order_points(pts)
+
+    m = REF_W * conf.MARGIN_PCT
+    s = 30 
     
-    if cv2.countNonZero(bot_zone) > cv2.countNonZero(top_zone):
+    dst = np.array([
+        [m + s/2, m + s/2],
+        [REF_W - m - s/2, m + s/2],
+        [REF_W - m - s/2, REF_H - m - s/2],
+        [m + s/2, REF_H - m - s/2]
+    ], dtype="float32")
+
+    M = cv2.getPerspectiveTransform(rect, dst)
+    warped = cv2.warpPerspective(gray, M, (REF_W, REF_H))
+    warped_color = cv2.warpPerspective(image, M, (REF_W, REF_H))
+
+    # ====================================================================
+    # BALANÇA DE ROTAÇÃO 180º RECALIBRADA
+    # ====================================================================
+    # Analisa o topo extremo (onde estão as logos e textos grossos)
+    # contra o fundo extremo (onde só sobra o fim da tabela e espaço vazio)
+    top_bar = warped[int(REF_H*0.05):int(REF_H*0.15), :]
+    bottom_bar = warped[int(REF_H*0.85):int(REF_H*0.95), :]
+    
+    top_dark = cv2.countNonZero(cv2.threshold(top_bar, 150, 255, cv2.THRESH_BINARY_INV)[1])
+    bot_dark = cv2.countNonZero(cv2.threshold(bottom_bar, 150, 255, cv2.THRESH_BINARY_INV)[1])
+    
+    # Se a faixa de baixo pesar mais que a de cima, aí sim está de ponta-cabeça
+    if bot_dark > top_dark:
         warped = cv2.rotate(warped, cv2.ROTATE_180)
-        
-    # LIMPEZA DE WHATSAPP E VAZAMENTOS
-    blur_warp = cv2.bilateralFilter(warped, d=9, sigmaColor=75, sigmaSpace=75)
-    _, binaria = cv2.threshold(blur_warp, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
-    
-    k_size = max(2, int(W_FINAL * 0.002))
-    kernel = np.ones((k_size, k_size), np.uint8)
-    binaria = cv2.morphologyEx(binaria, cv2.MORPH_OPEN, kernel)
-    
-    return cv2.cvtColor(warped, cv2.COLOR_GRAY2BGR), binaria, W_FINAL, H_FINAL
+        warped_color = cv2.rotate(warped_color, cv2.ROTATE_180)
+    # ====================================================================
 
-def ler_grid(img_binaria, grid: GridConfig, w_img, h_img, img_debug, gabarito=None):
-    x1 = grid.x_start * w_img
-    x2 = grid.x_end * w_img
-    y1 = grid.y_start * h_img
-    y2 = grid.y_end * h_img
-    
-    cv2.rectangle(img_debug, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
-    
-    cell_w = (x2 - x1) / grid.cols
-    cell_h = (y2 - y1) / grid.rows
-    
-    centros_x = [int(x1 + (c * cell_w) + (cell_w / 2)) for c in range(grid.cols)]
-    centros_y = [int(y1 + (r * cell_h) + (cell_h / 2)) for r in range(grid.rows)]
-    raio = int(min(cell_w, cell_h) * 0.18) 
-    area_roi = (raio * 2) ** 2
-    res_bloco = {}
-    
-    if grid.labels == ["D", "U"]:
-        freq_res = ["0", "0"]
-        for c_idx, cx in enumerate(centros_x):
-            votos = []
-            for cy in centros_y:
-                roi = img_binaria[cy-raio:cy+raio, cx-raio:cx+raio]
-                votos.append(cv2.countNonZero(roi))
-                cv2.circle(img_debug, (cx, cy), 2, (0, 255, 255), -1)
-            
-            idx_max = np.argmax(votos)
-            max_tinta = max(votos)
-            if max_tinta > (area_roi * 0.25):
-                freq_res[c_idx] = str(idx_max)
-                cv2.circle(img_debug, (cx, centros_y[idx_max]), int(raio), (255, 0, 0), -1)
-        return "".join(freq_res), {}
+    thresh_warped = cv2.adaptiveThreshold(warped, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 51, 15)
 
-    for r_idx, cy in enumerate(centros_y):
-        tintas = []
-        for cx in centros_x:
-            roi = img_binaria[cy-raio:cy+raio, cx-raio:cx+raio]
-            tintas.append(cv2.countNonZero(roi))
+    respostas = {}
+    correcao_detalhada = {}
+    total_acertos = 0
+    freq_arr = ["0", "0"] # Frequência em formato Dezena e Unidade (D, U)
+
+    for grid in conf.grids:
+        x1 = int(grid.x_start * REF_W)
+        x2 = int(grid.x_end * REF_W)
+        y1 = int(grid.y_start * REF_H)
+        y2 = int(grid.y_end * REF_H)
+
+        cell_w = (x2 - x1) / grid.cols
+        cell_h = (y2 - y1) / grid.rows
+
+        for row in range(grid.rows):
+            marcadas = []
             
-        marcadas = []
-        max_tinta_linha = max(tintas) if tintas else 0
-        
-        for idx, tinta in enumerate(tintas):
-            if tinta > (area_roi * 0.25) and tinta > (max_tinta_linha * 0.60):
-                marcadas.append(idx)
-        
-        if grid.questao_inicial > 0:
-            q_num = grid.questao_inicial + r_idx
-            resp_oficial = gabarito.get(q_num, ".") if gabarito else "."
-            
-            if len(marcadas) == 0:
-                res_bloco[q_num] = "."
-                for cx in centros_x: cv2.circle(img_debug, (cx, cy), 2, (150, 150, 150), -1)
-            elif len(marcadas) == 1:
-                idx_max = marcadas[0]
-                letra = grid.labels[idx_max]
-                res_bloco[q_num] = letra
-                cor = (0, 255, 0) 
-                if resp_oficial in ["NULA", "X"]: cor = (255, 200, 0) 
-                elif gabarito and letra != resp_oficial: cor = (0, 0, 255) 
-                cv2.circle(img_debug, (centros_x[idx_max], cy), int(raio), cor, 3)
+            for col in range(grid.cols):
+                cx = int(x1 + (col * cell_w) + (cell_w / 2))
+                cy = int(y1 + (row * cell_h) + (cell_h / 2))
+                
+                raio = int(min(cell_w, cell_h) * 0.25)
+                mask = np.zeros(thresh_warped.shape, dtype="uint8")
+                cv2.circle(mask, (cx, cy), raio, 255, -1)
+                
+                mask = cv2.bitwise_and(thresh_warped, thresh_warped, mask=mask)
+                total_pixels = cv2.countNonZero(mask)
+                area_bolinha = np.pi * (raio ** 2)
+                
+                # Exige 40% de preenchimento de tinta
+                if (total_pixels / area_bolinha) > 0.40:
+                    marcadas.append(col)
+                    cv2.circle(warped_color, (cx, cy), raio+4, (0, 165, 255), 2) # Circula a marcação de laranja
+
+            if grid.labels == ["D", "U"]:
+                if 0 in marcadas: freq_arr[0] = str(row)
+                if 1 in marcadas: freq_arr[1] = str(row)
             else:
-                res_bloco[q_num] = "*" 
-                cor = (255, 200, 0) if resp_oficial in ["NULA", "X"] else (0, 140, 255)
-                for idx in marcadas: cv2.circle(img_debug, (centros_x[idx], cy), int(raio), cor, 3)
+                q_num = grid.questao_inicial + row
+                if len(marcadas) == 0:
+                    respostas[q_num] = "-"
+                    correcao_detalhada[q_num] = {"Status": "Em Branco"}
+                elif len(marcadas) > 1:
+                    respostas[q_num] = "*"
+                    correcao_detalhada[q_num] = {"Status": "Múltiplas Marcações"}
+                else:
+                    resp_letra = grid.labels[marcadas[0]]
+                    respostas[q_num] = resp_letra
+                    
+                    gabarito_q = gabarito_oficial.get(q_num, "NULA")
+                    if gabarito_q == "NULA":
+                        total_acertos += 1
+                        correcao_detalhada[q_num] = {"Status": "Correto (Anulada)"}
+                        cv2.circle(warped_color, (int(x1 + (marcadas[0]*cell_w) + cell_w/2), int(y1 + (row*cell_h) + cell_h/2)), raio+4, (255, 0, 0), 3) # Azul para Nula
+                    elif resp_letra == gabarito_q:
+                        total_acertos += 1
+                        correcao_detalhada[q_num] = {"Status": "Correto"}
+                        cv2.circle(warped_color, (int(x1 + (marcadas[0]*cell_w) + cell_w/2), int(y1 + (row*cell_h) + cell_h/2)), raio+4, (0, 255, 0), 3) # Verde para Certo
+                    else:
+                        correcao_detalhada[q_num] = {"Status": "Incorreto"}
+                        cv2.circle(warped_color, (int(x1 + (marcadas[0]*cell_w) + cell_w/2), int(y1 + (row*cell_h) + cell_h/2)), raio+4, (0, 0, 255), 3) # Vermelho para Erro
 
-    return None, res_bloco
-
-def processar_gabarito(img, conf: ConfiguracaoProva, gabarito=None, offset_x=0, offset_y=0):
-    vis, binaria, w, h = alinhar_imagem(img, conf)
-    final = {"respostas": {}, "frequencia": "00"}
+    frequencia = "".join(freq_arr)
     
-    for g in conf.grids:
-        f_val, r_dict = ler_grid(binaria, g, w, h, vis, gabarito)
-        if g.labels == ["D", "U"]: final["frequencia"] = f_val
-        else: final["respostas"].update(r_dict)
-            
-    if gabarito:
-        acertos = 0
-        detalhes_correcao = {}
-        for q_num_int, resp_lida in final["respostas"].items():
-            resp_oficial = gabarito.get(q_num_int, ".")
-            status = "Em Branco"
-            if resp_oficial in ["NULA", "X"]:
-                status = "Correto (Anulada)"
-                acertos += 1
-            else:
-                if resp_lida == "*": status = "Múltiplas Marcações" 
-                elif resp_lida != ".":
-                    if resp_lida == resp_oficial:
-                        status = "Correto"
-                        acertos += 1
-                    else: status = "Incorreto"
-            
-            detalhes_correcao[q_num_int] = {
-                "Lida": "Múltiplas" if resp_lida == "*" else resp_lida,
-                "Gabarito": resp_oficial,
-                "Status": status
-            }
-        final["total_acertos"] = acertos
-        final["correcao_detalhada"] = detalhes_correcao
-        
-    return final, vis, None
+    resultado_final = {
+        "frequencia": frequencia,
+        "respostas": respostas,
+        "total_acertos": total_acertos,
+        "correcao_detalhada": correcao_detalhada
+    }
+    
+    return resultado_final, warped_color, None
