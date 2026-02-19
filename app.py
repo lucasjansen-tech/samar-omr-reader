@@ -7,6 +7,7 @@ from omr_engine import processar_gabarito
 import cv2
 import numpy as np
 import os
+import io
 
 st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
 
@@ -160,7 +161,10 @@ if perfil == "⚙️ Coordenação (Admin)":
                 df_export = pd.DataFrame(resultados_lote)
                 df_export['Ordem_Num'] = pd.to_numeric(df_export['Frequencia'], errors='coerce')
                 df_export = df_export.sort_values(by='Ordem_Num', ascending=True, na_position='last').drop(columns=['Ordem_Num']) 
-                st.download_button("📥 Baixar CSV Corrigido", df_export.to_csv(index=False, sep=";"), f"samar_robo_{modelo}.csv", "text/csv", type="primary")
+                
+                # Edição de Nome do Arquivo na Aba 2
+                nome_arq_t2 = st.text_input("Nome do arquivo de exportação:", value=f"samar_robo_{modelo}.csv")
+                st.download_button("📥 Baixar CSV Corrigido", df_export.to_csv(index=False, sep=";"), nome_arq_t2, "text/csv", type="primary")
 
     # --- ABA 4: MOTOR DE CORREÇÃO EM LOTE PARA CSVs ---
     with tab4:
@@ -177,12 +181,14 @@ if perfil == "⚙️ Coordenação (Admin)":
         st.markdown("#### 2. Processar Lotes")
         lote_bruto = st.file_uploader("Suba os arquivos 'respostas_brutas_turma.csv' gerados pela equipe:", type=["csv"], accept_multiple_files=True)
         
+        # Novo campo para definir o nome do arquivo final consolidado!
+        nome_arq_admin = st.text_input("Nome do arquivo final a ser gerado:", value=f"samar_dados_consolidados_{modelo}.csv")
+        
         if lote_bruto and st.button("⚙️ Corrigir Lotes e Gerar CSV Final"):
             todos_resultados = []
             
             for arq in lote_bruto:
                 df_bruto = pd.read_csv(arq, sep=";", dtype=str)
-                # Garante que as colunas novas existam caso subam um CSV antigo
                 for col in ["Ano_Ensino", "Turma", "Nome_Aluno"]:
                     if col not in df_bruto.columns: df_bruto[col] = ""
                 df_bruto = df_bruto.fillna("")
@@ -221,15 +227,15 @@ if perfil == "⚙️ Coordenação (Admin)":
 
             if todos_resultados:
                 df_final_admin = pd.DataFrame(todos_resultados)
-                # Ordena por Ano, depois Turma, depois Frequência
                 df_final_admin['Ordem_Num'] = pd.to_numeric(df_final_admin['Frequencia'], errors='coerce')
                 df_final_admin = df_final_admin.sort_values(by=['Ano_Ensino', 'Turma', 'Ordem_Num'], ascending=[True, True, True], na_position='last').drop(columns=['Ordem_Num']) 
                 
                 st.success(f"✅ Sucesso! {len(df_final_admin)} alunos foram corrigidos.")
-                st.download_button("📥 Baixar CSV Consolidado (Pronto para a Calculadora)", df_final_admin.to_csv(index=False, sep=";"), f"samar_dados_consolidados_{modelo}.csv", "text/csv", type="primary")
+                # Usa o nome definido na caixa de texto
+                st.download_button("📥 Baixar CSV Consolidado (Pronto para a Calculadora)", df_final_admin.to_csv(index=False, sep=";"), nome_arq_admin, "text/csv", type="primary")
 
 else:
-    # Perfil Digitador (Apenas a Aba de Transcrição é visível)
+    # Perfil Digitador
     tab3 = st.tabs(["📝 Cartão-Resposta Digital"])[0]
 
 # ====================================================================
@@ -239,7 +245,6 @@ with tab3:
     st.markdown("### 🖱️ Transcrição do Aluno")
     st.info("Preencha os dados da Turma apenas uma vez. Eles ficarão gravados na memória até você iniciar uma nova turma.")
     
-    # 1. DADOS DA TURMA (Fixos e Memorizados) - Ficam FORA do formulário de limpeza
     st.markdown("#### 1. Identificação da Turma")
     col_t1, col_t2 = st.columns(2)
     with col_t1:
@@ -250,7 +255,6 @@ with tab3:
     st.markdown("---")
     st.markdown("#### 2. Cartão do Aluno")
     
-    # 2. DADOS DO ALUNO E CARTÃO - Ficam DENTRO do formulário (limpam a cada "Enter")
     with st.form("form_digitacao", clear_on_submit=True):
         nome_aluno = st.text_input("👤 Nome do Aluno (Opcional):", max_chars=100)
         
@@ -261,15 +265,13 @@ with tab3:
             
         st.markdown("**📝 Respostas (Espelho do Gabarito)**")
         
-        # Filtra apenas os blocos de questões (ignora a Frequência da planta baixa)
         blocos_prova = [g for g in conf.grids if g.questao_inicial > 0]
-        cols_blocos = st.columns(len(blocos_prova)) # Cria uma coluna na tela para cada bloco do papel
+        cols_blocos = st.columns(len(blocos_prova)) 
         respostas_marcadas = {}
         
         opcoes_visuais = ["A", "B", "C", "D", "Branco", "Rasura"]
         mapa_valores = {"A":"A", "B":"B", "C":"C", "D":"D", "Branco":"-", "Rasura":"*"}
 
-        # Laço de repetição que desenha a tela exatamente igual à geometria do papel
         for i, bloco in enumerate(blocos_prova):
             with cols_blocos[i]:
                 st.markdown(f"**{bloco.titulo}**")
@@ -311,12 +313,20 @@ with tab3:
         st.write(f"**Total de Alunos Digitados:** {len(df_temp)}")
         st.dataframe(df_temp[["Ano_Ensino", "Turma", "Frequencia", "Nome_Aluno", "Respostas_Brutas"]])
         
+        # Criação de um nome de arquivo automático inteligente (para sugerir na caixa)
+        nome_sugerido = f"respostas_brutas_{ano_ensino.replace(' ', '_')}_Turma_{turma_aluno}_{modelo}.csv"
+        if not ano_ensino and not turma_aluno:
+            nome_sugerido = f"respostas_brutas_turma_{modelo}.csv"
+            
+        # Nova caixa de texto para o digitador poder editar o nome do arquivo se quiser!
+        nome_arq_dig = st.text_input("Editar nome do arquivo antes de baixar:", value=nome_sugerido)
+        
         col_exp1, col_exp2 = st.columns(2)
         with col_exp1:
             st.download_button(
                 label="📥 Baixar Dados da Turma (Entregar à Coordenação)", 
                 data=df_temp.to_csv(index=False, sep=";"), 
-                file_name=f"respostas_brutas_{ano_ensino.replace(' ', '_')}_Turma_{turma_aluno}_{modelo}.csv", 
+                file_name=nome_arq_dig, 
                 mime="text/csv", 
                 type="primary"
             )
