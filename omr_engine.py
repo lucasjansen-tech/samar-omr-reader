@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 
 def order_points(pts):
+    # Organiza os 4 pontos na ordem: Top-Left, Top-Right, Bottom-Right, Bottom-Left
     rect = np.zeros((4, 2), dtype="float32")
     s = pts.sum(axis=1)
     rect[0] = pts[np.argmin(s)]
@@ -15,14 +16,14 @@ def processar_gabarito(image, conf, gabarito_oficial):
     REF_W = conf.REF_W
     REF_H = conf.REF_H
 
+    # 1. Pré-processamento inicial para encontrar âncoras
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 51, 15)
 
+    # 2. Detecção de Contornos e Âncoras
     cnts, _ = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     anchors = []
-    
-    # Encontra os quadrados das âncoras
     for c in cnts:
         peri = cv2.arcLength(c, True)
         approx = cv2.approxPolyDP(c, 0.04 * peri, True)
@@ -34,8 +35,9 @@ def processar_gabarito(image, conf, gabarito_oficial):
                 anchors.append(approx)
 
     if len(anchors) < 4:
-        return {"erro": "Âncoras não encontradas. Certifique-se de que os quadrados das bordas estão visíveis."}, image, None
+        return {"erro": "Âncoras não encontradas."}, image, None
 
+    # 3. Ordenação e Perspectiva (Warp)
     anchors = sorted(anchors, key=cv2.contourArea, reverse=True)[:4]
     pts = np.array([[x + w/2, y + h/2] for (x, y, w, h) in [cv2.boundingRect(a) for a in anchors]], dtype="float32")
     rect = order_points(pts)
@@ -51,34 +53,41 @@ def processar_gabarito(image, conf, gabarito_oficial):
     ], dtype="float32")
 
     M = cv2.getPerspectiveTransform(rect, dst)
-    warped = cv2.warpPerspective(gray, M, (REF_W, REF_H))
-    warped_color = cv2.warpPerspective(image, M, (REF_W, REF_H))
+    warped = cv2.warpPerspective(gray, M, (REF_W, REF_H)) # Imagem em tons de cinza alinhada
+    warped_color = cv2.warpPerspective(image, M, (REF_W, REF_H)) # Imagem colorida alinhada
 
     # ====================================================================
-    # BALANÇA DE ROTAÇÃO 180º RECALIBRADA PARA O NOVO LAYOUT
+    # BALANÇA DE ROTAÇÃO 180º (COM RASCUNHO TEMPORÁRIO)
     # ====================================================================
-    # Cria o threshold com alta precisão antes para usar na balança
-    thresh_warped = cv2.adaptiveThreshold(warped, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 51, 15)
+    # Cria um threshold temporário apenas para pesar a tinta nas pontas
+    thresh_temp = cv2.adaptiveThreshold(warped, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 51, 15)
 
-    # Corta as laterais (do 20% ao 80% da folha) para IGNORAR as âncoras pretas na pesagem
     mid_x_start = int(REF_W * 0.2)
     mid_x_end = int(REF_W * 0.8)
 
-    # Topo: 4% a 10% (Pega os Títulos, Logos e cabeçalho. Peso = ALTO)
-    top_band = thresh_warped[int(REF_H*0.04):int(REF_H*0.10), mid_x_start:mid_x_end]
-    # Fundo: 93% a 97% (Pega o VAZIO absoluto logo abaixo da última bolinha. Peso = ZERO)
-    bot_band = thresh_warped[int(REF_H*0.93):int(REF_H*0.97), mid_x_start:mid_x_end]
+    # Topo: 4% a 10% (Onde estão os Títulos e Logos - Deve ser pesado)
+    top_band = thresh_temp[int(REF_H*0.04):int(REF_H*0.10), mid_x_start:mid_x_end]
+    # Fundo: 93% a 97% (Onde deve ser VAZIO absoluto - Deve ser leve)
+    bot_band = thresh_temp[int(REF_H*0.93):int(REF_H*0.97), mid_x_start:mid_x_end]
     
     top_dark = cv2.countNonZero(top_band)
     bot_dark = cv2.countNonZero(bot_band)
     
-    # Se a faixa de baixo, que deveria ser vazia, pesar mais que os títulos, está invertido!
+    # Se o fundo pesar mais que o topo, está invertido.
     if bot_dark > top_dark:
+        # Gira APENAS as imagens de base (cinza e colorida) para não perder qualidade
         warped = cv2.rotate(warped, cv2.ROTATE_180)
         warped_color = cv2.rotate(warped_color, cv2.ROTATE_180)
-        thresh_warped = cv2.rotate(thresh_warped, cv2.ROTATE_180) # Gira a máscara também
-    # ====================================================================
+        # O threshold temporário é descartado.
 
+    # ====================================================================
+    # APLICA O THRESHOLD FINAL NA IMAGEM JÁ NA POSIÇÃO CORRETA
+    # ====================================================================
+    # Agora sim, geramos o alto contraste definitivo na imagem alinhada.
+    # Isso garante bordas de bolinhas muito mais limpas e precisas.
+    thresh_warped = cv2.adaptiveThreshold(warped, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 51, 15)
+
+    # 5. Análise das Bolinhas (Loop Principal)
     respostas = {}
     correcao_detalhada = {}
     total_acertos = 0
@@ -108,10 +117,12 @@ def processar_gabarito(image, conf, gabarito_oficial):
                 total_pixels = cv2.countNonZero(mask)
                 area_bolinha = np.pi * (raio ** 2)
                 
+                # Limiar de 40% de preenchimento
                 if (total_pixels / area_bolinha) > 0.40:
                     marcadas.append(col)
-                    cv2.circle(warped_color, (cx, cy), raio+4, (0, 165, 255), 2) 
+                    cv2.circle(warped_color, (cx, cy), raio+4, (0, 165, 255), 2) # Círculo Laranja na detecção crua
 
+            # Lógica de Correção e Frequência
             if grid.labels == ["D", "U"]:
                 if 0 in marcadas: freq_arr[0] = str(row)
                 if 1 in marcadas: freq_arr[1] = str(row)
@@ -128,17 +139,21 @@ def processar_gabarito(image, conf, gabarito_oficial):
                     respostas[q_num] = resp_letra
                     
                     gabarito_q = gabarito_oficial.get(q_num, "NULA")
+                    # Desenha os círculos de correção (Verde/Vermelho/Azul) sobre o laranja
+                    cx_final = int(x1 + (marcadas[0]*cell_w) + cell_w/2)
+                    cy_final = int(y1 + (row*cell_h) + cell_h/2)
+
                     if gabarito_q == "NULA":
                         total_acertos += 1
                         correcao_detalhada[q_num] = {"Status": "Correto (Anulada)"}
-                        cv2.circle(warped_color, (int(x1 + (marcadas[0]*cell_w) + cell_w/2), int(y1 + (row*cell_h) + cell_h/2)), raio+4, (255, 0, 0), 3) 
+                        cv2.circle(warped_color, (cx_final, cy_final), raio+4, (255, 0, 0), 3) 
                     elif resp_letra == gabarito_q:
                         total_acertos += 1
                         correcao_detalhada[q_num] = {"Status": "Correto"}
-                        cv2.circle(warped_color, (int(x1 + (marcadas[0]*cell_w) + cell_w/2), int(y1 + (row*cell_h) + cell_h/2)), raio+4, (0, 255, 0), 3) 
+                        cv2.circle(warped_color, (cx_final, cy_final), raio+4, (0, 255, 0), 3) 
                     else:
                         correcao_detalhada[q_num] = {"Status": "Incorreto"}
-                        cv2.circle(warped_color, (int(x1 + (marcadas[0]*cell_w) + cell_w/2), int(y1 + (row*cell_h) + cell_h/2)), raio+4, (0, 0, 255), 3) 
+                        cv2.circle(warped_color, (cx_final, cy_final), raio+4, (0, 0, 255), 3) 
 
     frequencia = "".join(freq_arr)
     
