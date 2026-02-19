@@ -28,15 +28,20 @@ class ConfiguracaoProva:
     MARGIN_PCT = 0.05 
 
 # =========================================================
-# GEOMETRIA: SISTEMA SAMAR NATIVO (COM RODAPÉ APROVEITADO)
+# GEOMETRIA: SISTEMA SAMAR NATIVO
 # =========================================================
 Y_TOP = 0.41  
-Y_BOT = 0.91  
+Y_BOT = 0.91  # Fundo da folha para provas grandes (52 e 44)
 ALTURA_BLOCO = Y_BOT - Y_TOP
 
+# Fundo "encurtado" exclusivo para a prova de 18 questões!
+Y_BOT_CURTO = 0.65  # O bloco termina bem antes do fim da folha
+ALTURA_BLOCO_CURTO = Y_BOT_CURTO - Y_TOP
+
+# Cálculos de proporção para alinhar a Frequência (que tem 10 linhas) com os Blocos
 Y_END_FREQ_13 = Y_TOP + ((ALTURA_BLOCO / 13) * 10) 
 Y_END_FREQ_11 = Y_TOP + ((ALTURA_BLOCO / 11) * 10) 
-Y_END_FREQ_09 = Y_BOT 
+Y_END_FREQ_09 = Y_TOP + ((ALTURA_BLOCO_CURTO / 9) * 10) # Usa a altura curta
 
 TIPOS_PROVA = {
     "SAMAR_52_Questoes": ConfiguracaoProva(
@@ -67,9 +72,10 @@ TIPOS_PROVA = {
         titulo_prova="AVALIAÇÃO DE APRENDIZAGEM",
         subtitulo="Ensino Fundamental I - 1º ao 3º Ano",
         grids=[
+            # Observe que aqui trocamos Y_BOT por Y_BOT_CURTO
             GridConfig("FREQ.", "", 0.15, 0.22, Y_TOP, Y_END_FREQ_09, 10, 2, ["D", "U"], 0, COR_LARANJA),
-            GridConfig("BLOCO 1", "LÍNGUA PORTUGUESA", 0.32, 0.52, Y_TOP, Y_BOT, 9, 4, ["A","B","C","D"], 1, COR_LARANJA),
-            GridConfig("BLOCO 2", "MATEMÁTICA", 0.58, 0.78, Y_TOP, Y_BOT, 9, 4, ["A","B","C","D"], 10, COR_AZUL),
+            GridConfig("BLOCO 1", "LÍNGUA PORTUGUESA", 0.32, 0.52, Y_TOP, Y_BOT_CURTO, 9, 4, ["A","B","C","D"], 1, COR_LARANJA),
+            GridConfig("BLOCO 2", "MATEMÁTICA", 0.58, 0.78, Y_TOP, Y_BOT_CURTO, 9, 4, ["A","B","C","D"], 10, COR_AZUL),
         ]
     )
 }
