@@ -14,7 +14,6 @@ st.title("🖨️ Sistema SAMAR - Leitura OMR e Transcrição")
 modelo = st.selectbox("Selecione o Modelo de Prova:", list(TIPOS_PROVA.keys()))
 conf = TIPOS_PROVA[modelo]
 
-# Adicionamos a 3ª Aba no painel!
 tab1, tab2, tab3 = st.tabs(["1. Gerador de PDF", "2. Leitura por Imagem (Robô)", "3. Digitação Manual (Auto-Save)"])
 
 # ====================================================================
@@ -172,16 +171,15 @@ with tab2:
             st.download_button("📥 Baixar CSV (Calculadora)", df_export.to_csv(index=False, sep=";"), f"samar_leitor_robo_{modelo}.csv", "text/csv", type="primary")
 
 # ====================================================================
-# ABA 3: DIGITAÇÃO MANUAL (AUTO-SAVE) - A Nova Solução
+# ABA 3: CARTÃO-RESPOSTA DIGITAL (INTUITIVO E COM AUTO-SAVE)
 # ====================================================================
 with tab3:
-    st.markdown("### ⌨️ Central de Transcrição Rápida")
-    st.info("Neste modo, seus dados são salvos no disco rígido a cada aluno. Se o navegador fechar, seu trabalho não será perdido!")
+    st.markdown("### 🖱️ Cartão-Resposta Digital")
+    st.info("Preencha clicando nas bolinhas. Seus dados são salvos no disco a cada aluno.")
     
     total_q_tab3 = int(modelo.split('_')[1])
     ARQUIVO_TEMP = f"temp_transcricao_{modelo}.csv"
 
-    # Mapeamento de disciplinas (Idêntico ao Robô para o CSV sair perfeito)
     mapa_disc_t3 = {}
     tot_disc_t3 = {}
     for g in conf.grids:
@@ -191,8 +189,8 @@ with tab3:
             tot_disc_t3[disc] += g.rows
             for r in range(g.rows): mapa_disc_t3[g.questao_inicial + r] = disc
 
-    # 1. Configurar Gabarito da Sessão
-    st.markdown("#### 1. Gabarito da Turma Atual")
+    # 1. Configurar Gabarito Oficial (Ainda presente, como solicitado para focar apenas na inserção agora)
+    st.markdown("#### 1. Gabarito Oficial da Turma")
     gabarito_dig = st.text_input(f"Letras do Gabarito Oficial ({total_q_tab3} questões juntas):", value="A"*total_q_tab3, key="gab_t3").upper().strip()
     gab_oficial_t3 = {}
     if len(gabarito_dig) >= total_q_tab3:
@@ -200,32 +198,59 @@ with tab3:
             gab_oficial_t3[i+1] = "NULA" if char in ["X", "N"] else char
 
     st.markdown("---")
-    st.markdown("#### 2. Digitar Cartões dos Alunos")
+    st.markdown("#### 2. Inserção Intuitiva do Aluno")
     
-    # Formulário blindado com Auto-Clear
+    # Formulário de Marcação Visual
     with st.form("form_digitacao", clear_on_submit=True):
-        col_freq, col_resp = st.columns([1, 4])
-        with col_freq:
-            nova_freq = st.text_input("Frequência (Ex: 15)", max_chars=3)
-        with col_resp:
-            novas_resp = st.text_input(f"Respostas do Aluno (Digite as {total_q_tab3} letras juntas. Ex: ABCD...)", max_chars=total_q_tab3)
+        
+        # Inserção do Nome
+        nome_aluno = st.text_input("👤 Nome do Aluno (Opcional):", max_chars=100)
+        
+        st.markdown("**📌 Frequência (Marcação)**")
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            freq_d = st.radio("Dezena (D):", ["0","1","2","3","4","5","6","7","8","9"], horizontal=True)
+        with col_f2:
+            freq_u = st.radio("Unidade (U):", ["0","1","2","3","4","5","6","7","8","9"], horizontal=True)
             
-        salvar_btn = st.form_submit_button("Salvar Aluno (Enter) 💾")
+        st.markdown("**📝 Respostas (Marcação)**")
+        cols_resp = st.columns(3) # Divide as questões em 3 colunas para a tela não ficar gigante
+        respostas_marcadas = {}
+        
+        opcoes_visuais = ["A", "B", "C", "D", "Branco", "Múltiplas/Rasura"]
+        mapa_valores = {"A":"A", "B":"B", "C":"C", "D":"D", "Branco":"-", "Múltiplas/Rasura":"*"}
+
+        for q in range(1, total_q_tab3 + 1):
+            col_idx = (q - 1) % 3
+            with cols_resp[col_idx]:
+                escolha = st.radio(
+                    f"Q.{q:02d}", 
+                    options=opcoes_visuais, 
+                    index=4, # Padrão inicia na bolinha "Branco"
+                    horizontal=True
+                )
+                respostas_marcadas[q] = mapa_valores[escolha]
+            
+        salvar_btn = st.form_submit_button("💾 Salvar Aluno e Limpar Tela")
         
         if salvar_btn:
-            if nova_freq and len(novas_resp) == total_q_tab3:
-                # Cria linha do aluno
-                novo_dado = {"Frequencia": nova_freq.zfill(2), "Respostas_Brutas": novas_resp.upper()}
-                df_novo = pd.DataFrame([novo_dado])
-                
-                # Auto-Save no HD
-                if os.path.exists(ARQUIVO_TEMP):
-                    df_novo.to_csv(ARQUIVO_TEMP, mode='a', header=False, index=False, sep=";")
-                else:
-                    df_novo.to_csv(ARQUIVO_TEMP, index=False, sep=";")
-                st.success(f"✅ Aluno {nova_freq} salvo com sucesso no disco!")
+            nova_freq = freq_d + freq_u
+            resp_str = "".join([respostas_marcadas[q] for q in range(1, total_q_tab3 + 1)])
+            
+            novo_dado = {
+                "Frequencia": nova_freq, 
+                "Nome_Aluno": nome_aluno, 
+                "Respostas_Brutas": resp_str
+            }
+            df_novo = pd.DataFrame([novo_dado])
+            
+            if os.path.exists(ARQUIVO_TEMP):
+                df_novo.to_csv(ARQUIVO_TEMP, mode='a', header=False, index=False, sep=";")
             else:
-                st.error("⚠️ Preencha a frequência e todas as letras corretamente antes de salvar.")
+                df_novo.to_csv(ARQUIVO_TEMP, index=False, sep=";")
+                
+            mensagem_sucesso = f"✅ Aluno(a) **{nome_aluno if nome_aluno else 'Sem Nome'}** (Frequência: {nova_freq}) salvo(a) no HD com sucesso!"
+            st.success(mensagem_sucesso)
 
     # 3. Mostrar os Salvos e Exportar
     st.markdown("---")
@@ -233,8 +258,13 @@ with tab3:
     
     if os.path.exists(ARQUIVO_TEMP):
         df_temp = pd.read_csv(ARQUIVO_TEMP, sep=";", dtype=str)
+        # Previne erros caso a coluna nome esteja vazia
+        if "Nome_Aluno" not in df_temp.columns:
+            df_temp["Nome_Aluno"] = ""
+        df_temp["Nome_Aluno"] = df_temp["Nome_Aluno"].fillna("")
+        
         st.write(f"**Total de Alunos Salvos:** {len(df_temp)}")
-        st.dataframe(df_temp)
+        st.dataframe(df_temp[["Frequencia", "Nome_Aluno", "Respostas_Brutas"]])
         
         col_exp1, col_exp2 = st.columns(2)
         with col_exp1:
@@ -243,13 +273,13 @@ with tab3:
                 
                 for index, row in df_temp.iterrows():
                     aluno_f = row["Frequencia"]
+                    aluno_nome = row["Nome_Aluno"]
                     respostas_brutas = row["Respostas_Brutas"]
                     
-                    aluno_processado = {"Frequencia": aluno_f}
+                    aluno_processado = {"Frequencia": aluno_f, "Nome": aluno_nome}
                     acertos_geral = 0
                     acertos_disc = {disc: 0 for disc in tot_disc_t3}
                     
-                    # Motor de Correção Manual idêntico ao Robô
                     for q in range(1, total_q_tab3 + 1):
                         letra_marcada = respostas_brutas[q-1] if q-1 < len(respostas_brutas) else "-"
                         gabarito_certo = gab_oficial_t3.get(q, "NULA")
@@ -264,7 +294,6 @@ with tab3:
                             
                         aluno_processado[f"Q{q:02d}"] = is_correct
                     
-                    # Fechamento Matemático
                     aluno_processado["Total_Acertos_Geral"] = acertos_geral
                     aluno_processado["%_Acerto_Geral"] = round((acertos_geral / total_q_tab3) * 100, 2) if total_q_tab3 > 0 else 0
                     
@@ -276,7 +305,6 @@ with tab3:
                         
                     resultados_dig.append(aluno_processado)
 
-                # Exportação Binária Final
                 df_final_dig = pd.DataFrame(resultados_dig)
                 df_final_dig['Ordem_Num'] = pd.to_numeric(df_final_dig['Frequencia'], errors='coerce')
                 df_final_dig = df_final_dig.sort_values(by='Ordem_Num', ascending=True, na_position='last').drop(columns=['Ordem_Num']) 
