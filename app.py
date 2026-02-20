@@ -29,7 +29,7 @@ if not os.path.exists(DB_USUARIOS):
     pd.DataFrame([{
         "Nome": "Coordenação Master", 
         "Email": "admin", 
-        "Senha": hash_senha("coted2026"),
+        "Senha": hash_senha("@coted2026@"),
         "Perfil": "Administrador"
     }]).to_csv(DB_USUARIOS, index=False, sep=";")
 else:
@@ -570,3 +570,4 @@ with tab3:
                     st.rerun()
     else:
         st.info("O painel de controle da turma aparecerá aqui após o registro do primeiro aluno.")
+
