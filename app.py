@@ -15,14 +15,11 @@ import uuid
 st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
 
 # ====================================================================
-# FUNÇÃO DE SEGURANÇA: CRIPTOGRAFIA DE SENHAS
+# FUNÇÃO DE SEGURANÇA E INICIALIZAÇÃO
 # ====================================================================
 def hash_senha(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
 
-# ====================================================================
-# INICIALIZAÇÃO DO BANCO DE USUÁRIOS E SESSÃO
-# ====================================================================
 DB_USUARIOS = "usuarios_samar.csv"
 if not os.path.exists(DB_USUARIOS):
     pd.DataFrame([{
@@ -44,7 +41,7 @@ if 'usuario_logado' not in st.session_state:
     st.session_state['perfil_logado'] = None
 
 # ====================================================================
-# FUNÇÃO GERADORA DE GABARITOS DIGITAIS
+# FUNÇÃO GERADORA DE GABARITOS DIGITAIS (ZIP)
 # ====================================================================
 def gerar_zip_gabaritos(df, conf_prova, modelo_prova):
     id_unico = uuid.uuid4().hex
@@ -142,7 +139,6 @@ if not st.session_state['usuario_logado']:
 st.sidebar.markdown("### 👤 Sessão Ativa")
 st.sidebar.success(f"**{st.session_state['nome_logado']}**\n\nNível: {st.session_state['perfil_logado']}")
 if st.sidebar.button("🚪 Sair do Sistema (Logout)"):
-    # Limpa as variáveis de sessão completas
     st.session_state.clear()
     st.rerun()
 
@@ -682,13 +678,24 @@ with tab3:
                         use_container_width=True
                     )
         with c3:
-            if st.button("🗑️ Limpar Sessão (Iniciar Nova Turma)", use_container_width=True):
-                try: os.remove(ARQUIVO_TEMP)
-                except Exception: pass
-                st.session_state.escola_val = ""
-                st.session_state.ano_val = ""
-                st.session_state.turma_val = ""
-                st.session_state.turno_val = ""
-                st.rerun()
+            # TRAVA DE SEGURANÇA NA EXCLUSÃO (Gaveta Expansível)
+            with st.expander("🗑️ Iniciar Nova Turma", expanded=False):
+                st.markdown("<p style='font-size:14px; color:#d32f2f;'><b>⚠️ Atenção:</b> Verifique se você já fez o download do CSV e do ZIP acima antes de prosseguir!</p>", unsafe_allow_html=True)
+                
+                # Botão final de exclusão
+                if st.button("🚨 Apagar Turma e Limpar Tela", use_container_width=True):
+                    try: os.remove(ARQUIVO_TEMP)
+                    except Exception: pass
+                    
+                    # Amnésia Forçada: Limpa a memória das variáveis
+                    for campo in ["escola_val", "ano_val", "turma_val", "turno_val"]:
+                        st.session_state[campo] = ""
+                        
+                    # Amnésia Forçada 2: Destrói o cache visual da tela
+                    for widget in ["_escola", "_ano", "_turma", "_turno"]:
+                        if widget in st.session_state:
+                            del st.session_state[widget]
+                            
+                    st.rerun()
     else:
         st.info("O painel de controle da turma aparecerá aqui após o registro do primeiro aluno.")
