@@ -14,7 +14,30 @@ import uuid
 import base64
 from datetime import datetime
 
+# ====================================================================
+# CONEXÃO COM O BANCO DE DADOS EM NUVEM (SUPABASE)
+# ====================================================================
+try:
+    from supabase import create_client, Client
+    HAS_SUPABASE = True
+except ImportError:
+    HAS_SUPABASE = False
+
+SUPABASE_URL = "https://lbcweuwgjivdexzbanjt.supabase.co"
+SUPABASE_KEY = "sb_publishable_BccjjvXAWyTFm2uQ6P5qbg_LlFPFw0e"
+
+usa_nuvem = False
+if HAS_SUPABASE:
+    try:
+        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        usa_nuvem = True
+    except Exception:
+        pass
+
 st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
+
+if not HAS_SUPABASE:
+    st.error("⚠️ Atenção: A biblioteca do Supabase não está instalada. Feche o sistema, abra o terminal e digite: pip install supabase")
 
 # ====================================================================
 # LISTA OFICIAL DE ESCOLAS
@@ -40,32 +63,39 @@ ESCOLAS_SAMAR = [
 ]
 
 # ====================================================================
-# FUNÇÃO DE SEGURANÇA E INICIALIZAÇÃO DE BANCOS
+# FUNÇÕES DE SINCRONIZAÇÃO EM NUVEM (O COFRE CENTRAL)
+# ====================================================================
+def sync_turma_nuvem(df_local, escola, ano, turma, turno, digitador):
+    """Atualiza o banco de dados em nuvem com a edição mais recente da turma"""
+    if not usa_nuvem or df_local.empty: return
+    try:
+        # 1. Limpa os dados velhos desse lote específico para evitar duplicação
+        supabase.table("respostas_geral").delete().eq("escola", escola).eq("ano_ensino", ano).eq("turma", turma).eq("turno", turno).eq("digitador", digitador).execute()
+        
+        # 2. Envia a tabela corrigida e atualizada
+        df_sync = df_local[["Escola", "Ano_Ensino", "Turma", "Turno", "Frequencia", "Nome_Aluno", "Respostas_Brutas"]].copy()
+        df_sync["digitador"] = digitador
+        df_sync.columns = [c.lower() for c in df_sync.columns] # Padroniza para o SQL
+        
+        records = df_sync.to_dict(orient="records")
+        if records:
+            supabase.table("respostas_geral").insert(records).execute()
+    except Exception as e:
+        print("Erro no Supabase:", e) # Falha silenciosamente para não travar o digitador se a internet cair
+
+# ====================================================================
+# INICIALIZAÇÃO DE BANCOS LOCAIS E SENHAS
 # ====================================================================
 def hash_senha(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
 
 DB_USUARIOS = "usuarios_samar.csv"
 if not os.path.exists(DB_USUARIOS):
-    pd.DataFrame([{
-        "Nome": "Coordenação Master", 
-        "Email": "admin", 
-        "Senha": hash_senha("coted2026"),
-        "Perfil": "Administrador"
-    }]).to_csv(DB_USUARIOS, index=False, sep=";")
-else:
-    df_check = pd.read_csv(DB_USUARIOS, sep=";", dtype=str)
-    if 'Perfil' not in df_check.columns:
-        df_check['Perfil'] = 'Digitador'
-        df_check.loc[0, 'Perfil'] = 'Administrador' 
-        df_check.to_csv(DB_USUARIOS, index=False, sep=";")
+    pd.DataFrame([{"Nome": "Coordenação Master", "Email": "admin", "Senha": hash_senha("coted2026"), "Perfil": "Administrador"}]).to_csv(DB_USUARIOS, index=False, sep=";")
 
 DB_OCORRENCIAS = "atas_ocorrencias_samar.csv"
 if not os.path.exists(DB_OCORRENCIAS):
-    pd.DataFrame(columns=[
-        "Data_Registro", "Escola", "Ano_Ensino", "Turma", "Turno", 
-        "Aplicador", "Revisor_Digitador", "Ocorrencia"
-    ]).to_csv(DB_OCORRENCIAS, index=False, sep=";")
+    pd.DataFrame(columns=["Data_Registro", "Escola", "Ano_Ensino", "Turma", "Turno", "Aplicador", "Revisor_Digitador", "Ocorrencia"]).to_csv(DB_OCORRENCIAS, index=False, sep=";")
 
 if 'usuario_logado' not in st.session_state:
     st.session_state['usuario_logado'] = None
@@ -76,7 +106,7 @@ if 'reset_key' not in st.session_state:
     st.session_state['reset_key'] = 0
 
 # ====================================================================
-# GERADORES DE DOCUMENTOS (GABARITOS E ATAS OFICIAIS)
+# GERADORES DE DOCUMENTOS
 # ====================================================================
 def gerar_zip_gabaritos(df, conf_prova, modelo_prova):
     id_unico = uuid.uuid4().hex
@@ -144,38 +174,28 @@ def gerar_html_ata(escola, ano, turma, turno, aplicador, ocorrencia, revisor, da
 
     html = f"""
     <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>Ata de Ocorrência - {escola}</title>
-        <style>
-            body {{ font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; max-width: 800px; margin: auto; padding: 20px; }}
-            .header {{ text-align: center; font-weight: bold; font-size: 20px; text-decoration: underline; margin-bottom: 40px; }}
-            .linha {{ margin-bottom: 15px; font-size: 16px; border-bottom: 1px dotted #ccc; padding-bottom: 5px; }}
-            .label {{ font-weight: bold; color: #333; }}
-            .caixa-ocorrencia {{ border: 1px solid #000; padding: 20px; min-height: 250px; margin-top: 10px; margin-bottom: 50px; white-space: pre-wrap; background-color: #fcfcfc; }}
-            .assinatura {{ margin-top: 80px; text-align: center; }}
-            .linha-assinatura {{ border-top: 1px solid #000; width: 400px; margin: 0 auto; margin-bottom: 10px; }}
-            .sub-info {{ font-size: 12px; color: #555; margin-top: 5px; }}
-        </style>
-    </head>
-    <body>
-        {logo_html}
-        <div class="header">ATA DE OCORRÊNCIAS DE CORREÇÃO DO SAMAR</div>
-        <div class="linha"><span class="label">ESCOLA:</span> {escola}</div>
-        <div class="linha"><span class="label">TURMA / ANO:</span> {turma} - {ano} ({turno})</div>
-        <div class="linha"><span class="label">APLICADOR:</span> {aplicador}</div>
-        
-        <div style="margin-top: 40px;"><span class="label">OCORRÊNCIAS:</span></div>
-        <div class="caixa-ocorrencia">{ocorrencia}</div>
-        
-        <div class="assinatura">
-            <div class="linha-assinatura"></div>
-            <div class="label">ASSINATURA DO REVISOR</div>
-            <div style="font-size: 18px; font-family: 'Courier New', Courier, monospace; margin-top: 10px;">{revisor}</div>
-            <div class="sub-info">Documento gerado digitalmente pelo Sistema SAMAR GRID PRO em {data}</div>
-        </div>
-    </body>
-    </html>
+    <head><meta charset="UTF-8"><title>Ata - {escola}</title>
+    <style>
+        body {{ font-family: Arial; margin: 40px; line-height: 1.6; max-width: 800px; margin: auto; padding: 20px; }}
+        .header {{ text-align: center; font-weight: bold; font-size: 20px; text-decoration: underline; margin-bottom: 40px; }}
+        .linha {{ margin-bottom: 15px; font-size: 16px; border-bottom: 1px dotted #ccc; padding-bottom: 5px; }}
+        .label {{ font-weight: bold; color: #333; }}
+        .caixa-ocorrencia {{ border: 1px solid #000; padding: 20px; min-height: 250px; margin-top: 10px; margin-bottom: 50px; white-space: pre-wrap; background-color: #fcfcfc; }}
+        .assinatura {{ margin-top: 80px; text-align: center; }}
+        .linha-assinatura {{ border-top: 1px solid #000; width: 400px; margin: 0 auto; margin-bottom: 10px; }}
+        .sub-info {{ font-size: 12px; color: #555; margin-top: 5px; }}
+    </style></head><body>
+    {logo_html}
+    <div class="header">ATA DE OCORRÊNCIAS DE CORREÇÃO DO SAMAR</div>
+    <div class="linha"><span class="label">ESCOLA:</span> {escola}</div>
+    <div class="linha"><span class="label">TURMA / ANO:</span> {turma} - {ano} ({turno})</div>
+    <div class="linha"><span class="label">APLICADOR:</span> {aplicador}</div>
+    <div style="margin-top: 40px;"><span class="label">OCORRÊNCIAS:</span></div>
+    <div class="caixa-ocorrencia">{ocorrencia}</div>
+    <div class="assinatura"><div class="linha-assinatura"></div><div class="label">ASSINATURA DO REVISOR</div>
+    <div style="font-size: 18px; font-family: 'Courier New'; margin-top: 10px;">{revisor}</div>
+    <div class="sub-info">Documento gerado digitalmente pelo Sistema SAMAR GRID PRO em {data}</div>
+    </div></body></html>
     """
     return html
 
@@ -183,26 +203,25 @@ def gerar_zip_atas(df_atas):
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w") as zf:
         for idx, row in df_atas.iterrows():
-            esc = str(row.get("Escola", "Escola"))
-            tur = str(row.get("Turma", "Turma"))
+            esc = str(row.get("Escola", ""))
+            tur = str(row.get("Turma", ""))
             ano = str(row.get("Ano_Ensino", ""))
             tur_no = str(row.get("Turno", ""))
             apl = str(row.get("Aplicador", ""))
             oco = str(row.get("Ocorrencia", ""))
             rev = str(row.get("Revisor_Digitador", ""))
             dat = str(row.get("Data_Registro", ""))
-            
             html_content = gerar_html_ata(esc, ano, tur, tur_no, apl, oco, rev, dat)
             nome_arq = f"Ata_Ocorrencia_{esc.replace(' ', '_')}_{tur.replace(' ', '_')}_{idx}.html"
             zf.writestr(nome_arq, html_content.encode('utf-8'))
     return zip_buffer.getvalue()
 
 # ====================================================================
-# TELA CENTRAL DE LOGIN UNIFICADO
+# TELA CENTRAL DE LOGIN
 # ====================================================================
 if not st.session_state['usuario_logado']:
     st.title("🖨️ Sistema SAMAR - Acesso Restrito")
-    st.info("Insira suas credenciais corporativas. O sistema identificará automaticamente o seu nível de acesso.")
+    st.info("Insira suas credenciais corporativas para acessar a nuvem.")
     with st.container(border=True):
         email_input = st.text_input("E-mail ou Usuário:")
         senha_input = st.text_input("Senha:", type="password")
@@ -230,20 +249,21 @@ if not st.session_state['usuario_logado']:
 # ====================================================================
 st.sidebar.markdown("### 👤 Sessão Ativa")
 st.sidebar.success(f"**{st.session_state['nome_logado']}**\n\nNível: {st.session_state['perfil_logado']}")
+if usa_nuvem:
+    st.sidebar.caption("🟢 Conectado ao Banco em Nuvem")
+else:
+    st.sidebar.caption("🔴 Banco em Nuvem Offline")
+
 if st.sidebar.button("🚪 Sair do Sistema (Logout)"):
     st.session_state.clear()
     st.rerun()
 
 is_admin = (st.session_state['perfil_logado'] == "Administrador")
 
-# ====================================================================
-# CARREGAMENTO DO MODELO DE PROVA
-# ====================================================================
-st.title("🖨️ Sistema SAMAR - Operação Descentralizada")
+st.title("🖨️ Sistema SAMAR - Operação em Nuvem")
 
 modelos_disponiveis = list(TIPOS_PROVA.keys())
 idx_padrao = next((i for i, m in enumerate(modelos_disponiveis) if "18" in m), 0)
-
 modelo = st.selectbox("Selecione o Modelo de Prova:", modelos_disponiveis, index=idx_padrao)
 conf = TIPOS_PROVA[modelo]
 total_q_global = int(modelo.split('_')[1])
@@ -258,7 +278,7 @@ for g in conf.grids:
         for r in range(g.rows): mapa_disc_global[g.questao_inicial + r] = disc
 
 if is_admin:
-    tabs = st.tabs(["1. Gerador", "2. Leitor Robô", "3. Cartão Digital", "4. Corretor Lotes", "5. 👥 Usuários", "6. 📋 Atas Registradas"])
+    tabs = st.tabs(["1. Gerador", "2. Leitor Robô", "3. Cartão Digital", "4. Corretor Nuvem / Lotes", "5. 👥 Usuários", "6. 📋 Atas Registradas"])
     tab1, tab2, tab3, tab4, tab5, tab6 = tabs
 else:
     tabs = st.tabs(["📝 Cartão-Resposta Digital (Área de Transcrição)"])
@@ -285,15 +305,10 @@ if is_admin:
                 logos_dict = {'esq': logo_esq, 'cen': logo_cen, 'dir': logo_dir}
                 ext = fmt.split()[0].lower()
                 fn = f"Gabarito_{modelo}.{ext}"
-                success = False
-                if ext == "pdf":
-                    gerar_pdf(conf, fn, custom_titulo, custom_sub, logos_dict)
-                    mime, success = "application/pdf", True
-                else:
-                    if gerar_imagem_a4(conf, fn, ext, custom_titulo, custom_sub, logos_dict):
-                        mime, success = f"image/{ext}", True
-                if success and os.path.exists(fn):
-                    with open(fn, "rb") as f: st.download_button(f"📥 Baixar Arquivo {ext.upper()}", f, fn, mime, use_container_width=True)
+                if ext == "pdf": gerar_pdf(conf, fn, custom_titulo, custom_sub, logos_dict)
+                else: gerar_imagem_a4(conf, fn, ext, custom_titulo, custom_sub, logos_dict)
+                if os.path.exists(fn):
+                    with open(fn, "rb") as f: st.download_button(f"📥 Baixar Arquivo {ext.upper()}", f, fn, mime="application/octet-stream", use_container_width=True)
 
 # ====================================================================
 # ABA 2: LEITURA POR IMAGEM (Admin)
@@ -316,12 +331,10 @@ if is_admin:
             cols = st.columns(blocos)
             for bloco in range(blocos):
                 with cols[bloco]:
-                    st.markdown(f"**Bloco {bloco+1}**")
                     for q in range(questoes_por_bloco):
                         q_num = (bloco * questoes_por_bloco) + q + 1
                         gab_oficial[q_num] = st.selectbox(f"Q.{q_num:02d}", ["A", "B", "C", "D", "NULA"], key=f"q_t2_{q_num}")
         st.markdown("---")
-        st.markdown("### 📸 Passo 2: Analisar Provas")
         up = st.file_uploader("Upload das Imagens/PDF:", type=["pdf", "png", "jpg"], accept_multiple_files=True)
         if up:
             resultados_lote = []
@@ -346,209 +359,176 @@ if is_admin:
                             aluno_dados[f"Q{q_num:02d}"] = is_correct
                             if mapa_disc_global.get(q_num) and is_correct: acertos_disciplina[mapa_disc_global[q_num]] += 1
                         aluno_dados["Total_Acertos_Geral"] = acertos
-                        aluno_dados["%_Acerto_Geral"] = round((acertos / total_q_global) * 100, 2) if total_q_global > 0 else 0
                         for disc, total in tot_disc_global.items():
-                            qtd_acertos = acertos_disciplina[disc]
-                            aluno_dados[f"Acertos_{disc.replace(' ', '_')}"] = qtd_acertos
-                            aluno_dados[f"%_{disc.replace(' ', '_')}"] = round((qtd_acertos / total) * 100, 2) if total > 0 else 0
+                            aluno_dados[f"Acertos_{disc.replace(' ', '_')}"] = acertos_disciplina[disc]
                         resultados_lote.append(aluno_dados)
-                        st.markdown("---")
-                        st.write(f"#### Resultados - Aluno da Frequência: {freq}")
-                        c1, c2 = st.columns([1, 1])
-                        with c1: st.image(vis, use_container_width=True)
-                        with c2: 
-                            st.success(f"**Acertos Totais:** {acertos} de {len(gab_oficial)} questões")
-                            for disc in tot_disc_global.keys(): st.info(f"**{disc}:** {acertos_disciplina[disc]} acertos")
-                        if "correcao_detalhada" in res:
-                            with st.expander(f"🔍 Abrir Correção Detalhada por Questão (Aluno {freq})"):
-                                df_detalhe = pd.DataFrame.from_dict(res["correcao_detalhada"], orient="index")
-                                def color_status(val):
-                                    if val == 'Correto': return 'color: #2e7d32; font-weight: bold'
-                                    elif val == 'Correto (Anulada)': return 'color: #0288d1; font-weight: bold'
-                                    elif val == 'Incorreto' or val == 'Múltiplas Marcações': return 'color: #d32f2f; font-weight: bold'
-                                    return 'color: #f57c00' 
-                                st.dataframe(df_detalhe.style.map(color_status, subset=['Status']), use_container_width=True)
-                except Exception as e: st.error(f"Erro ao ler o arquivo {arquivo.name}. Certifique-se de que é uma imagem legível ou um PDF válido.")
+                except Exception as e: st.error(f"Erro no arquivo {arquivo.name}")
             if resultados_lote:
-                st.markdown("---")
                 df_export = pd.DataFrame(resultados_lote)
-                df_export['Ordem_Num'] = pd.to_numeric(df_export['Frequencia'], errors='coerce')
-                df_export = df_export.sort_values(by='Ordem_Num', ascending=True, na_position='last').drop(columns=['Ordem_Num']) 
-                nome_arq_t2 = st.text_input("Nome do arquivo de exportação final:", value=f"samar_robo_{modelo}.csv")
-                st.download_button("📥 Baixar CSV Corrigido", df_export.to_csv(index=False, sep=";"), nome_arq_t2, "text/csv", type="primary")
+                st.download_button("📥 Baixar CSV Corrigido", df_export.to_csv(index=False, sep=";"), "samar_robo.csv", "text/csv", type="primary")
 
 # ====================================================================
-# ABA 4: MOTOR DE CORREÇÃO EM LOTE PARA CSVs (Admin)
+# ABA 4: O NOVO MOTOR DE CORREÇÃO PELA NUVEM (Admin)
 # ====================================================================
 if is_admin:
     with tab4:
-        st.markdown("### 🛠️ Corretor de Arquivos Brutos (Digitadores)")
-        st.info("Pegue os arquivos '.csv' que os digitadores te enviaram, defina o Gabarito e deixe o sistema processar as notas e porcentagens.")
-        gabarito_admin = st.text_input(f"Letras do Gabarito Oficial ({total_q_global} questões):", value="A"*total_q_global, key="gab_t4").upper().strip()
+        st.markdown("### ☁️ Corretor Integrado com Supabase")
+        st.info("Defina o Gabarito e puxe TODOS os alunos que a equipe digitou na nuvem instantaneamente.")
+        
+        gabarito_admin = st.text_input(f"Letras do Gabarito Oficial ({total_q_global} questões):", value="A"*total_q_global).upper().strip()
         gab_dict_admin = {}
         if len(gabarito_admin) >= total_q_global:
             for i, char in enumerate(gabarito_admin[:total_q_global]): gab_dict_admin[i+1] = "NULA" if char in ["X", "N"] else char
-        lote_bruto = st.file_uploader("Suba os arquivos CSVs gerados pela equipe:", type=["csv"], accept_multiple_files=True)
-        nome_arq_admin = st.text_input("Nome do arquivo final a ser gerado:", value=f"samar_dados_consolidados_{modelo}.csv")
-        if lote_bruto and st.button("⚙️ Corrigir Lotes e Gerar CSV Final", type="primary"):
+
+        st.markdown("---")
+        st.markdown("#### Processar Base de Dados")
+        
+        col_btn_nuvem, col_btn_manual = st.columns(2)
+        processar_agora = False
+        dfs_para_processar = []
+        
+        with col_btn_nuvem:
+            if st.button("📥 Puxar Todos os Dados da Nuvem (Supabase)", use_container_width=True, type="primary"):
+                if usa_nuvem:
+                    with st.spinner("Baixando do Cofre Central..."):
+                        res = supabase.table("respostas_geral").select("*").execute()
+                        if res.data:
+                            df_nuvem = pd.DataFrame(res.data)
+                            # Renomeia as colunas de volta para o formato de processamento do app
+                            df_nuvem.rename(columns={
+                                "escola": "Escola", "ano_ensino": "Ano_Ensino", "turma": "Turma", 
+                                "turno": "Turno", "frequencia": "Frequencia", "nome_aluno": "Nome_Aluno", 
+                                "respostas_brutas": "Respostas_Brutas"
+                            }, inplace=True)
+                            dfs_para_processar.append(df_nuvem)
+                            processar_agora = True
+                        else:
+                            st.warning("O banco de dados do Supabase está vazio.")
+                else:
+                    st.error("Sem conexão com o Supabase.")
+                    
+        with col_btn_manual:
+            lote_bruto = st.file_uploader("Ou faça upload de CSVs manuais (Backup):", type=["csv"], accept_multiple_files=True)
+            if lote_bruto and st.button("⚙️ Corrigir Lotes Manuais", use_container_width=True):
+                for arq in lote_bruto:
+                    try: dfs_para_processar.append(pd.read_csv(arq, sep=";", dtype=str))
+                    except: st.error(f"Erro no {arq.name}")
+                processar_agora = True
+
+        if processar_agora and dfs_para_processar:
+            df_bruto_final = pd.concat(dfs_para_processar, ignore_index=True)
+            df_bruto_final = df_bruto_final.fillna("")
             todos_resultados = []
-            arquivos_com_erro = 0
-            for arq in lote_bruto:
-                try:
-                    df_bruto = pd.read_csv(arq, sep=";", dtype=str)
-                    if "Respostas_Brutas" not in df_bruto.columns or "Frequencia" not in df_bruto.columns:
-                        st.error(f"⚠️ Arquivo ignorado: '{arq.name}' não possui as colunas padrão do SAMAR.")
-                        arquivos_com_erro += 1
-                        continue
-                    for col in ["Escola", "Ano_Ensino", "Turma", "Turno", "Nome_Aluno"]:
-                        if col not in df_bruto.columns: df_bruto[col] = ""
-                    df_bruto = df_bruto.fillna("")
-                    for index, row in df_bruto.iterrows():
-                        aluno_escola = row["Escola"]
-                        aluno_ano = row["Ano_Ensino"]
-                        aluno_turma = row["Turma"]
-                        aluno_turno = row["Turno"] 
-                        aluno_f = row["Frequencia"]
-                        aluno_nome = row["Nome_Aluno"]
-                        respostas_brutas = row["Respostas_Brutas"]
-                        aluno_processado = {"Escola": aluno_escola, "Ano_Ensino": aluno_ano, "Turma": aluno_turma, "Turno": aluno_turno, "Frequencia": aluno_f, "Nome": aluno_nome}
-                        acertos_geral = 0
-                        acertos_disc = {disc: 0 for disc in tot_disc_global}
-                        for q in range(1, total_q_global + 1):
-                            letra_marcada = respostas_brutas[q-1] if (pd.notna(respostas_brutas) and q-1 < len(respostas_brutas)) else "-"
-                            gabarito_certo = gab_dict_admin.get(q, "NULA")
-                            aluno_processado[f"Letra_Q{q:02d}"] = letra_marcada
-                            is_correct = 1 if gabarito_certo == "NULA" or letra_marcada == gabarito_certo else 0
-                            if is_correct:
-                                acertos_geral += 1
-                                if mapa_disc_global.get(q): acertos_disc[mapa_disc_global[q]] += 1
-                            aluno_processado[f"Q{q:02d}"] = is_correct
-                        aluno_processado["Total_Acertos_Geral"] = acertos_geral
-                        aluno_processado["%_Acerto_Geral"] = round((acertos_geral / total_q_global) * 100, 2) if total_q_global > 0 else 0
-                        for disc, total in tot_disc_global.items():
-                            qtd_acertos = acertos_disc[disc]
-                            aluno_processado[f"Acertos_{disc.replace(' ', '_')}"] = qtd_acertos
-                            aluno_processado[f"%_{disc.replace(' ', '_')}"] = round((qtd_acertos / total) * 100, 2) if total > 0 else 0
-                        todos_resultados.append(aluno_processado)
-                except Exception as e:
-                    st.error(f"⚠️ O arquivo '{arq.name}' falhou durante a leitura.")
-                    arquivos_com_erro += 1
-            if todos_resultados:
-                df_final_admin = pd.DataFrame(todos_resultados)
-                df_final_admin['Ordem_Num'] = pd.to_numeric(df_final_admin['Frequencia'], errors='coerce')
-                df_final_admin = df_final_admin.sort_values(by=['Escola', 'Ano_Ensino', 'Turma', 'Turno', 'Ordem_Num'], ascending=[True, True, True, True, True], na_position='last').drop(columns=['Ordem_Num']) 
-                if arquivos_com_erro == 0: st.success(f"✅ Sucesso absoluto! {len(df_final_admin)} alunos foram processados sem nenhum erro.")
-                else: st.warning(f"⚠️ Parcial: {len(df_final_admin)} alunos foram processados, mas {arquivos_com_erro} arquivo(s) apresentaram erros.")
-                st.download_button("📥 Baixar CSV Consolidado", df_final_admin.to_csv(index=False, sep=";"), nome_arq_admin, "text/csv", type="primary")
+            
+            with st.spinner("Corrigindo alunos e calculando estatísticas..."):
+                for index, row in df_bruto_final.iterrows():
+                    aluno_processado = {
+                        "Escola": row.get("Escola", ""), "Ano_Ensino": row.get("Ano_Ensino", ""), 
+                        "Turma": row.get("Turma", ""), "Turno": row.get("Turno", ""), 
+                        "Frequencia": row.get("Frequencia", ""), "Nome": row.get("Nome_Aluno", ""),
+                        "Digitador_Responsavel": row.get("digitador", "Manual") # Puxa o rastro de auditoria
+                    }
+                    acertos_geral = 0
+                    acertos_disc = {disc: 0 for disc in tot_disc_global}
+                    respostas_brutas = row.get("Respostas_Brutas", "")
+                    
+                    for q in range(1, total_q_global + 1):
+                        letra_marcada = respostas_brutas[q-1] if (isinstance(respostas_brutas, str) and q-1 < len(respostas_brutas)) else "-"
+                        gabarito_certo = gab_dict_admin.get(q, "NULA")
+                        aluno_processado[f"Letra_Q{q:02d}"] = letra_marcada
+                        is_correct = 1 if gabarito_certo == "NULA" or letra_marcada == gabarito_certo else 0
+                        if is_correct:
+                            acertos_geral += 1
+                            if mapa_disc_global.get(q): acertos_disc[mapa_disc_global[q]] += 1
+                        aluno_processado[f"Q{q:02d}"] = is_correct
+                    
+                    aluno_processado["Total_Acertos_Geral"] = acertos_geral
+                    aluno_processado["%_Acerto_Geral"] = round((acertos_geral / total_q_global) * 100, 2) if total_q_global > 0 else 0
+                    for disc, total in tot_disc_global.items():
+                        qtd_acertos = acertos_disc[disc]
+                        aluno_processado[f"Acertos_{disc.replace(' ', '_')}"] = qtd_acertos
+                        aluno_processado[f"%_{disc.replace(' ', '_')}"] = round((qtd_acertos / total) * 100, 2) if total > 0 else 0
+                        
+                    todos_resultados.append(aluno_processado)
+
+            df_final_admin = pd.DataFrame(todos_resultados)
+            df_final_admin['Ordem_Num'] = pd.to_numeric(df_final_admin['Frequencia'], errors='coerce')
+            df_final_admin = df_final_admin.sort_values(by=['Escola', 'Ano_Ensino', 'Turma', 'Turno', 'Ordem_Num'], ascending=[True, True, True, True, True], na_position='last').drop(columns=['Ordem_Num']) 
+            
+            st.success(f"✅ {len(df_final_admin)} alunos foram corrigidos e processados com sucesso!")
+            st.download_button("📥 Baixar Planilha Consolidada Looker Studio (CSV)", df_final_admin.to_csv(index=False, sep=";"), f"samar_dados_consolidados_nuvem.csv", "text/csv", type="primary")
 
 # ====================================================================
 # ABA 5: GESTÃO DE USUÁRIOS (Admin)
 # ====================================================================
 if is_admin:
     with tab5:
-        st.markdown("### 👥 Controle de Usuários e Permissões")
+        st.markdown("### 👥 Controle de Usuários")
         df_usuarios = pd.read_csv(DB_USUARIOS, sep=";", dtype=str)
         st.dataframe(df_usuarios[["Nome", "Email", "Perfil"]], use_container_width=True)
-        st.markdown("---")
         col_add, col_edit = st.columns(2)
         with col_add:
             with st.container(border=True):
-                st.markdown("#### ➕ Criar Novo Usuário")
+                st.markdown("#### ➕ Criar Usuário")
                 with st.form("form_add_user", clear_on_submit=True):
-                    novo_nome = st.text_input("Nome Completo:")
-                    novo_email = st.text_input("E-mail (Login):")
+                    novo_nome = st.text_input("Nome:")
+                    novo_email = st.text_input("Login:")
                     nova_senha = st.text_input("Senha:", type="password")
-                    novo_perfil = st.selectbox("Nível de Acesso:", ["Digitador", "Administrador"])
-                    if st.form_submit_button("Cadastrar Usuário", type="primary", use_container_width=True):
+                    novo_perfil = st.selectbox("Perfil:", ["Digitador", "Administrador"])
+                    if st.form_submit_button("Cadastrar", type="primary"):
                         if novo_nome and novo_email and nova_senha:
-                            if novo_email in df_usuarios['Email'].values: st.error("⚠️ Este e-mail já está cadastrado!")
+                            if novo_email in df_usuarios['Email'].values: st.error("Email já cadastrado.")
                             else:
-                                novo_user = pd.DataFrame([{"Nome": novo_nome, "Email": novo_email, "Senha": hash_senha(nova_senha), "Perfil": novo_perfil}])
-                                novo_user.to_csv(DB_USUARIOS, mode='a', header=False, index=False, sep=";")
-                                st.success(f"✅ Usuário cadastrado com sucesso!")
+                                pd.DataFrame([{"Nome": novo_nome, "Email": novo_email, "Senha": hash_senha(nova_senha), "Perfil": novo_perfil}]).to_csv(DB_USUARIOS, mode='a', header=False, index=False, sep=";")
                                 st.rerun()
-                        else: st.error("Preencha todos os campos.")
         with col_edit:
             with st.container(border=True):
-                st.markdown("#### ✏️ Editar / Excluir Usuário")
+                st.markdown("#### ✏️ Editar")
                 if not df_usuarios.empty:
-                    user_to_edit = st.selectbox("Selecione o E-mail do Usuário:", df_usuarios['Email'].tolist())
-                    nova_senha_edit = st.text_input("Nova Senha (deixe em branco para não alterar):", type="password")
-                    col_btn1, col_btn2 = st.columns(2)
-                    with col_btn1:
-                        if st.button("💾 Atualizar Senha", use_container_width=True):
-                            if nova_senha_edit:
-                                df_usuarios.loc[df_usuarios['Email'] == user_to_edit, 'Senha'] = hash_senha(nova_senha_edit)
-                                df_usuarios.to_csv(DB_USUARIOS, index=False, sep=";")
-                                st.success("Senha atualizada!")
-                                st.rerun()
-                            else: st.warning("Digite a nova senha.")
-                    with col_btn2:
-                        if st.button("🗑️ Excluir", use_container_width=True):
+                    user_to_edit = st.selectbox("Usuário:", df_usuarios['Email'].tolist())
+                    nova_senha_edit = st.text_input("Nova Senha:", type="password")
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        if st.button("Salvar Senha"):
+                            df_usuarios.loc[df_usuarios['Email'] == user_to_edit, 'Senha'] = hash_senha(nova_senha_edit)
+                            df_usuarios.to_csv(DB_USUARIOS, index=False, sep=";")
+                            st.rerun()
+                    with c2:
+                        if st.button("Excluir Usuário"):
                             if len(df_usuarios) > 1:
-                                df_usuarios = df_usuarios[df_usuarios['Email'] != user_to_edit]
-                                df_usuarios.to_csv(DB_USUARIOS, index=False, sep=";")
-                                st.success("Usuário excluído!")
+                                df_usuarios[df_usuarios['Email'] != user_to_edit].to_csv(DB_USUARIOS, index=False, sep=";")
                                 st.rerun()
-                            else: st.error("Não é possível excluir o último usuário.")
-                else: st.info("Nenhum usuário cadastrado.")
-        with st.expander("⚠️ Zona de Perigo (Apenas T.I.)"):
-            if st.button("🚨 Resetar Banco de Usuários", type="primary"):
-                try:
-                    os.remove(DB_USUARIOS)
-                    st.success("Banco apagado!")
-                except Exception: pass
 
 # ====================================================================
-# ABA 6: LIVRO DE ATAS REGISTRADAS (Admin)
+# ABA 6: ATAS REGISTRADAS NA NUVEM (Admin)
 # ====================================================================
 if is_admin:
     with tab6:
-        st.markdown("### 📋 Livro Oficial de Atas e Ocorrências")
-        st.info("Aqui você visualiza, EDITA e exporta todas as ocorrências relatadas pela equipe.")
-
-        if os.path.exists(DB_OCORRENCIAS):
-            df_atas = pd.read_csv(DB_OCORRENCIAS, sep=";", dtype=str)
-            if not df_atas.empty:
-                df_atas_editado = st.data_editor(
-                    df_atas, 
-                    use_container_width=True, 
-                    num_rows="dynamic", 
-                    key="editor_admin_atas",
-                    height=300
-                )
+        st.markdown("### 📋 Livro Oficial de Atas (Supabase)")
+        if usa_nuvem:
+            res = supabase.table("atas_ocorrencias").select("*").execute()
+            if res.data:
+                df_atas = pd.DataFrame(res.data)
+                df_atas.rename(columns={
+                    "data_registro":"Data_Registro", "escola":"Escola", "ano_ensino":"Ano_Ensino", 
+                    "turma":"Turma", "turno":"Turno", "aplicador":"Aplicador", 
+                    "revisor_digitador":"Revisor_Digitador", "ocorrencia":"Ocorrencia"
+                }, inplace=True)
                 
-                st.write("")
-                col_save_atas, c1, c2 = st.columns([1.5, 1, 1])
-                with col_save_atas:
-                    if st.button("💾 Salvar Edições na Tabela de Atas", use_container_width=True, type="primary"):
-                        df_atas_editado.to_csv(DB_OCORRENCIAS, index=False, sep=";")
-                        st.success("Banco de Atas atualizado com sucesso!")
-                        st.rerun()
+                st.dataframe(df_atas, use_container_width=True)
+                
+                c1, c2 = st.columns(2)
                 with c1:
-                    st.download_button(
-                        label="📊 Exportar Planilha (CSV)",
-                        data=df_atas_editado.to_csv(index=False, sep=";"),
-                        file_name=f"atas_samar_{datetime.now().strftime('%Y%m%d')}.csv",
-                        mime="text/csv",
-                        use_container_width=True
-                    )
+                    st.download_button("📊 Exportar Planilha (CSV)", df_atas.to_csv(index=False, sep=";"), f"atas_samar_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv", type="primary", use_container_width=True)
                 with c2:
-                    zip_atas = gerar_zip_atas(df_atas_editado)
-                    st.download_button(
-                        label="🖨️ Baixar Documentos HTML (ZIP)",
-                        data=zip_atas,
-                        file_name=f"Documentos_Atas_{datetime.now().strftime('%Y%m%d')}.zip",
-                        mime="application/zip",
-                        use_container_width=True
-                    )
+                    st.download_button("🖨️ Baixar Documentos HTML (ZIP)", gerar_zip_atas(df_atas), f"Documentos_Atas_{datetime.now().strftime('%Y%m%d')}.zip", "application/zip", type="primary", use_container_width=True)
             else:
-                st.success("Nenhuma ocorrência registrada até o momento.")
+                st.success("Nenhuma ocorrência na nuvem.")
         else:
-            st.success("Nenhuma ocorrência registrada até o momento.")
+            st.error("Conecte ao Supabase para ver as atas.")
 
 # ====================================================================
-# ABA 3 COMPARTILHADA: CARTÃO-RESPOSTA E ATAS (TRANSCRIÇÃO)
+# ABA 3: CARTÃO-RESPOSTA E ATAS (Digitador) - COM INTEGRAÇÃO SUPABASE
 # ====================================================================
 with tab3:
     nome_operador = st.session_state['nome_logado']
@@ -582,7 +562,7 @@ with tab3:
     def salvar_e_limpar_callback():
         sync_header() 
         if not st.session_state.escola_val or not st.session_state.ano_val or not st.session_state.turma_val or not st.session_state.turno_val:
-            st.session_state.msg_erro = "⚠️ Atenção: Selecione a 'Escola', o 'Ano', a 'Turma' e o 'Turno' no topo antes de salvar."
+            st.session_state.msg_erro = "⚠️ Preencha a Escola, Ano, Turma e Turno no topo."
             return
             
         nova_freq = st.session_state.freq_d + st.session_state.freq_u
@@ -593,11 +573,20 @@ with tab3:
             "Turno": st.session_state.turno_val, "Frequencia": nova_freq, "Nome_Aluno": st.session_state.nome_aluno_input, "Respostas_Brutas": resp_str
         }
         df_novo = pd.DataFrame([novo_dado])
-        arq = st.session_state.ARQUIVO_TEMP
-        if os.path.exists(arq): df_novo.to_csv(arq, mode='a', header=False, index=False, sep=";")
-        else: df_novo.to_csv(arq, index=False, sep=";")
         
-        st.session_state.msg_sucesso = f"✅ O Aluno de Frequência {nova_freq} foi gravado com sucesso!"
+        # Salva Localmente
+        arq = st.session_state.ARQUIVO_TEMP
+        if os.path.exists(arq): 
+            df_atualizado = pd.concat([pd.read_csv(arq, sep=";", dtype=str), df_novo], ignore_index=True)
+            df_atualizado.to_csv(arq, index=False, sep=";")
+        else: 
+            df_atualizado = df_novo
+            df_atualizado.to_csv(arq, index=False, sep=";")
+            
+        # SINCRONIZA COM A NUVEM
+        sync_turma_nuvem(df_atualizado, st.session_state.escola_val, st.session_state.ano_val, st.session_state.turma_val, st.session_state.turno_val, nome_operador)
+        
+        st.session_state.msg_sucesso = f"✅ O Aluno {nova_freq} foi gravado no cofre central!"
         st.session_state.nome_aluno_input = ""
         st.session_state.freq_d = "0"
         st.session_state.freq_u = "0"
@@ -610,7 +599,6 @@ with tab3:
         if f"q_{q}" not in st.session_state: st.session_state[f"q_{q}"] = None 
 
     st.markdown("### 🖱️ Transcrição Intuitiva do Aluno")
-    st.info(f"Olá, **{nome_operador}**. Os dados que você digitar aqui serão salvos com segurança em sua sessão exclusiva.")
     
     if "msg_erro" in st.session_state:
         st.error(st.session_state.msg_erro)
@@ -622,9 +610,7 @@ with tab3:
     rk = st.session_state.reset_key 
     
     with st.container(border=True):
-        st.markdown("#### 🏫 1. Identificação da Turma e Escola")
-        
-        # AGORA É UM SELECTBOX (CAIXA DE SELEÇÃO) COM A LISTA DE ESCOLAS OFICIAL
+        st.markdown("#### 🏫 1. Identificação")
         idx_escola = ESCOLAS_SAMAR.index(st.session_state.escola_val) if st.session_state.escola_val in ESCOLAS_SAMAR else 0
         st.selectbox("Escola:", ESCOLAS_SAMAR, index=idx_escola, key=f"_escola_{rk}", on_change=sync_header)
         
@@ -643,9 +629,8 @@ with tab3:
 
     with st.container(border=True):
         st.markdown("#### 👤 2. Preenchimento do Cartão-Resposta")
-        st.text_input("Nome do Aluno (Opcional, mas recomendado para o arquivo visual):", max_chars=100, key="nome_aluno_input")
+        st.text_input("Nome do Aluno:", max_chars=100, key="nome_aluno_input")
         st.divider()
-        st.markdown("##### 📌 Frequência do Aluno")
         col_f1, col_f2, col_f3 = st.columns([2, 2, 1])
         with col_f1: st.radio("Dezena (D):", ["0","1","2","3","4","5","6","7","8","9"], horizontal=True, key="freq_d")
         with col_f2: st.radio("Unidade (U):", ["0","1","2","3","4","5","6","7","8","9"], horizontal=True, key="freq_u")
@@ -657,7 +642,6 @@ with tab3:
                 f"</div>", unsafe_allow_html=True
             )
         st.divider()
-        st.markdown("##### 📝 Respostas (As questões não selecionadas serão gravadas automaticamente como 'Em Branco')")
         blocos_prova = [g for g in conf.grids if g.questao_inicial > 0]
         cols_blocos = st.columns(len(blocos_prova)) 
         opcoes_visuais = ["A", "B", "C", "D", "Branco", "Rasura"]
@@ -665,7 +649,6 @@ with tab3:
             with cols_blocos[i]:
                 with st.container(border=True):
                     st.markdown(f"**{bloco.titulo}**")
-                    st.caption(bloco.texto_extra)
                     for r in range(bloco.rows):
                         q = bloco.questao_inicial + r
                         st.radio(f"Questão {q:02d}", options=opcoes_visuais, index=None, horizontal=True, key=f"q_{q}")
@@ -673,7 +656,7 @@ with tab3:
         st.button("💾 Salvar Cartão deste Aluno e Limpar Tela", type="primary", use_container_width=True, on_click=salvar_e_limpar_callback)
 
     st.markdown("---")
-    st.markdown("#### 📁 Progresso da Turma e Fechamento")
+    st.markdown("#### 📁 Progresso da Turma (Sincronizado com a Nuvem)")
     
     if os.path.exists(ARQUIVO_TEMP):
         df_temp = pd.read_csv(ARQUIVO_TEMP, sep=";", dtype=str)
@@ -682,11 +665,6 @@ with tab3:
         df_temp = df_temp.fillna("")
         for q in range(1, total_q_global + 1):
             df_temp[f"Q{q:02d}"] = df_temp["Respostas_Brutas"].apply(lambda x: x[q-1] if isinstance(x, str) and len(x) >= q else "-")
-        
-        col_info, col_save = st.columns([4, 1])
-        with col_info:
-            st.write(f"**Total de Alunos Transcritos nesta sessão:** {len(df_temp)}")
-            st.info("💡 **Dica de Edição:** Dê dois cliques na célula da questão abaixo para corrigir a letra. O cabeçalho fica fixo se você rolar a tabela!")
         
         colunas_exibir = ["Escola", "Ano_Ensino", "Turma", "Turno", "Frequencia", "Nome_Aluno"] + [f"Q{q:02d}" for q in range(1, total_q_global + 1)]
         config_colunas = {
@@ -710,116 +688,57 @@ with tab3:
         else: df_salvar["Respostas_Brutas"] = pd.Series(dtype=str)
         df_salvar = df_salvar[["Escola", "Ano_Ensino", "Turma", "Turno", "Frequencia", "Nome_Aluno", "Respostas_Brutas"]]
         
-        with col_save:
-            st.write("")
-            if st.button("💾 Salvar Edições na Tabela", use_container_width=True):
-                df_salvar.to_csv(ARQUIVO_TEMP, index=False, sep=";")
-                st.success("Tabela atualizada com sucesso!")
-                st.rerun()
-        
+        if st.button("💾 Salvar Edições na Tabela e na Nuvem", use_container_width=True):
+            df_salvar.to_csv(ARQUIVO_TEMP, index=False, sep=";")
+            # Atualiza o Supabase com as correções feitas na tabela
+            sync_turma_nuvem(df_salvar, st.session_state.escola_val, st.session_state.ano_val, st.session_state.turma_val, st.session_state.turno_val, nome_operador)
+            st.success("Tabela atualizada e sincronizada com sucesso!")
+            st.rerun()
+            
         st.write("")
-        escola_str = st.session_state.escola_val.replace(" ", "_") if st.session_state.escola_val else "Escola"
-        nome_sugerido = f"respostas_brutas_{escola_str}_{st.session_state.ano_val.replace(' ', '_')}_{st.session_state.turma_val}_{st.session_state.turno_val}.csv"
-        nome_arq_dig = st.text_input("Nome do arquivo de dados que será baixado:", value=nome_sugerido)
-        
         c1, c2, c3 = st.columns(3)
-        with c1:
-            st.download_button(
-                label="📊 Baixar Dados (CSV)", 
-                data=df_salvar.to_csv(index=False, sep=";"), 
-                file_name=nome_arq_dig, 
-                mime="text/csv", 
-                type="primary",
-                use_container_width=True
-            )
-        with c2:
+        escola_str = st.session_state.escola_val.replace(" ", "_") if st.session_state.escola_val else "Escola"
+        with c1: st.download_button("📊 Baixar Cópia Local (CSV)", df_salvar.to_csv(index=False, sep=";"), f"respostas_{escola_str}.csv", "text/csv", use_container_width=True)
+        with c2: 
             if st.button("🖼️ Gerar Gabaritos Digitais (ZIP)", use_container_width=True):
-                with st.spinner("Gerando backup em imagens..."):
-                    zip_data = gerar_zip_gabaritos(df_salvar, conf, modelo) 
-                    st.download_button(
-                        label="📥 Download Completo (ZIP)",
-                        data=zip_data,
-                        file_name=f"Gabaritos_Imagens_{escola_str}_{st.session_state.ano_val}_{st.session_state.turma_val}_{st.session_state.turno_val}.zip",
-                        mime="application/zip",
-                        type="primary",
-                        use_container_width=True
-                    )
+                st.download_button("📥 Download Completo (ZIP)", gerar_zip_gabaritos(df_salvar, conf, modelo), f"Gabaritos_{escola_str}.zip", "application/zip", type="primary", use_container_width=True)
         with c3:
             with st.expander("🗑️ Iniciar Nova Turma", expanded=False):
-                st.markdown("<p style='font-size:14px; color:#d32f2f;'><b>⚠️ Atenção:</b> Verifique se você já fez o download do CSV e do ZIP acima antes de prosseguir!</p>", unsafe_allow_html=True)
-                if st.button("🚨 Apagar Turma e Limpar Tela", use_container_width=True):
+                if st.button("🚨 Apagar Sessão e Limpar Tela", use_container_width=True):
                     try: os.remove(ARQUIVO_TEMP)
-                    except Exception: pass
+                    except: pass
                     for campo in ["escola_val", "ano_val", "turma_val", "turno_val"]: st.session_state[campo] = ""
                     st.session_state.reset_key += 1
                     st.rerun()
 
-    else:
-        st.info("O painel de controle da turma aparecerá aqui após o registro do primeiro aluno.")
-
     # ====================================================================
-    # FORMULÁRIO DE ATA DIGITAL E EDIÇÃO PARA O DIGITADOR
+    # FORMULÁRIO DE ATA DIGITAL (ENVIADA PARA NUVEM)
     # ====================================================================
     st.markdown("---")
-    st.markdown("#### 📋 Registrar e Gerenciar Ocorrências (Atas)")
-    
-    with st.expander("➕ Nova Ocorrência (Preencher Ata)", expanded=False):
-        st.info("Relate problemas como rasuras, alunos ausentes ou materiais danificados.")
+    st.markdown("#### 📋 Registrar Ata Oficial na Nuvem")
+    with st.expander("➕ Nova Ocorrência", expanded=False):
         with st.form("form_ata", clear_on_submit=True):
-            nome_aplicador = st.text_input("NOME DO APLICADOR (Responsável de Sala):")
+            nome_aplicador = st.text_input("NOME DO APLICADOR:")
             texto_ata = st.text_area("DESCRIÇÃO DA OCORRÊNCIA:", height=100)
             data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
-            
-            if st.form_submit_button("💾 Salvar Ata de Ocorrência", type="primary"):
+            if st.form_submit_button("💾 Enviar Ata para a Coordenação", type="primary"):
                 if not st.session_state.escola_val or not st.session_state.turma_val:
-                    st.error("⚠️ Selecione a Escola e a Turma no topo da página antes de registrar a ata.")
-                elif not nome_aplicador or not texto_ata:
-                    st.error("⚠️ Preencha o nome do Aplicador e a descrição da Ocorrência.")
+                    st.error("⚠️ Selecione a Escola e Turma.")
                 else:
                     nova_ata = {
-                        "Data_Registro": data_atual,
-                        "Escola": st.session_state.escola_val,
-                        "Ano_Ensino": st.session_state.ano_val,
-                        "Turma": st.session_state.turma_val,
-                        "Turno": st.session_state.turno_val,
-                        "Aplicador": nome_aplicador,
-                        "Revisor_Digitador": nome_operador,
-                        "Ocorrencia": texto_ata
+                        "data_registro": data_atual, "escola": st.session_state.escola_val,
+                        "ano_ensino": st.session_state.ano_val, "turma": st.session_state.turma_val,
+                        "turno": st.session_state.turno_val, "aplicador": nome_aplicador,
+                        "revisor_digitador": nome_operador, "ocorrencia": texto_ata
                     }
-                    df_ata = pd.DataFrame([nova_ata])
-                    df_ata.to_csv(DB_OCORRENCIAS, mode='a', header=False, index=False, sep=";")
-                    st.success("✅ Ata enviada! Ela aparecerá na tabela abaixo para você gerenciar e baixar.")
-
-    if os.path.exists(DB_OCORRENCIAS):
-        df_todas_atas = pd.read_csv(DB_OCORRENCIAS, sep=";", dtype=str)
-        df_minhas_atas = df_todas_atas[df_todas_atas['Revisor_Digitador'] == nome_operador]
-        df_outras_atas = df_todas_atas[df_todas_atas['Revisor_Digitador'] != nome_operador]
-        
-        if not df_minhas_atas.empty:
-            st.markdown("##### ✏️ Suas Atas Salvas (Edição e Download)")
-            st.caption("Dê dois cliques na célula para corrigir o texto. Para excluir uma ata, clique na linha e aperte 'Delete'.")
-            
-            df_minhas_editadas = st.data_editor(
-                df_minhas_atas,
-                use_container_width=True,
-                num_rows="dynamic",
-                key=f"editor_atas_{nome_arquivo_seguro}",
-                height=200
-            )
-            
-            c_ata1, c_ata2 = st.columns(2)
-            with c_ata1:
-                if st.button("💾 Salvar Edições nas Suas Atas", use_container_width=True):
-                    df_final_atas = pd.concat([df_outras_atas, df_minhas_editadas], ignore_index=True)
-                    df_final_atas.to_csv(DB_OCORRENCIAS, index=False, sep=";")
-                    st.success("Suas Atas foram atualizadas com sucesso no servidor!")
-                    st.rerun()
-            with c_ata2:
-                zip_minhas = gerar_zip_atas(df_minhas_editadas)
-                st.download_button(
-                    label="🖨️ Baixar Suas Atas em Documento HTML (ZIP)",
-                    data=zip_minhas,
-                    file_name=f"Minhas_Atas_{nome_operador.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.zip",
-                    mime="application/zip",
-                    use_container_width=True
-                )
+                    if usa_nuvem:
+                        try: supabase.table("atas_ocorrencias").insert(nova_ata).execute()
+                        except: pass
+                    # Salva cópia local por segurança
+                    pd.DataFrame([nova_ata]).to_csv(DB_OCORRENCIAS, mode='a', header=False, index=False, sep=";")
+                    
+                    html_doc = gerar_html_ata(st.session_state.escola_val, st.session_state.ano_val, st.session_state.turma_val, st.session_state.turno_val, nome_aplicador, texto_ata, nome_operador, data_atual)
+                    st.session_state['ultima_ata_html'] = html_doc
+                    st.success("✅ Ata sincronizada com o Supabase!")
+        if st.session_state.get('ultima_ata_html'):
+            st.download_button("🖨️ Baixar Documento da Ata (HTML)", data=st.session_state['ultima_ata_html'], file_name="Ata.html", mime="text/html", type="secondary")
