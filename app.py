@@ -20,13 +20,30 @@ st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
 def hash_senha(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
 
+# ====================================================================
+# INICIALIZAÇÃO DO BANCO DE USUÁRIOS E MIGRAÇÃO AUTOMÁTICA
+# ====================================================================
 DB_USUARIOS = "usuarios_samar.csv"
 if not os.path.exists(DB_USUARIOS):
-    pd.DataFrame([{"Nome": "Digitador Teste", "Email": "teste@samar", "Senha": hash_senha("123")}]).to_csv(DB_USUARIOS, index=False, sep=";")
+    # Cria o banco inicial já com uma conta Admin mestre
+    pd.DataFrame([{
+        "Nome": "Coordenação Master", 
+        "Email": "admin", 
+        "Senha": hash_senha("coted2026"),
+        "Perfil": "Administrador"
+    }]).to_csv(DB_USUARIOS, index=False, sep=";")
+else:
+    # Se o banco antigo existir, atualiza ele para a nova versão com "Perfil"
+    df_check = pd.read_csv(DB_USUARIOS, sep=";", dtype=str)
+    if 'Perfil' not in df_check.columns:
+        df_check['Perfil'] = 'Digitador'
+        df_check.loc[0, 'Perfil'] = 'Administrador' # Garante que o primeiro usuário não perca o acesso
+        df_check.to_csv(DB_USUARIOS, index=False, sep=";")
 
 if 'usuario_logado' not in st.session_state:
     st.session_state['usuario_logado'] = None
     st.session_state['nome_logado'] = None
+    st.session_state['perfil_logado'] = None
 
 # ====================================================================
 # FUNÇÃO GERADORA DE GABARITOS DIGITAIS (ANTI-COLISÃO)
@@ -43,10 +60,8 @@ def gerar_zip_gabaritos(df, conf_prova, modelo_prova, ano_turma, nome_turma):
     else: base_cv = cv2.cvtColor(base_cv, cv2.COLOR_RGB2BGR)
     base_cv = cv2.resize(base_cv, (conf_prova.REF_W, conf_prova.REF_H))
     
-    try:
-        os.remove(fn_pdf)
-    except:
-        pass
+    try: os.remove(fn_pdf)
+    except: pass
     
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w") as zf:
@@ -87,69 +102,49 @@ def gerar_zip_gabaritos(df, conf_prova, modelo_prova, ano_turma, nome_turma):
     return zip_buffer.getvalue()
 
 # ====================================================================
-# CONTROLE DE ROTEAMENTO E LOGIN
+# TELA CENTRAL DE LOGIN UNIFICADO (A Porta de Entrada)
 # ====================================================================
-st.sidebar.markdown("### 🔐 Controle de Acesso")
-perfil = st.sidebar.radio("Selecione seu Perfil:", ["👨‍💻 Digitador (Transcrição)", "⚙️ Coordenação (Admin)"])
-
-is_authenticated = False
-is_admin = False
-
-if perfil == "⚙️ Coordenação (Admin)":
-    senha = st.sidebar.text_input("Senha de Acesso (Digite e aperte Enter):", type="password")
+if not st.session_state['usuario_logado']:
+    st.title("🖨️ Sistema SAMAR - Acesso Restrito")
+    st.info("Insira suas credenciais corporativas. O sistema identificará automaticamente o seu nível de acesso (Coordenação ou Transcrição).")
     
-    if senha == "coted2026": 
-        is_authenticated = True
-        is_admin = True
-    elif senha != "":
-        st.sidebar.error("❌ Senha incorreta.")
-        st.stop()
-    else:
-        st.title("🖨️ Sistema SAMAR")
-        st.info("👈 Digite a senha 'coted2026' no menu lateral e aperte Enter para liberar o sistema.")
+    with st.container(border=True):
+        email_input = st.text_input("E-mail ou Usuário:")
+        senha_input = st.text_input("Senha:", type="password")
         
-        # BOTÃO DE EMERGÊNCIA AQUI FORA (NÃO PRECISA LOGAR PARA APAGAR O ARQUIVO QUEBRADO)
-        st.write("")
-        st.write("")
-        with st.container(border=True):
-            st.error("⚠️ **Problemas com senhas antigas?** Se você não consegue logar como digitador, clique no botão abaixo para resetar o banco de dados de usuários.")
-            if st.button("🚨 CLIQUE AQUI PARA RESETAR O BANCO DE USUÁRIOS", type="primary"):
-                try:
-                    os.remove(DB_USUARIOS)
-                    st.success("✅ Banco apagado! O sistema criará um novo automaticamente. A página será recarregada.")
-                    st.rerun()
-                except Exception as e:
-                    st.warning("O arquivo já foi apagado ou não existe. O sistema está limpo!")
-        st.stop()
-else:
-    if st.session_state['usuario_logado']:
-        is_authenticated = True
-        st.sidebar.success(f"Logado como:\n**{st.session_state['nome_logado']}**")
-        if st.sidebar.button("🚪 Sair (Logout)"):
-            st.session_state['usuario_logado'] = None
-            st.session_state['nome_logado'] = None
-            st.rerun()
-    else:
-        st.title("🖨️ Sistema SAMAR - Central de Transcrição")
-        st.markdown("### 🔒 Acesso Restrito")
-        st.info("Insira suas credenciais fornecidas pela Coordenação para iniciar as transcrições.")
-        
-        with st.container(border=True):
-            email_input = st.text_input("E-mail de Acesso:")
-            senha_input = st.text_input("Senha:", type="password")
+        if st.button("Entrar no Sistema 🚀", type="primary"):
+            df_users = pd.read_csv(DB_USUARIOS, sep=";", dtype=str)
+            senha_criptografada = hash_senha(senha_input)
+            match = df_users[(df_users['Email'] == email_input) & (df_users['Senha'] == senha_criptografada)]
             
-            if st.button("Entrar no Sistema", type="primary"):
-                df_users = pd.read_csv(DB_USUARIOS, sep=";", dtype=str)
-                senha_criptografada = hash_senha(senha_input)
-                match = df_users[(df_users['Email'] == email_input) & (df_users['Senha'] == senha_criptografada)]
-                
-                if not match.empty:
-                    st.session_state['usuario_logado'] = email_input
-                    st.session_state['nome_logado'] = match.iloc[0]['Nome']
+            if not match.empty:
+                st.session_state['usuario_logado'] = email_input
+                st.session_state['nome_logado'] = match.iloc[0]['Nome']
+                st.session_state['perfil_logado'] = match.iloc[0]['Perfil']
+                st.rerun()
+            else:
+                # CHAVE MESTRA DE EMERGÊNCIA (Caso dê algum erro no banco de dados, você nunca perde o acesso)
+                if email_input == "admin" and senha_input == "coted2026":
+                    st.session_state['usuario_logado'] = "admin"
+                    st.session_state['nome_logado'] = "Coordenação Master"
+                    st.session_state['perfil_logado'] = "Administrador"
                     st.rerun()
                 else:
-                    st.error("❌ E-mail ou Senha incorretos. Tente novamente.")
-        st.stop()
+                    st.error("❌ Usuário ou Senha incorretos.")
+    st.stop() # Trava tudo se não estiver logado
+
+# ====================================================================
+# BARRA LATERAL PARA USUÁRIOS LOGADOS
+# ====================================================================
+st.sidebar.markdown("### 👤 Sessão Ativa")
+st.sidebar.success(f"**{st.session_state['nome_logado']}**\n\nNível: {st.session_state['perfil_logado']}")
+if st.sidebar.button("🚪 Sair do Sistema (Logout)"):
+    st.session_state['usuario_logado'] = None
+    st.session_state['nome_logado'] = None
+    st.session_state['perfil_logado'] = None
+    st.rerun()
+
+is_admin = (st.session_state['perfil_logado'] == "Administrador")
 
 # ====================================================================
 # CARREGAMENTO DO MODELO DE PROVA E RENDERIZAÇÃO
@@ -169,7 +164,7 @@ for g in conf.grids:
         for r in range(g.rows): mapa_disc_global[g.questao_inicial + r] = disc
 
 if is_admin:
-    tabs = st.tabs(["1. Gerador", "2. Leitor Robô", "3. Cartão Digital", "4. Corretor Lotes", "5. 👥 Usuários"])
+    tabs = st.tabs(["1. Gerador", "2. Leitor Robô", "3. Cartão Digital", "4. Corretor Lotes", "5. 👥 Controle de Usuários"])
     tab1, tab2, tab3, tab4, tab5 = tabs
 else:
     tabs = st.tabs(["📝 Cartão-Resposta Digital (Área de Transcrição)"])
@@ -386,7 +381,7 @@ if is_admin:
                 if arquivos_com_erro == 0:
                     st.success(f"✅ Sucesso absoluto! {len(df_final_admin)} alunos foram processados sem nenhum erro.")
                 else:
-                    st.warning(f"⚠️ Parcial: {len(df_final_admin)} alunos foram processados, mas {arquivos_com_erro} arquivo(s) apresentaram erros (veja os alertas vermelhos acima).")
+                    st.warning(f"⚠️ Parcial: {len(df_final_admin)} alunos foram processados, mas {arquivos_com_erro} arquivo(s) apresentaram erros.")
                     
                 st.download_button("📥 Baixar CSV Consolidado", df_final_admin.to_csv(index=False, sep=";"), nome_arq_admin, "text/csv", type="primary")
 
@@ -395,31 +390,32 @@ if is_admin:
 # ====================================================================
 if is_admin:
     with tab5:
-        st.markdown("### 👥 Gestão de Digitadores")
-        st.info("Painel de controle de acessos da equipe. As senhas são criptografadas (blindadas) no banco de dados.")
+        st.markdown("### 👥 Controle de Usuários e Permissões")
+        st.info("Crie acessos para Administradores (acesso total) ou Digitadores (apenas transcrição).")
         
         df_usuarios = pd.read_csv(DB_USUARIOS, sep=";", dtype=str)
-        st.dataframe(df_usuarios[["Nome", "Email"]], use_container_width=True)
+        st.dataframe(df_usuarios[["Nome", "Email", "Perfil"]], use_container_width=True)
         
         st.markdown("---")
         col_add, col_edit = st.columns(2)
         
         with col_add:
             with st.container(border=True):
-                st.markdown("#### ➕ Adicionar Digitador")
+                st.markdown("#### ➕ Criar Novo Usuário")
                 with st.form("form_add_user", clear_on_submit=True):
                     novo_nome = st.text_input("Nome Completo:")
                     novo_email = st.text_input("E-mail (Login):")
                     nova_senha = st.text_input("Senha:", type="password")
+                    novo_perfil = st.selectbox("Nível de Acesso:", ["Digitador", "Administrador"])
                     
                     if st.form_submit_button("Cadastrar Usuário", type="primary", use_container_width=True):
                         if novo_nome and novo_email and nova_senha:
                             if novo_email in df_usuarios['Email'].values:
                                 st.error("⚠️ Este e-mail já está cadastrado!")
                             else:
-                                novo_user = pd.DataFrame([{"Nome": novo_nome, "Email": novo_email, "Senha": hash_senha(nova_senha)}])
+                                novo_user = pd.DataFrame([{"Nome": novo_nome, "Email": novo_email, "Senha": hash_senha(nova_senha), "Perfil": novo_perfil}])
                                 novo_user.to_csv(DB_USUARIOS, mode='a', header=False, index=False, sep=";")
-                                st.success(f"✅ Usuário '{novo_nome}' cadastrado!")
+                                st.success(f"✅ Usuário '{novo_nome}' cadastrado como {novo_perfil}!")
                                 st.rerun()
                         else:
                             st.error("Preencha todos os campos.")
@@ -433,33 +429,41 @@ if is_admin:
                     
                     col_btn1, col_btn2 = st.columns(2)
                     with col_btn1:
-                        if st.button("💾 Salvar Nova Senha", use_container_width=True):
+                        if st.button("💾 Atualizar Senha", use_container_width=True):
                             if nova_senha_edit:
                                 df_usuarios.loc[df_usuarios['Email'] == user_to_edit, 'Senha'] = hash_senha(nova_senha_edit)
                                 df_usuarios.to_csv(DB_USUARIOS, index=False, sep=";")
                                 st.success("Senha atualizada com sucesso!")
                                 st.rerun()
                             else:
-                                st.warning("Digite uma nova senha antes de salvar.")
+                                st.warning("Digite a nova senha.")
                     with col_btn2:
-                        if st.button("🗑️ Excluir Usuário", use_container_width=True):
-                            df_usuarios = df_usuarios[df_usuarios['Email'] != user_to_edit]
-                            df_usuarios.to_csv(DB_USUARIOS, index=False, sep=";")
-                            st.success("Usuário excluído com sucesso!")
-                            st.rerun()
+                        if st.button("🗑️ Excluir", use_container_width=True):
+                            if len(df_usuarios) > 1:
+                                df_usuarios = df_usuarios[df_usuarios['Email'] != user_to_edit]
+                                df_usuarios.to_csv(DB_USUARIOS, index=False, sep=";")
+                                st.success("Usuário excluído!")
+                                st.rerun()
+                            else:
+                                st.error("Você não pode excluir o último usuário do sistema.")
                 else:
                     st.info("Nenhum usuário cadastrado.")
+                    
+        # BOTÃO DE EMERGÊNCIA ESCONDIDO APENAS PARA ADMINS AQUI NO FINAL
+        st.write("")
+        with st.expander("⚠️ Zona de Perigo (Apenas T.I.)"):
+            if st.button("🚨 Resetar Banco de Usuários", type="primary"):
+                try:
+                    os.remove(DB_USUARIOS)
+                    st.success("Banco apagado! Faça logout para o sistema recriar o arquivo Mestre.")
+                except Exception: pass
 
 # ====================================================================
 # ABA 3 COMPARTILHADA: CARTÃO-RESPOSTA DIGITAL (TRANSCRIÇÃO)
 # ====================================================================
 with tab3:
-    if is_admin:
-        nome_operador = "Coordenação (Admin)"
-        nome_arquivo_seguro = "admin_master"
-    else:
-        nome_operador = st.session_state['nome_logado']
-        nome_arquivo_seguro = st.session_state['usuario_logado'].replace("@", "_").replace(".", "_")
+    nome_operador = st.session_state['nome_logado']
+    nome_arquivo_seguro = st.session_state['usuario_logado'].replace("@", "_").replace(".", "_")
         
     ARQUIVO_TEMP = f"temp_transcricao_{modelo}_{nome_arquivo_seguro}.csv"
     
@@ -537,7 +541,7 @@ with tab3:
         c1, c2, c3 = st.columns(3)
         with c1:
             st.download_button(
-                label="📊 Baixar Dados (CSV) para Coordenação", 
+                label="📊 Baixar Dados (CSV)", 
                 data=df_temp.to_csv(index=False, sep=";"), 
                 file_name=nome_arq_dig, 
                 mime="text/csv", 
@@ -546,7 +550,7 @@ with tab3:
             )
         with c2:
             if st.button("🖼️ Gerar Gabaritos Digitais (ZIP)", use_container_width=True):
-                with st.spinner("Gerando backup em imagens dos alunos..."):
+                with st.spinner("Gerando backup em imagens..."):
                     zip_data = gerar_zip_gabaritos(df_temp, conf, modelo, ano_ensino, turma_aluno)
                     st.download_button(
                         label="📥 Download Completo (ZIP)",
@@ -561,7 +565,7 @@ with tab3:
                 try:
                     os.remove(ARQUIVO_TEMP)
                     st.rerun()
-                except Exception as e:
+                except Exception:
                     st.warning("⚠️ O arquivo de turma já foi limpo ou há uma leve lentidão do sistema. A tela será atualizada.")
                     st.rerun()
     else:
