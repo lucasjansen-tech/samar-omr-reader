@@ -15,19 +15,6 @@ import uuid
 st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
 
 # ====================================================================
-# INJEÇÃO CSS: BLINDAGEM VISUAL DO LOGIN (Oculta o "Olhinho")
-# ====================================================================
-st.markdown("""
-    <style>
-        /* Desativa o botão de revelar senha (eye icon) em todos os inputs */
-        div[data-baseweb="input"] button {
-            display: none !important;
-            pointer-events: none !important;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
-# ====================================================================
 # FUNÇÃO DE SEGURANÇA: CRIPTOGRAFIA DE SENHAS
 # ====================================================================
 def hash_senha(senha):
@@ -111,16 +98,24 @@ perfil = st.sidebar.radio("Selecione seu Perfil:", ["👨‍💻 Digitador (Tran
 is_authenticated = False
 is_admin = False
 
-# Senha do Admin Master agora está blindada! O hash abaixo corresponde à senha "coted2026"
+# Senha: coted2026
 HASH_ADMIN = "d731835cdccf6874e0e5a871926c45f448e6fb10b37f4cfbd571066c1f727c00"
 
 if perfil == "⚙️ Coordenação (Admin)":
     senha = st.sidebar.text_input("Senha de Acesso:", type="password")
-    if senha and hash_senha(senha) == HASH_ADMIN: 
-        is_authenticated = True
-        is_admin = True
+    btn_entrar_admin = st.sidebar.button("Entrar 🚀") # NOVO BOTÃO ADICIONADO AQUI!
+    
+    if senha or btn_entrar_admin:
+        if hash_senha(senha) == HASH_ADMIN: 
+            is_authenticated = True
+            is_admin = True
+        else:
+            st.sidebar.error("❌ Senha incorreta.")
+            st.title("🖨️ Sistema SAMAR")
+            st.info("👈 Autentique-se no menu lateral para acessar o sistema.")
+            st.stop()
     else:
-        st.sidebar.warning("Digite a senha da coordenação para liberar o painel Admin.")
+        st.sidebar.warning("Digite a senha e clique em Entrar.")
         st.title("🖨️ Sistema SAMAR")
         st.info("👈 Autentique-se no menu lateral para acessar o sistema.")
         st.stop()
@@ -139,7 +134,7 @@ else:
         
         with st.container(border=True):
             email_input = st.text_input("E-mail de Acesso:")
-            senha_input = st.text_input("Senha:", type="password") # O TYPE PASSWORD ESCONDE AS LETRAS
+            senha_input = st.text_input("Senha:", type="password")
             
             if st.button("Entrar no Sistema", type="primary"):
                 df_users = pd.read_csv(DB_USUARIOS, sep=";", dtype=str)
@@ -155,7 +150,7 @@ else:
         st.stop()
 
 # ====================================================================
-# CARREGAMENTO DO MODELO DE PROVA
+# CARREGAMENTO DO MODELO DE PROVA E RENDERIZAÇÃO
 # ====================================================================
 st.title("🖨️ Sistema SAMAR - Operação Descentralizada")
 modelo = st.selectbox("Selecione o Modelo de Prova:", list(TIPOS_PROVA.keys()))
@@ -300,7 +295,7 @@ if is_admin:
                                     return 'color: #f57c00' 
                                 st.dataframe(df_detalhe.style.map(color_status, subset=['Status']), use_container_width=True)
                 except Exception as e:
-                    st.error(f"Erro ao ler o arquivo {arquivo.name}. Certifique-se de que é uma imagem legível ou um PDF válido. ({e})")
+                    st.error(f"Erro ao ler o arquivo {arquivo.name}. Certifique-se de que é uma imagem legível ou um PDF válido.")
                             
             if resultados_lote:
                 st.markdown("---")
@@ -378,7 +373,7 @@ if is_admin:
                             
                         todos_resultados.append(aluno_processado)
                 except Exception as e:
-                    st.error(f"⚠️ O arquivo '{arq.name}' falhou durante a leitura. Motivo: {str(e)}")
+                    st.error(f"⚠️ O arquivo '{arq.name}' falhou durante a leitura.")
                     arquivos_com_erro += 1
 
             if todos_resultados:
