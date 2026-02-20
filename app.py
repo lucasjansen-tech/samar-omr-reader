@@ -40,6 +40,10 @@ if 'usuario_logado' not in st.session_state:
     st.session_state['nome_logado'] = None
     st.session_state['perfil_logado'] = None
 
+# A "Chave Dinâmica" para garantir que a tela limpe sem gerar o erro vermelho
+if 'reset_key' not in st.session_state:
+    st.session_state['reset_key'] = 0
+
 # ====================================================================
 # FUNÇÃO GERADORA DE GABARITOS DIGITAIS (ZIP)
 # ====================================================================
@@ -469,7 +473,7 @@ if is_admin:
                 except Exception: pass
 
 # ====================================================================
-# ABA 3 COMPARTILHADA: CARTÃO-RESPOSTA DIGITAL (TRANSCRIÇÃO BLINDADA)
+# ABA 3 COMPARTILHADA: CARTÃO-RESPOSTA DIGITAL (TRANSCRIÇÃO)
 # ====================================================================
 with tab3:
     nome_operador = st.session_state['nome_logado']
@@ -496,16 +500,17 @@ with tab3:
         except: pass
 
     # ---------------------------------------------------------
-    # MEMÓRIA PERSISTENTE: O COFRE DOS CAMPOS
+    # MEMÓRIA PERSISTENTE DA TELA
     # ---------------------------------------------------------
     for k in ["escola_val", "ano_val", "turma_val", "turno_val"]:
         if k not in st.session_state: st.session_state[k] = ""
         
     def sync_header():
-        if "_escola" in st.session_state: st.session_state.escola_val = st.session_state._escola
-        if "_ano" in st.session_state: st.session_state.ano_val = st.session_state._ano
-        if "_turma" in st.session_state: st.session_state.turma_val = st.session_state._turma
-        if "_turno" in st.session_state: st.session_state.turno_val = st.session_state._turno
+        rk = st.session_state.reset_key
+        if f"_escola_{rk}" in st.session_state: st.session_state.escola_val = st.session_state[f"_escola_{rk}"]
+        if f"_ano_{rk}" in st.session_state: st.session_state.ano_val = st.session_state[f"_ano_{rk}"]
+        if f"_turma_{rk}" in st.session_state: st.session_state.turma_val = st.session_state[f"_turma_{rk}"]
+        if f"_turno_{rk}" in st.session_state: st.session_state.turno_val = st.session_state[f"_turno_{rk}"]
 
     mapa_valores_global = {"A":"A", "B":"B", "C":"C", "D":"D", "Branco":"-", "Rasura":"*"}
     
@@ -561,23 +566,25 @@ with tab3:
     # ---------------------------------------------------------
     # LAYOUT DE PREENCHIMENTO DO ALUNO
     # ---------------------------------------------------------
+    rk = st.session_state.reset_key # A Chave Mágica para não dar erro no Streamlit
+    
     with st.container(border=True):
         st.markdown("#### 🏫 1. Identificação da Turma e Escola (Sobrevive a mudanças de Aba e Logouts)")
-        st.text_input("Nome da Escola:", value=st.session_state.escola_val, placeholder="Ex: Escola Municipal...", key="_escola", on_change=sync_header)
+        st.text_input("Nome da Escola:", value=st.session_state.escola_val, placeholder="Ex: Escola Municipal...", key=f"_escola_{rk}", on_change=sync_header)
         
         col_t1, col_t2, col_t3 = st.columns(3)
         
         anos_lista = ["", "1º Ano", "2º Ano", "3º Ano", "4º Ano", "5º Ano", "6º Ano", "7º Ano", "8º Ano", "9º Ano"]
         idx_ano = anos_lista.index(st.session_state.ano_val) if st.session_state.ano_val in anos_lista else 0
-        with col_t1: st.selectbox("Ano de Ensino:", anos_lista, index=idx_ano, key="_ano", on_change=sync_header)
+        with col_t1: st.selectbox("Ano de Ensino:", anos_lista, index=idx_ano, key=f"_ano_{rk}", on_change=sync_header)
         
         turmas_lista = ["", "A", "B", "C", "D", "E", "F", "G", "H", "Única"]
         idx_turma = turmas_lista.index(st.session_state.turma_val) if st.session_state.turma_val in turmas_lista else 0
-        with col_t2: st.selectbox("Turma:", turmas_lista, index=idx_turma, key="_turma", on_change=sync_header)
+        with col_t2: st.selectbox("Turma:", turmas_lista, index=idx_turma, key=f"_turma_{rk}", on_change=sync_header)
         
         turnos_lista = ["", "Manhã", "Tarde", "Integral", "Noite"]
         idx_turno = turnos_lista.index(st.session_state.turno_val) if st.session_state.turno_val in turnos_lista else 0
-        with col_t3: st.selectbox("Turno:", turnos_lista, index=idx_turno, key="_turno", on_change=sync_header)
+        with col_t3: st.selectbox("Turno:", turnos_lista, index=idx_turno, key=f"_turno_{rk}", on_change=sync_header)
 
     st.write("")
 
@@ -708,13 +715,14 @@ with tab3:
                     try: os.remove(ARQUIVO_TEMP)
                     except Exception: pass
                     
-                    # Amnésia Forçada 1: Limpa a memória das variáveis cofre
-                    for campo in ["escola_val", "ano_val", "turma_val", "turno_val"]:
-                        st.session_state[campo] = ""
+                    # Limpa a memória das variáveis
+                    st.session_state.escola_val = ""
+                    st.session_state.ano_val = ""
+                    st.session_state.turma_val = ""
+                    st.session_state.turno_val = ""
                         
-                    # Amnésia Forçada 2: FORÇA os componentes visuais a ficarem em branco diretamente!
-                    for widget in ["_escola", "_ano", "_turma", "_turno"]:
-                        st.session_state[widget] = ""
+                    # Gira a chave da tela para recriar os campos do zero (Bypass do Streamlit API Exception)
+                    st.session_state.reset_key += 1
                             
                     st.rerun()
     else:
