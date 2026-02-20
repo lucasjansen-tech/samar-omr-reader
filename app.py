@@ -15,14 +15,11 @@ import uuid
 st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
 
 # ====================================================================
-# FUNÇÃO DE SEGURANÇA: CRIPTOGRAFIA DE SENHAS
+# FUNÇÃO DE SEGURANÇA E INICIALIZAÇÃO
 # ====================================================================
 def hash_senha(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
 
-# ====================================================================
-# INICIALIZAÇÃO DO BANCO DE USUÁRIOS E SESSÃO
-# ====================================================================
 DB_USUARIOS = "usuarios_samar.csv"
 if not os.path.exists(DB_USUARIOS):
     pd.DataFrame([{
@@ -44,7 +41,7 @@ if 'usuario_logado' not in st.session_state:
     st.session_state['perfil_logado'] = None
 
 # ====================================================================
-# FUNÇÃO GERADORA DE GABARITOS DIGITAIS (CABEÇALHO PREENCHIDO)
+# FUNÇÃO GERADORA DE GABARITOS DIGITAIS (ZIP)
 # ====================================================================
 def gerar_zip_gabaritos(df, conf_prova, modelo_prova):
     id_unico = uuid.uuid4().hex
@@ -474,7 +471,7 @@ if is_admin:
                 except Exception: pass
 
 # ====================================================================
-# ABA 3 COMPARTILHADA: CARTÃO-RESPOSTA DIGITAL (TRANSCRIÇÃO REATIVA)
+# ABA 3 COMPARTILHADA: CARTÃO-RESPOSTA DIGITAL (TRANSCRIÇÃO BLINDADA)
 # ====================================================================
 with tab3:
     nome_operador = st.session_state['nome_logado']
@@ -483,12 +480,24 @@ with tab3:
     st.session_state['ARQUIVO_TEMP'] = ARQUIVO_TEMP
     
     # ---------------------------------------------------------
-    # CALLBACK DE SALVAMENTO E LIMPEZA AUTOMÁTICA
+    # MEMÓRIA PERSISTENTE: O COFRE DOS CAMPOS DE CABEÇALHO
     # ---------------------------------------------------------
+    for k in ["escola_val", "ano_val", "turma_val", "turno_val"]:
+        if k not in st.session_state: st.session_state[k] = ""
+        
+    def sync_header():
+        # Quando qualquer um dos campos for mexido, essa função atualiza o cofre instantaneamente
+        if "_escola" in st.session_state: st.session_state.escola_val = st.session_state._escola
+        if "_ano" in st.session_state: st.session_state.ano_val = st.session_state._ano
+        if "_turma" in st.session_state: st.session_state.turma_val = st.session_state._turma
+        if "_turno" in st.session_state: st.session_state.turno_val = st.session_state._turno
+
     mapa_valores_global = {"A":"A", "B":"B", "C":"C", "D":"D", "Branco":"-", "Rasura":"*"}
     
     def salvar_e_limpar_callback():
-        if not st.session_state.get('escola_input') or not st.session_state.get('ano_input') or not st.session_state.get('turma_input') or not st.session_state.get('turno_input'):
+        sync_header() # Puxa do cofre na hora de salvar só por segurança
+        
+        if not st.session_state.escola_val or not st.session_state.ano_val or not st.session_state.turma_val or not st.session_state.turno_val:
             st.session_state.msg_erro = "⚠️ Atenção: Preencha a 'Escola', o 'Ano', a 'Turma' e o 'Turno' no topo antes de salvar."
             return
             
@@ -496,10 +505,10 @@ with tab3:
         resp_str = "".join([mapa_valores_global[st.session_state[f"q_{q}"]] for q in range(1, total_q_global + 1)])
         
         novo_dado = {
-            "Escola": st.session_state.escola_input, 
-            "Ano_Ensino": st.session_state.ano_input, 
-            "Turma": st.session_state.turma_input, 
-            "Turno": st.session_state.turno_input, 
+            "Escola": st.session_state.escola_val, 
+            "Ano_Ensino": st.session_state.ano_val, 
+            "Turma": st.session_state.turma_val, 
+            "Turno": st.session_state.turno_val, 
             "Frequencia": nova_freq, 
             "Nome_Aluno": st.session_state.nome_aluno_input, 
             "Respostas_Brutas": resp_str
@@ -512,30 +521,21 @@ with tab3:
         
         st.session_state.msg_sucesso = f"✅ O Aluno de Frequência {nova_freq} foi gravado com sucesso!"
         
-        # O Reset Mágico dos campos do Aluno (Mantém a Turma preenchida!)
         st.session_state.nome_aluno_input = ""
         st.session_state.freq_d = "0"
         st.session_state.freq_u = "0"
         for q in range(1, total_q_global + 1):
             st.session_state[f"q_{q}"] = "Branco"
 
-    # ---------------------------------------------------------
-    # INICIALIZAÇÃO DE VARIÁVEIS DA TELA PARA NÃO DAR ERRO
-    # ---------------------------------------------------------
     if "freq_d" not in st.session_state: st.session_state.freq_d = "0"
     if "freq_u" not in st.session_state: st.session_state.freq_u = "0"
     if "nome_aluno_input" not in st.session_state: st.session_state.nome_aluno_input = ""
-    if "escola_input" not in st.session_state: st.session_state.escola_input = ""
-    if "ano_input" not in st.session_state: st.session_state.ano_input = ""
-    if "turma_input" not in st.session_state: st.session_state.turma_input = ""
-    if "turno_input" not in st.session_state: st.session_state.turno_input = ""
-    for q in range(1, 100): # Garante margem de segurança para qualquer tamanho de prova
+    for q in range(1, 100): 
         if f"q_{q}" not in st.session_state: st.session_state[f"q_{q}"] = "Branco"
 
     st.markdown("### 🖱️ Transcrição Intuitiva do Aluno")
     st.info(f"Olá, **{nome_operador}**. Os dados que você digitar aqui serão salvos com segurança em sua sessão exclusiva.")
     
-    # Exibe Mensagens de Sucesso ou Erro do Callback
     if "msg_erro" in st.session_state:
         st.error(st.session_state.msg_erro)
         del st.session_state.msg_erro
@@ -544,16 +544,25 @@ with tab3:
         del st.session_state.msg_sucesso
 
     # ---------------------------------------------------------
-    # O LAYOUT VISUAL
+    # CABEÇALHO LIGADO À MEMÓRIA PERSISTENTE
     # ---------------------------------------------------------
     with st.container(border=True):
-        st.markdown("#### 🏫 1. Identificação da Turma e Escola (Preencha 1 vez)")
-        st.text_input("Nome da Escola:", placeholder="Ex: Escola Municipal...", key="escola_input")
+        st.markdown("#### 🏫 1. Identificação da Turma e Escola (Sobrevive a mudanças de Aba)")
+        st.text_input("Nome da Escola:", value=st.session_state.escola_val, placeholder="Ex: Escola Municipal...", key="_escola", on_change=sync_header)
         
         col_t1, col_t2, col_t3 = st.columns(3)
-        with col_t1: st.selectbox("Ano de Ensino:", ["", "1º Ano", "2º Ano", "3º Ano", "4º Ano", "5º Ano", "6º Ano", "7º Ano", "8º Ano", "9º Ano"], key="ano_input")
-        with col_t2: st.selectbox("Turma:", ["", "A", "B", "C", "D", "E", "F", "G", "H", "Única"], key="turma_input")
-        with col_t3: st.selectbox("Turno:", ["", "Manhã", "Tarde", "Integral", "Noite"], key="turno_input")
+        
+        anos_lista = ["", "1º Ano", "2º Ano", "3º Ano", "4º Ano", "5º Ano", "6º Ano", "7º Ano", "8º Ano", "9º Ano"]
+        idx_ano = anos_lista.index(st.session_state.ano_val) if st.session_state.ano_val in anos_lista else 0
+        with col_t1: st.selectbox("Ano de Ensino:", anos_lista, index=idx_ano, key="_ano", on_change=sync_header)
+        
+        turmas_lista = ["", "A", "B", "C", "D", "E", "F", "G", "H", "Única"]
+        idx_turma = turmas_lista.index(st.session_state.turma_val) if st.session_state.turma_val in turmas_lista else 0
+        with col_t2: st.selectbox("Turma:", turmas_lista, index=idx_turma, key="_turma", on_change=sync_header)
+        
+        turnos_lista = ["", "Manhã", "Tarde", "Integral", "Noite"]
+        idx_turno = turnos_lista.index(st.session_state.turno_val) if st.session_state.turno_val in turnos_lista else 0
+        with col_t3: st.selectbox("Turno:", turnos_lista, index=idx_turno, key="_turno", on_change=sync_header)
 
     st.write("")
 
@@ -570,7 +579,6 @@ with tab3:
         with col_f2: 
             st.radio("Unidade (U):", ["0","1","2","3","4","5","6","7","8","9"], horizontal=True, key="freq_u")
         with col_f3:
-            # O VISOR LUMINOSO AO VIVO
             st.markdown(
                 f"<div style='text-align: center; border: 2px dashed #4CAF50; border-radius: 10px; padding: 10px;'>"
                 f"<p style='margin:0; font-size: 14px; font-weight: bold;'>Número Selecionado:</p>"
@@ -597,7 +605,6 @@ with tab3:
                         st.radio(f"Questão {q:02d}", options=opcoes_visuais, horizontal=True, key=f"q_{q}")
             
         st.write("")
-        # Botão dispara a função "salvar_e_limpar_callback" sem recarregar a página inteira à toa
         st.button("💾 Salvar Cartão deste Aluno e Limpar Tela", type="primary", use_container_width=True, on_click=salvar_e_limpar_callback)
 
     st.markdown("---")
@@ -629,8 +636,8 @@ with tab3:
                 st.rerun()
         
         st.write("")
-        escola_str = st.session_state.escola_input.replace(" ", "_") if st.session_state.escola_input else "Escola"
-        nome_sugerido = f"respostas_brutas_{escola_str}_{st.session_state.ano_input.replace(' ', '_')}_{st.session_state.turma_input}_{st.session_state.turno_input}.csv"
+        escola_str = st.session_state.escola_val.replace(" ", "_") if st.session_state.escola_val else "Escola"
+        nome_sugerido = f"respostas_brutas_{escola_str}_{st.session_state.ano_val.replace(' ', '_')}_{st.session_state.turma_val}_{st.session_state.turno_val}.csv"
         nome_arq_dig = st.text_input("Nome do arquivo de dados que será baixado:", value=nome_sugerido)
         
         c1, c2, c3 = st.columns(3)
@@ -650,18 +657,20 @@ with tab3:
                     st.download_button(
                         label="📥 Download Completo (ZIP)",
                         data=zip_data,
-                        file_name=f"Gabaritos_Imagens_{escola_str}_{st.session_state.ano_input}_{st.session_state.turma_input}_{st.session_state.turno_input}.zip",
+                        file_name=f"Gabaritos_Imagens_{escola_str}_{st.session_state.ano_val}_{st.session_state.turma_val}_{st.session_state.turno_val}.zip",
                         mime="application/zip",
                         type="primary",
                         use_container_width=True
                     )
         with c3:
             if st.button("🗑️ Limpar Sessão (Iniciar Nova Turma)", use_container_width=True):
-                try:
-                    os.remove(ARQUIVO_TEMP)
-                    st.rerun()
-                except Exception:
-                    st.warning("⚠️ O arquivo de turma já foi limpo.")
-                    st.rerun()
+                try: os.remove(ARQUIVO_TEMP)
+                except Exception: pass
+                # A mágica do botão limpar: além de apagar o arquivo, ele detona o cofre da memória!
+                st.session_state.escola_val = ""
+                st.session_state.ano_val = ""
+                st.session_state.turma_val = ""
+                st.session_state.turno_val = ""
+                st.rerun()
     else:
         st.info("O painel de controle da turma aparecerá aqui após o registro do primeiro aluno.")
