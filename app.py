@@ -17,7 +17,7 @@ import re
 from datetime import datetime
 
 # ====================================================================
-# FUNÇÃO DE LIMPEZA E FORMATAÇÃO (O FIM DOS BUGS "??") E PADRÕES
+# FUNÇÕES DE LIMPEZA E PADRÕES AVALIATIVOS DA REDE
 # ====================================================================
 def limpar_texto_imagem(txt):
     if not isinstance(txt, str): return ""
@@ -25,15 +25,11 @@ def limpar_texto_imagem(txt):
     return ''.join(c for c in unicodedata.normalize('NFD', txt) if unicodedata.category(c) != 'Mn')
 
 def get_padrao_por_ano(ano_str):
-    """Retorna a quantidade total e a divisão de blocos baseada no ano selecionado"""
     a = str(ano_str).lower()
-    if any(x in a for x in ['1', '2', '3']):
-        return 18, [("LÍNGUA PORTUGUESA", 9), ("MATEMÁTICA", 9)]
-    elif any(x in a for x in ['4', '5', '6']):
-        return 44, [("LÍNGUA PORTUGUESA", 22), ("MATEMÁTICA", 22)]
-    elif any(x in a for x in ['7', '8', '9']):
-        return 52, [("LÍNGUA PORTUGUESA", 26), ("MATEMÁTICA", 26)]
-    return 18, [("LÍNGUA PORTUGUESA", 9), ("MATEMÁTICA", 9)] # Padrão de segurança
+    if any(x in a for x in ['1', '2', '3']): return 18, [("LÍNGUA PORTUGUESA", 9), ("MATEMÁTICA", 9)]
+    elif any(x in a for x in ['4', '5', '6']): return 44, [("LÍNGUA PORTUGUESA", 22), ("MATEMÁTICA", 22)]
+    elif any(x in a for x in ['7', '8', '9']): return 52, [("LÍNGUA PORTUGUESA", 26), ("MATEMÁTICA", 26)]
+    return 18, [("LÍNGUA PORTUGUESA", 9), ("MATEMÁTICA", 9)] 
 
 # ====================================================================
 # INJEÇÃO DE DESIGN E CONEXÃO SUPABASE
@@ -153,7 +149,6 @@ def gerar_zip_gabaritos(df, conf_prova, modelo_prova):
         for _, row in df.iterrows():
             img_aluno = base_cv.copy()
             
-            # FILTRO ANTI-ACENTO E ERROS DE FONTE
             escola = limpar_texto_imagem(str(row.get("Escola", "")))
             ano = limpar_texto_imagem(str(row.get("Ano_Ensino", "")))
             turma = limpar_texto_imagem(str(row.get("Turma", "")))
@@ -163,19 +158,20 @@ def gerar_zip_gabaritos(df, conf_prova, modelo_prova):
             freq = str(row.get("Frequencia", "00")).zfill(2)
             respostas = str(row.get("Respostas_Brutas", ""))
             
-            # PREENCHIMENTO CIRÚRGICO (TEXTO EM PRETO)
+            # PREENCHIMENTO CIRÚRGICO (COORDENADAS AJUSTADAS PARA AS LINHAS)
             cor_caneta = (0, 0, 0)
             fonte = cv2.FONT_HERSHEY_SIMPLEX
             escala = 0.55
             espessura = 2
             h, w = conf_prova.REF_H, conf_prova.REF_W
             
-            cv2.putText(img_aluno, escola, (int(w * 0.25), int(h * 0.151)), fonte, escala, cor_caneta, espessura)
-            cv2.putText(img_aluno, ano, (int(w * 0.09), int(h * 0.183)), fonte, escala, cor_caneta, espessura)
-            cv2.putText(img_aluno, turma, (int(w * 0.36), int(h * 0.183)), fonte, escala, cor_caneta, espessura)
-            cv2.putText(img_aluno, turno, (int(w * 0.60), int(h * 0.183)), fonte, escala, cor_caneta, espessura)
-            cv2.putText(img_aluno, nome, (int(w * 0.10), int(h * 0.218)), fonte, escala, cor_caneta, espessura)
-            cv2.putText(img_aluno, freq, (int(w * 0.85), int(h * 0.218)), fonte, escala, cor_caneta, espessura)
+            # Os X e Y foram ajustados para desviar dos rótulos "ANO:" e "TURMA:" e cair na linha
+            cv2.putText(img_aluno, escola, (int(w * 0.25), int(h * 0.153)), fonte, escala, cor_caneta, espessura)
+            cv2.putText(img_aluno, ano, (int(w * 0.13), int(h * 0.185)), fonte, escala, cor_caneta, espessura)
+            cv2.putText(img_aluno, turma, (int(w * 0.40), int(h * 0.185)), fonte, escala, cor_caneta, espessura)
+            cv2.putText(img_aluno, turno, (int(w * 0.64), int(h * 0.185)), fonte, escala, cor_caneta, espessura)
+            cv2.putText(img_aluno, nome, (int(w * 0.13), int(h * 0.220)), fonte, escala, cor_caneta, espessura)
+            cv2.putText(img_aluno, f"FREQ: {freq}", (int(w * 0.85), int(h * 0.220)), fonte, escala, cor_caneta, espessura)
             
             for grid in conf_prova.grids:
                 x1, x2 = int(grid.x_start * conf_prova.REF_W), int(grid.x_end * conf_prova.REF_W)
@@ -228,7 +224,7 @@ def gerar_zip_atas(df_atas):
     return zip_buffer.getvalue()
 
 # ====================================================================
-# TELA DE LOGIN E BARRA LATERAL
+# TELA DE LOGIN
 # ====================================================================
 if not st.session_state['usuario_logado']:
     st.title("🖨️ Sistema SAMAR - Acesso Restrito")
@@ -255,15 +251,20 @@ if not st.session_state['usuario_logado']:
                     st.error("❌ Usuário ou Senha incorretos.")
     st.stop()
 
+# ====================================================================
+# BARRA LATERAL E TOPO
+# ====================================================================
 st.sidebar.markdown("### 👤 Sessão Ativa")
 st.sidebar.success(f"**{st.session_state['nome_logado']}**\n\nNível: {st.session_state['perfil_logado']}")
 if usa_nuvem: st.sidebar.caption("🟢 Conectado ao Supabase")
 else: st.sidebar.caption("🔴 Banco Offline")
+
 if st.sidebar.button("🚪 Sair do Sistema"):
     st.session_state.clear()
     st.rerun()
 
 is_admin = (st.session_state['perfil_logado'] == "Administrador")
+
 st.title("🖨️ Sistema SAMAR - Operação em Nuvem")
 
 modelos_disponiveis = list(TIPOS_PROVA.keys())
@@ -271,6 +272,18 @@ idx_padrao = next((i for i, m in enumerate(modelos_disponiveis) if "18" in m), 0
 modelo = st.selectbox("Modelo da Prova / Gabarito:", modelos_disponiveis, index=idx_padrao)
 conf = TIPOS_PROVA[modelo]
 total_q_global = int(modelo.split('_')[1])
+
+for q in range(1, total_q_global + 1):
+    if f"q_{q}" not in st.session_state: st.session_state[f"q_{q}"] = None
+
+mapa_disc_global = {}
+tot_disc_global = {}
+for g in conf.grids:
+    if g.questao_inicial > 0:
+        disc = g.texto_extra if g.texto_extra else "Geral"
+        if disc not in tot_disc_global: tot_disc_global[disc] = 0
+        tot_disc_global[disc] += g.rows
+        for r in range(g.rows): mapa_disc_global[g.questao_inicial + r] = disc
 
 if is_admin:
     tabs = st.tabs(["1. Gerador", "2. Leitor Robô", "3. Cartão Digital", "4. Controle Nuvem", "5. 👥 Usuários", "6. 📋 Atas", "7. ⚙️ Configurações & Ciclos"])
@@ -280,7 +293,7 @@ else:
     tab3 = tabs[0]
 
 # ====================================================================
-# ABA 7 (ADMIN): CONFIGURAÇÕES E GABARITOS DINÂMICOS (MATRIZ POR DISCIPLINA)
+# ABA 7 (ADMIN): CONFIGURAÇÕES E GABARITOS
 # ====================================================================
 if is_admin:
     with tab7:
@@ -309,7 +322,6 @@ if is_admin:
                 gab_existente = dict_gabaritos_mestres.get((sel_eta_gab, sel_ano_gab), "")
                 if gab_existente: st.success(f"✅ Já existe um gabarito cadastrado para o **{sel_ano_gab}** na etapa **{sel_eta_gab}**.")
                 
-                # CHAMA A FUNÇÃO DE PADRÕES INTELIGENTES
                 expected_total, blocos_esperados = get_padrao_por_ano(sel_ano_gab)
                 st.markdown(f"**Padrão detectado para o {sel_ano_gab}:** {expected_total} questões no total. Cole as respostas nas caixas correspondentes:")
                 
@@ -389,7 +401,7 @@ if is_admin:
                     with open(fn, "rb") as f: st.download_button(f"📥 Baixar {fn}", f, fn, mime="application/octet-stream", use_container_width=True)
 
 # ====================================================================
-# ABA 2: LEITOR ROBÔ (INPUT POR DISCIPLINA INTELIGENTE)
+# ABA 2: LEITOR ROBÔ
 # ====================================================================
 if is_admin:
     with tab2:
@@ -465,7 +477,6 @@ if is_admin:
                         
                         aluno_dados = {"Etapa": etapa_leitor, "Escola": escola_leitor, "Ano_Ensino": ano_leitor, "Turma": turma_leitor, "Turno": turno_leitor, "Frequencia": freq}
                         
-                        # CORREÇÃO POR DISCIPLINA
                         acertos_disciplina = {n_d: 0 for n_d, _ in blocos_esperados_leitor}
                         mapa_disc_aluno = {}
                         q_curr = 1
@@ -489,7 +500,7 @@ if is_admin:
                 st.download_button("📥 Baixar CSV Corrigido", df_export.to_csv(index=False, sep=";"), f"Resultados_Robo_{ano_leitor}_{turma_leitor}.csv", "text/csv", type="primary")
 
 # ====================================================================
-# ABA 4 (ADMIN): TORRE DE CONTROLE, EXCLUSÃO EXATA E MOTOR INTELIGENTE
+# ABA 4 (ADMIN): TORRE DE CONTROLE, FILTROS INTELIGENTES E EXCLUSÃO
 # ====================================================================
 if is_admin:
     with tab4:
@@ -508,33 +519,44 @@ if is_admin:
                 df_master.columns = ['ID', 'Etapa', 'Escola', 'Ano_Ensino', 'Turma', 'Turno', 'Frequencia', 'Nome_Aluno', 'Respostas_Brutas', 'Digitador', 'Status']
 
                 with st.container(border=True):
-                    st.markdown("#### 🔍 Filtro Hierárquico")
+                    st.markdown("#### 🔍 Filtro Hierárquico Inteligente")
                     f_col0, f_col1, f_col2, f_col3 = st.columns(4)
                     
-                    etapas_disp = ["Todas as Etapas"] + sorted(list(df_master['Etapa'].dropna().unique()))
-                    with f_col0: sel_etapa_admin = st.selectbox("1. Etapa Avaliativa:", etapas_disp)
-                    df_f0 = df_master if sel_etapa_admin == "Todas as Etapas" else df_master[df_master['Etapa'] == sel_etapa_admin]
+                    with f_col0:
+                        etapas_disp = [""] + sorted(list(df_master['Etapa'].dropna().unique()))
+                        sel_etapa_admin = st.selectbox("1. Selecione a Etapa:", etapas_disp)
                     
-                    anos_disp = ["Todos os Anos"] + sorted(list(df_f0['Ano_Ensino'].dropna().unique()))
-                    with f_col1: sel_ano_admin = st.selectbox("2. Ano de Ensino:", anos_disp)
-                    df_f1 = df_f0 if sel_ano_admin == "Todos os Anos" else df_f0[df_f0['Ano_Ensino'] == sel_ano_admin]
+                    df_f1 = df_master[df_master['Etapa'] == sel_etapa_admin] if sel_etapa_admin else pd.DataFrame()
+                    with f_col1:
+                        anos_disp = ["", "Todos os Anos"] + sorted(list(df_f1['Ano_Ensino'].dropna().unique())) if sel_etapa_admin else [""]
+                        sel_ano_admin = st.selectbox("2. Selecione o Ano:", anos_disp, disabled=not sel_etapa_admin)
                     
-                    escolas_disp = ["Todas as Escolas"] + sorted(list(df_f1['Escola'].dropna().unique()))
-                    with f_col2: sel_esc_admin = st.selectbox("3. Escola:", escolas_disp)
-                    df_f2 = df_f1 if sel_esc_admin == "Todas as Escolas" else df_f1[df_f1['Escola'] == sel_esc_admin]
-                    
-                    if sel_esc_admin != "Todas as Escolas":
-                        turmas_disp = ["Todas as Turmas"] + sorted(list(df_f2['Turma'].dropna().unique()))
-                        with f_col3: sel_tur_admin = st.selectbox("4. Turma:", turmas_disp)
-                        df_f3 = df_f2 if sel_tur_admin == "Todas as Turmas" else df_f2[df_f2['Turma'] == sel_tur_admin]
-                    else:
-                        df_f3 = df_f2
+                    if sel_ano_admin == "Todos os Anos": df_f2 = df_f1
+                    elif sel_ano_admin: df_f2 = df_f1[df_f1['Ano_Ensino'] == sel_ano_admin]
+                    else: df_f2 = pd.DataFrame()
 
-                if sel_esc_admin != "Todas as Escolas":
-                    turmas_turnos = df_f3[['Etapa', 'Ano_Ensino', 'Turma', 'Turno']].drop_duplicates().values.tolist()
+                    with f_col2:
+                        escolas_disp = ["", "Todas as Escolas"] + sorted(list(df_f2['Escola'].dropna().unique())) if sel_ano_admin else [""]
+                        sel_esc_admin = st.selectbox("3. Selecione a Escola:", escolas_disp, disabled=not sel_ano_admin)
+                    
+                    if sel_esc_admin == "Todas as Escolas": df_f3 = df_f2
+                    elif sel_esc_admin: df_f3 = df_f2[df_f2['Escola'] == sel_esc_admin]
+                    else: df_f3 = pd.DataFrame()
+
+                    with f_col3:
+                        turmas_disp = ["", "Todas as Turmas"] + sorted(list(df_f3['Turma'].dropna().unique())) if sel_esc_admin else [""]
+                        sel_tur_admin = st.selectbox("4. Selecione a Turma:", turmas_disp, disabled=not sel_esc_admin)
+                        
+                    if sel_tur_admin == "Todas as Turmas": df_final_filtro = df_f3
+                    elif sel_tur_admin: df_final_filtro = df_f3[df_f3['Turma'] == sel_tur_admin]
+                    else: df_final_filtro = pd.DataFrame()
+
+                # TABELAS DE EDIÇÃO (SÓ APARECEM SE UMA ESCOLA ESPECÍFICA FOR SELECIONADA)
+                if sel_esc_admin and sel_esc_admin != "Todas as Escolas":
+                    turmas_turnos = df_final_filtro[['Etapa', 'Ano_Ensino', 'Turma', 'Turno']].drop_duplicates().values.tolist()
                     for (eta_b, ano_b, tur, tur_no) in turmas_turnos:
                         with st.expander(f"📚 {eta_b} | {ano_b} | Turma {tur} ({tur_no})", expanded=False):
-                            df_tur = df_f3[(df_f3['Turma'] == tur) & (df_f3['Turno'] == tur_no) & (df_f3['Etapa'] == eta_b) & (df_f3['Ano_Ensino'] == ano_b)].copy()
+                            df_tur = df_final_filtro[(df_final_filtro['Turma'] == tur) & (df_final_filtro['Turno'] == tur_no) & (df_final_filtro['Etapa'] == eta_b) & (df_final_filtro['Ano_Ensino'] == ano_b)].copy()
                             status_turma = "Bloqueado" if 'Bloqueado' in df_tur['Status'].values else "Aberto"
                             icone_status = "🔒 BLOQUEADA" if status_turma == "Bloqueado" else "🔓 ABERTA"
                             
@@ -551,7 +573,6 @@ if is_admin:
                                         supabase.table("respostas_geral").update({"status": "Aberto"}).eq("etapa", eta_b).eq("escola", sel_esc_admin).eq("ano_ensino", ano_b).eq("turma", tur).eq("turno", tur_no).execute()
                                         st.rerun()
                             
-                            # CORTA A TABELA PARA EXIBIR APENAS AS QUESTÕES DAQUELE ANO
                             q_esperadas, _ = get_padrao_por_ano(ano_b)
                             for q in range(1, q_esperadas + 1):
                                 df_tur[f"Q{q:02d}"] = df_tur["Respostas_Brutas"].apply(lambda x: x[q-1] if isinstance(x, str) and len(x) >= q else "-")
@@ -588,24 +609,23 @@ if is_admin:
                                     st.success("A turma foi apagada da nuvem instantaneamente.")
                                     st.rerun()
                 else:
-                    st.write("⬆️ Para ver e editar os dados, utilize os filtros acima e selecione uma Escola.")
+                    if sel_etapa_admin:
+                        st.info("⬆️ Para editar dados ou excluir alunos, utilize os filtros para selecionar uma Escola específica.")
 
                 st.markdown("---")
                 st.markdown("#### ⚙️ Motor Inteligente de Notas (ZIP com Pastas)")
 
-                if st.button("🚀 Calcular Notas Inteligentes e Empacotar (ZIP)", type="primary", use_container_width=True):
+                if st.button("🚀 Calcular Notas do Filtro Atual e Empacotar (ZIP)", type="primary", use_container_width=True):
                     with st.spinner("Buscando gabaritos mestres e corrigindo alunos..."):
                         todos_resultados = []
-                        if not df_f3.empty:
-                            for index, row in df_f3.iterrows():
+                        if not df_final_filtro.empty:
+                            for index, row in df_final_filtro.iterrows():
                                 eta_aluno = row["Etapa"]
                                 ano_aluno = row["Ano_Ensino"]
                                 gabarito_str = dict_gabaritos_mestres.get((eta_aluno, ano_aluno), "")
                                 if not gabarito_str: continue 
                                 
-                                # DETECTA O PADRÃO PARA AQUELE ALUNO ESPECÍFICO
                                 total_q_aluno, blocos_aluno = get_padrao_por_ano(ano_aluno)
-                                
                                 mapa_disc_aluno = {}
                                 tot_disc_aluno = {}
                                 q_curr = 1
@@ -665,10 +685,10 @@ if is_admin:
                                     nome_arquivo_csv = f"{eta_clean}/{esc_clean}/{ano_clean}/Turma_{tur_clean}_{turno_clean}.csv"
                                     zf.writestr(nome_arquivo_csv, group_df.to_csv(index=False, sep=";"))
                                     
-                            st.success(f"✅ {len(df_final_admin)} alunos avaliados foram separados em pastas e empacotados!")
+                            st.success(f"✅ {len(df_final_admin)} alunos do seu filtro foram corrigidos e empacotados!")
                             st.download_button("📥 Baixar Arquivo ZIP Estruturado", data=zip_csv_buffer.getvalue(), file_name=f"Resultados_SAMAR_{datetime.now().strftime('%Y%m%d')}.zip", mime="application/zip", type="primary", use_container_width=True)
                         else:
-                            st.warning("⚠️ Nenhum aluno foi corrigido. Verifique se você cadastrou o Gabarito Mestre na Aba 7 para o Ano de Ensino dos alunos.")
+                            st.warning("⚠️ O motor não corrigiu ninguém. Isso acontece se não houver dados no filtro selecionado ou se a Coordenação não tiver cadastrado o Gabarito Mestre desta Etapa/Ano na Aba 7.")
             else:
                 st.info("A Nuvem está vazia.")
 
@@ -742,15 +762,11 @@ with tab3:
     mapa_valores_global = {"A":"A", "B":"B", "C":"C", "D":"D", "Branco":"-", "Rasura":"*", None: "-"}
     
     def salvar_aluno_callback():
-        # VALIDAÇÃO 1: NOME NÃO PODE SER VAZIO
         if not st.session_state.nome_aluno_input.strip():
             st.session_state.msg_erro = "⚠️ OBRIGATÓRIO: O campo 'Nome do Aluno' não pode ficar em branco."
             return
 
-        # VALIDAÇÃO 2: NENHUMA QUESTÃO PODE PASSAR SEM SELEÇÃO
-        # Usa o padrão de correção baseado no Ano de Ensino selecionado no fluxo!
         q_esperadas_aluno, _ = get_padrao_por_ano(st.session_state.config_ano)
-        
         questoes_vazias = []
         for q in range(1, q_esperadas_aluno + 1):
             if st.session_state.get(f"q_{q}") is None: questoes_vazias.append(str(q))
@@ -883,7 +899,6 @@ with tab3:
         elif turma_esta_bloqueada:
             st.error("🔒 **TURMA BLOQUEADA PELA COORDENAÇÃO:** O boletim desta turma já foi gerado. A edição e inclusão de alunos está bloqueada.")
 
-        # INTELIGÊNCIA: RENDERIZA O GABARITO NA TELA BASEADO NO ANO DE ENSINO
         q_esperadas_dig, blocos_esperados_dig = get_padrao_por_ano(st.session_state.config_ano)
 
         if not turma_esta_bloqueada:
@@ -902,7 +917,6 @@ with tab3:
                         f"</div>", unsafe_allow_html=True
                     )
                 st.divider()
-                
                 cols_blocos = st.columns(len(blocos_esperados_dig)) 
                 opcoes_visuais = ["A", "B", "C", "D", "Branco", "Rasura"]
                 
