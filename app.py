@@ -109,7 +109,6 @@ def gerar_zip_gabaritos(df, conf_prova, modelo_prova):
     return zip_buffer.getvalue()
 
 def gerar_html_ata(escola, ano, turma, turno, aplicador, ocorrencia, revisor, data):
-    # Lógica para converter a imagem em código e embutir no arquivo
     logo_html = ""
     img_path = "Frame 18.png"
     if os.path.exists(img_path):
@@ -483,32 +482,42 @@ if is_admin:
 if is_admin:
     with tab6:
         st.markdown("### 📋 Livro Oficial de Atas e Ocorrências")
-        st.info("Aqui você visualiza e exporta todas as ocorrências relatadas pela equipe de digitação nos arquivos físicos das turmas.")
+        st.info("Aqui você visualiza, EDITA e exporta todas as ocorrências relatadas pela equipe.")
 
         if os.path.exists(DB_OCORRENCIAS):
             df_atas = pd.read_csv(DB_OCORRENCIAS, sep=";", dtype=str)
             if not df_atas.empty:
-                st.dataframe(df_atas, use_container_width=True)
+                # TABELA EDITÁVEL PARA A COORDENAÇÃO
+                df_atas_editado = st.data_editor(
+                    df_atas, 
+                    use_container_width=True, 
+                    num_rows="dynamic", 
+                    key="editor_admin_atas",
+                    height=300
+                )
                 
-                c1, c2 = st.columns(2)
+                st.write("")
+                col_save_atas, c1, c2 = st.columns([1.5, 1, 1])
+                with col_save_atas:
+                    if st.button("💾 Salvar Edições na Tabela de Atas", use_container_width=True, type="primary"):
+                        df_atas_editado.to_csv(DB_OCORRENCIAS, index=False, sep=";")
+                        st.success("Banco de Atas atualizado com sucesso!")
+                        st.rerun()
                 with c1:
                     st.download_button(
-                        label="📊 Exportar Planilha de Atas (CSV)",
-                        data=df_atas.to_csv(index=False, sep=";"),
+                        label="📊 Exportar Planilha (CSV)",
+                        data=df_atas_editado.to_csv(index=False, sep=";"),
                         file_name=f"atas_samar_{datetime.now().strftime('%Y%m%d')}.csv",
                         mime="text/csv",
-                        type="primary",
                         use_container_width=True
                     )
                 with c2:
-                    # BAIXA TODAS AS ATAS EM FORMATO DOCUMENTO HTML NUM ARQUIVO ZIP!
-                    zip_atas = gerar_zip_atas(df_atas)
+                    zip_atas = gerar_zip_atas(df_atas_editado)
                     st.download_button(
-                        label="🖨️ Baixar Documentos das Atas Oficiais (ZIP)",
+                        label="🖨️ Baixar Documentos HTML (ZIP)",
                         data=zip_atas,
                         file_name=f"Documentos_Atas_{datetime.now().strftime('%Y%m%d')}.zip",
                         mime="application/zip",
-                        type="primary",
                         use_container_width=True
                     )
             else:
@@ -723,19 +732,19 @@ with tab3:
         st.info("O painel de controle da turma aparecerá aqui após o registro do primeiro aluno.")
 
     # ====================================================================
-    # FORMULÁRIO DE ATA DIGITAL PARA O DIGITADOR
+    # FORMULÁRIO DE ATA DIGITAL E EDIÇÃO PARA O DIGITADOR
     # ====================================================================
     st.markdown("---")
-    st.markdown("#### 📋 Registrar Ocorrência (Ata Oficial)")
-    with st.expander("Clique aqui para registrar problemas nas provas físicas desta turma", expanded=False):
-        st.info("Ata com base no Documento Oficial. Relate problemas como rasuras, alunos ausentes ou materiais danificados.")
-        
+    st.markdown("#### 📋 Registrar e Gerenciar Ocorrências (Atas)")
+    
+    with st.expander("➕ Nova Ocorrência (Preencher Ata)", expanded=False):
+        st.info("Relate problemas como rasuras, alunos ausentes ou materiais danificados.")
         with st.form("form_ata", clear_on_submit=True):
             nome_aplicador = st.text_input("NOME DO APLICADOR (Responsável de Sala):")
-            texto_ata = st.text_area("DESCRIÇÃO DA OCORRÊNCIA:", height=150)
+            texto_ata = st.text_area("DESCRIÇÃO DA OCORRÊNCIA:", height=100)
             data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
             
-            if st.form_submit_button("💾 Salvar Ata de Ocorrência no Sistema", type="primary"):
+            if st.form_submit_button("💾 Salvar Ata de Ocorrência", type="primary"):
                 if not st.session_state.escola_val or not st.session_state.turma_val:
                     st.error("⚠️ Preencha a Escola e a Turma no topo da página antes de registrar a ata.")
                 elif not nome_aplicador or not texto_ata:
@@ -753,21 +762,45 @@ with tab3:
                     }
                     df_ata = pd.DataFrame([nova_ata])
                     df_ata.to_csv(DB_OCORRENCIAS, mode='a', header=False, index=False, sep=";")
-                    
-                    html_documento = gerar_html_ata(
-                        st.session_state.escola_val, st.session_state.ano_val, st.session_state.turma_val, 
-                        st.session_state.turno_val, nome_aplicador, texto_ata, nome_operador, data_atual
-                    )
-                    st.session_state['ultima_ata_html'] = html_documento
-                    st.session_state['ultima_ata_nome'] = f"Ata_Ocorrencia_{st.session_state.escola_val.replace(' ','_')}_{st.session_state.turma_val}.html"
-                    
-                    st.success("✅ Ata enviada com sucesso para a Coordenação!")
+                    st.success("✅ Ata enviada! Ela aparecerá na tabela abaixo para você gerenciar e baixar.")
+                    # A página não recarrega automaticamente dentro de um form do Streamlit, então avisamos o usuário.
 
-        if st.session_state.get('ultima_ata_html'):
-            st.download_button(
-                label="🖨️ Baixar Documento da Ata Preenchida (Pronto p/ Impressão)",
-                data=st.session_state['ultima_ata_html'],
-                file_name=st.session_state['ultima_ata_nome'],
-                mime="text/html",
-                type="secondary"
+    # --------------------------------------------------------------------
+    # TABELA DE EDIÇÃO DAS ATAS DO DIGITADOR (MAGIA ACONTECE AQUI)
+    # --------------------------------------------------------------------
+    if os.path.exists(DB_OCORRENCIAS):
+        df_todas_atas = pd.read_csv(DB_OCORRENCIAS, sep=";", dtype=str)
+        # Filtra para o digitador ver APENAS as atas dele
+        df_minhas_atas = df_todas_atas[df_todas_atas['Revisor_Digitador'] == nome_operador]
+        df_outras_atas = df_todas_atas[df_todas_atas['Revisor_Digitador'] != nome_operador]
+        
+        if not df_minhas_atas.empty:
+            st.markdown("##### ✏️ Suas Atas Salvas (Edição e Download)")
+            st.caption("Dê dois cliques na célula para corrigir o texto. Para excluir uma ata, clique na linha e aperte 'Delete'.")
+            
+            df_minhas_editadas = st.data_editor(
+                df_minhas_atas,
+                use_container_width=True,
+                num_rows="dynamic",
+                key=f"editor_atas_{nome_arquivo_seguro}",
+                height=200
             )
+            
+            c_ata1, c_ata2 = st.columns(2)
+            with c_ata1:
+                if st.button("💾 Salvar Edições nas Suas Atas", use_container_width=True):
+                    # Junta as atas dos outros com as atas editadas deste usuário e salva por cima
+                    df_final_atas = pd.concat([df_outras_atas, df_minhas_editadas], ignore_index=True)
+                    df_final_atas.to_csv(DB_OCORRENCIAS, index=False, sep=";")
+                    st.success("Suas Atas foram atualizadas com sucesso no servidor!")
+                    st.rerun()
+            with c_ata2:
+                # Gera o ZIP só com as atas desse digitador, já com as edições refletidas
+                zip_minhas = gerar_zip_atas(df_minhas_editadas)
+                st.download_button(
+                    label="🖨️ Baixar Suas Atas em Documento HTML (ZIP)",
+                    data=zip_minhas,
+                    file_name=f"Minhas_Atas_{nome_operador.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.zip",
+                    mime="application/zip",
+                    use_container_width=True
+                )
