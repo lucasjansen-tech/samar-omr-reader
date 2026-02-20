@@ -37,7 +37,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ====================================================================
-# CONEXÃO COM O BANCO DE DADOS EM NUVEM (SUPABASE)
+# CONEXÃO COM A NUVEM SUPABASE
 # ====================================================================
 try:
     from supabase import create_client, Client
@@ -55,10 +55,10 @@ if HAS_SUPABASE:
         usa_nuvem = True
     except Exception: pass
 
-if not HAS_SUPABASE: st.error("⚠️ Atenção: A biblioteca do Supabase não foi carregada.")
+if not HAS_SUPABASE: st.error("⚠️ A biblioteca supabase não está instalada.")
 
 # ====================================================================
-# INICIALIZAÇÃO DE BANCOS LOCAIS E LISTAS DINÂMICAS
+# INICIALIZAÇÃO DE BANCOS E ESTADOS BLINDADOS
 # ====================================================================
 def hash_senha(senha): return hashlib.sha256(senha.encode()).hexdigest()
 
@@ -74,9 +74,6 @@ else:
 DB_OCORRENCIAS = "atas_ocorrencias_samar.csv"
 if not os.path.exists(DB_OCORRENCIAS): pd.DataFrame(columns=["etapa", "Data_Registro", "Escola", "Ano_Ensino", "Turma", "Turno", "Aplicador", "Revisor_Digitador", "Ocorrencia"]).to_csv(DB_OCORRENCIAS, index=False, sep=";")
 
-DB_ETAPAS = "etapas_samar.csv"
-if not os.path.exists(DB_ETAPAS): pd.DataFrame([{"Nome_Etapa": "Avaliação Diagnóstica", "Data_Limite": "2030-12-31"}]).to_csv(DB_ETAPAS, index=False, sep=";")
-
 DB_ESCOLAS = "escolas_samar.csv"
 if not os.path.exists(DB_ESCOLAS):
     escolas_iniciais = ["COLÉGIO MILITAR TIRADENTES XII", "UNIDADE ESCOLAR JOSÉ LISBOA", "UNIDADE ESCOLAR SÃO JOAQUIM"]
@@ -87,8 +84,20 @@ if not os.path.exists(DB_ANOS):
     anos_iniciais = ["1º Ano", "2º Ano", "3º Ano", "4º Ano", "5º Ano"]
     pd.DataFrame([{"Ano_Ensino": a} for a in anos_iniciais]).to_csv(DB_ANOS, index=False, sep=";")
 
-DB_GABARITOS = "gabaritos_oficiais.csv"
-if not os.path.exists(DB_GABARITOS): pd.DataFrame(columns=["ID", "Etapa", "Ano_Ensino", "Gabarito"]).to_csv(DB_GABARITOS, index=False, sep=";")
+# --- ATUALIZAÇÃO AUTOMÁTICA DA TABELA DE ETAPAS (COM DATA DE ABERTURA) ---
+DB_ETAPAS = "etapas_samar.csv"
+if not os.path.exists(DB_ETAPAS): 
+    pd.DataFrame([{"Nome_Etapa": "Avaliação Diagnóstica", "Data_Abertura": "2020-01-01", "Data_Limite": "2030-12-31"}]).to_csv(DB_ETAPAS, index=False, sep=";")
+else:
+    df_e = pd.read_csv(DB_ETAPAS, sep=";", dtype=str)
+    mudou = False
+    if "Data_Limite" not in df_e.columns:
+        df_e["Data_Limite"] = "2030-12-31"
+        mudou = True
+    if "Data_Abertura" not in df_e.columns:
+        df_e["Data_Abertura"] = "2020-01-01"
+        mudou = True
+    if mudou: df_e.to_csv(DB_ETAPAS, index=False, sep=";")
 
 df_esc_lida = pd.read_csv(DB_ESCOLAS, sep=";", dtype=str)
 ESCOLAS_SAMAR = [""] + df_esc_lida['Nome_Escola'].dropna().tolist()
@@ -99,7 +108,7 @@ ANOS_ENSINO = [""] + df_ano_lida['Ano_Ensino'].dropna().tolist()
 TURMAS_DISP = ["", "A", "B", "C", "D", "E", "F", "G", "H", "Única"]
 TURNOS_DISP = ["", "Manhã", "Tarde", "Integral", "Noite"]
 
-# --- INTELIGÊNCIA DE PRAZOS ---
+# --- INTELIGÊNCIA DE PRAZOS RÍGIDA (ABERTURA E FECHAMENTO) ---
 df_etapas_lidas = pd.read_csv(DB_ETAPAS, sep=";", dtype=str)
 hoje = datetime.now().date()
 ETAPAS_ATIVAS = []
@@ -109,16 +118,32 @@ for _, row in df_etapas_lidas.iterrows():
     if not nome_etapa or nome_etapa == 'nan': continue
     TODAS_ETAPAS.append(nome_etapa)
     try:
-        data_limite_str = str(row.get('Data_Limite', '2030-12-31')).split()[0]
-        if '/' in data_limite_str: dt_limite = datetime.strptime(data_limite_str, "%d/%m/%Y").date()
-        else: dt_limite = datetime.strptime(data_limite_str, "%Y-%m-%d").date()
-        if hoje <= dt_limite: ETAPAS_ATIVAS.append(nome_etapa)
-    except: ETAPAS_ATIVAS.append(nome_etapa) 
+        d_abert_str = str(row.get('Data_Abertura', '2020-01-01')).split()[0]
+        if '/' in d_abert_str: dt_abert = datetime.strptime(d_abert_str, "%d/%m/%Y").date()
+        else: dt_abert = datetime.strptime(d_abert_str, "%Y-%m-%d").date()
+        
+        d_lim_str = str(row.get('Data_Limite', '2030-12-31')).split()[0]
+        if '/' in d_lim_str: dt_lim = datetime.strptime(d_lim_str, "%d/%m/%Y").date()
+        else: dt_lim = datetime.strptime(d_lim_str, "%Y-%m-%d").date()
+        
+        if dt_abert <= hoje <= dt_lim:
+            ETAPAS_ATIVAS.append(nome_etapa)
+    except:
+        ETAPAS_ATIVAS.append(nome_etapa) 
 
 if not TODAS_ETAPAS: TODAS_ETAPAS = ["Padrão"]
 if not ETAPAS_ATIVAS: ETAPAS_ATIVAS = TODAS_ETAPAS 
 
-# --- ESTADOS DA SESSÃO ---
+# --- DICIONÁRIO DE GABARITOS MESTRES ---
+dict_gabaritos_mestres = {}
+if usa_nuvem:
+    try:
+        res_gabs = supabase.table("gabaritos_oficiais").select("*").execute()
+        if res_gabs.data:
+            for item in res_gabs.data:
+                dict_gabaritos_mestres[(item['etapa'], item['ano_ensino'])] = str(item['gabarito']).upper().strip()
+    except: pass
+
 estados_padrao = {
     'usuario_logado': None, 'nome_logado': None, 'perfil_logado': None,
     'turma_confirmada': False, 'config_etapa': "", 'config_escola': "",
@@ -130,19 +155,7 @@ for key, valor in estados_padrao.items():
     if key not in st.session_state: st.session_state[key] = valor
 
 # ====================================================================
-# MAPA GLOBAL DE GABARITOS MESTRES
-# ====================================================================
-dict_gabaritos_mestres = {}
-if usa_nuvem:
-    try:
-        res_gabs = supabase.table("gabaritos_oficiais").select("*").execute()
-        if res_gabs.data:
-            for item in res_gabs.data:
-                dict_gabaritos_mestres[(item['etapa'], item['ano_ensino'])] = str(item['gabarito']).upper().strip()
-    except: pass
-
-# ====================================================================
-# GERADORES DE DOCUMENTOS
+# GERADORES DE ARQUIVOS (PDF E ZIP)
 # ====================================================================
 def gerar_zip_gabaritos(df, conf_prova, modelo_prova):
     id_unico = uuid.uuid4().hex
@@ -286,47 +299,100 @@ for g in conf.grids:
         for r in range(g.rows): mapa_disc_global[g.questao_inicial + r] = disc
 
 if is_admin:
-    tabs = st.tabs(["1. Gerador", "2. Leitor Robô", "3. Cartão Digital", "4. Controle Nuvem", "5. 👥 Usuários", "6. 📋 Atas", "7. ⚙️ Configurações"])
+    tabs = st.tabs(["1. Gerador", "2. Leitor Robô", "3. Cartão Digital", "4. Controle Nuvem", "5. 👥 Usuários", "6. 📋 Atas", "7. ⚙️ Configurações & Ciclos"])
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = tabs
 else:
     tabs = st.tabs(["📝 Área de Transcrição Digital"])
     tab3 = tabs[0]
 
 # ====================================================================
-# ABA 7 (ADMIN): CONFIGURAÇÕES GERAIS
+# ABA 7 (ADMIN): CONFIGURAÇÕES INTEGRADAS (ETAPAS, PRAZOS E GABARITOS)
 # ====================================================================
 if is_admin:
     with tab7:
-        st.markdown("### ⚙️ Configurações Gerais do Sistema")
-        st.info("Personalize as listas que aparecem nos menus. Estas configurações afetam como os dados são arquivados.")
+        st.markdown("### ⚙️ Gestão de Ciclos e Gabaritos")
         
-        c_cfg1, c_cfg2, c_cfg3 = st.columns(3)
-        with c_cfg1:
-            st.markdown("#### 📅 Ciclos e Prazos")
+        with st.container(border=True):
+            st.markdown("#### 📅 1. Definir Ciclos e Prazos de Acesso")
+            st.info("O sistema só aceitará digitações no período entre a Data de Abertura e o Prazo Final.")
             df_etapas_edit = pd.read_csv(DB_ETAPAS, sep=";", dtype=str)
+            df_etapas_edit['Data_Abertura'] = pd.to_datetime(df_etapas_edit['Data_Abertura'], dayfirst=True, errors='coerce').dt.date
+            df_etapas_edit['Data_Abertura'] = df_etapas_edit['Data_Abertura'].fillna(datetime(2020, 1, 1).date())
             df_etapas_edit['Data_Limite'] = pd.to_datetime(df_etapas_edit['Data_Limite'], dayfirst=True, errors='coerce').dt.date
             df_etapas_edit['Data_Limite'] = df_etapas_edit['Data_Limite'].fillna(datetime(2030, 12, 31).date())
-            edited_etapas = st.data_editor(df_etapas_edit, column_config={"Nome_Etapa": st.column_config.TextColumn("Nome do Ciclo", required=True), "Data_Limite": st.column_config.DateColumn("Prazo Final", format="DD/MM/YYYY", required=True)}, num_rows="dynamic", use_container_width=True, key="ed_etp")
-            if st.button("💾 Salvar Ciclos", type="primary", use_container_width=True):
+            
+            edited_etapas = st.data_editor(
+                df_etapas_edit,
+                column_config={
+                    "Nome_Etapa": st.column_config.TextColumn("Nome do Ciclo", required=True),
+                    "Data_Abertura": st.column_config.DateColumn("Data de Abertura", format="DD/MM/YYYY", required=True),
+                    "Data_Limite": st.column_config.DateColumn("Prazo Final de Edição", format="DD/MM/YYYY", required=True)
+                },
+                num_rows="dynamic", use_container_width=True, key="ed_etp"
+            )
+            if st.button("💾 Salvar Ciclos e Prazos", type="primary"):
+                edited_etapas['Data_Abertura'] = edited_etapas['Data_Abertura'].apply(lambda x: x.strftime('%Y-%m-%d') if pd.notna(x) else '2020-01-01')
                 edited_etapas['Data_Limite'] = edited_etapas['Data_Limite'].apply(lambda x: x.strftime('%Y-%m-%d') if pd.notna(x) else '2030-12-31')
                 edited_etapas.to_csv(DB_ETAPAS, index=False, sep=";")
                 st.success("Ciclos atualizados!")
                 st.rerun()
 
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # O NOVO GERENCIADOR DE GABARITOS VINCULADO À ETAPA
+        with st.container(border=True):
+            st.markdown("#### 🔑 2. Atribuir Gabaritos Mestres por Ciclo")
+            st.info("Adicione os Anos de Ensino que serão avaliados em um ciclo específico e suas respectivas respostas. Turmas que não possuírem gabarito cadastrado aqui serão ignoradas pelo Motor de Correção.")
+            
+            sel_eta_gab = st.selectbox("Selecione o Ciclo para vincular os gabaritos:", TODAS_ETAPAS, key="sel_eta_gab")
+            if usa_nuvem and sel_eta_gab:
+                res_gab_db = supabase.table("gabaritos_oficiais").select("*").eq("etapa", sel_eta_gab).execute()
+                if res_gab_db.data:
+                    df_gabs = pd.DataFrame(res_gab_db.data)
+                    df_gabs.columns = ['ID', 'Etapa', 'Ano_Ensino', 'Gabarito']
+                else:
+                    df_gabs = pd.DataFrame(columns=['ID', 'Etapa', 'Ano_Ensino', 'Gabarito'])
+                    
+                config_cols_gab = {
+                    "ID": None, "Etapa": None, # Escondido, pois a seleção já é a etapa
+                    "Ano_Ensino": st.column_config.SelectboxColumn("Ano de Ensino Avaliado", options=ANOS_ENSINO, required=True),
+                    "Gabarito": st.column_config.TextColumn("Letras do Gabarito Mestre", required=True)
+                }
+                
+                df_gabs_edit = st.data_editor(df_gabs[['ID', 'Ano_Ensino', 'Gabarito']], column_config=config_cols_gab, num_rows="dynamic", use_container_width=True, key="ed_gabs_t7")
+                
+                if st.button(f"💾 Salvar Gabaritos do(a) {sel_eta_gab}", type="primary"):
+                    records_gab = []
+                    for _, r in df_gabs_edit.iterrows():
+                        if pd.notna(r["Ano_Ensino"]) and pd.notna(r["Gabarito"]):
+                            records_gab.append({
+                                "id": str(r["ID"]) if pd.notna(r.get("ID")) else str(uuid.uuid4()),
+                                "etapa": sel_eta_gab,
+                                "ano_ensino": str(r["Ano_Ensino"]),
+                                "gabarito": str(r["Gabarito"]).upper().strip()
+                            })
+                    supabase.table("gabaritos_oficiais").delete().eq("etapa", sel_eta_gab).execute() 
+                    if records_gab: supabase.table("gabaritos_oficiais").insert(records_gab).execute()
+                    st.success("Gabaritos e Séries Avaliadas do ciclo foram atualizados!")
+                    st.rerun()
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        c_cfg2, c_cfg3 = st.columns(2)
         with c_cfg2:
-            st.markdown("#### 🏫 Escolas da Rede")
+            st.markdown("#### 🏫 3. Escolas da Rede")
             df_esc_edit = pd.read_csv(DB_ESCOLAS, sep=";", dtype=str)
             edited_escolas = st.data_editor(df_esc_edit, column_config={"Nome_Escola": st.column_config.TextColumn("Nome da Escola", required=True)}, num_rows="dynamic", use_container_width=True, key="ed_esc")
-            if st.button("💾 Salvar Escolas", type="primary", use_container_width=True):
+            if st.button("💾 Salvar Escolas", type="primary"):
                 edited_escolas.to_csv(DB_ESCOLAS, index=False, sep=";")
                 st.success("Escolas atualizadas!")
                 st.rerun()
 
         with c_cfg3:
-            st.markdown("#### 🎓 Anos de Ensino")
+            st.markdown("#### 🎓 4. Anos de Ensino")
             df_ano_edit = pd.read_csv(DB_ANOS, sep=";", dtype=str)
-            edited_anos = st.data_editor(df_ano_edit, column_config={"Ano_Ensino": st.column_config.TextColumn("Ano / Série / Etapa", required=True)}, num_rows="dynamic", use_container_width=True, key="ed_ano")
-            if st.button("💾 Salvar Anos", type="primary", use_container_width=True):
+            edited_anos = st.data_editor(df_ano_edit, column_config={"Ano_Ensino": st.column_config.TextColumn("Ano / Série", required=True)}, num_rows="dynamic", use_container_width=True, key="ed_ano")
+            if st.button("💾 Salvar Anos", type="primary"):
                 edited_anos.to_csv(DB_ANOS, index=False, sep=";")
                 st.success("Anos de ensino atualizados!")
                 st.rerun()
@@ -384,7 +450,6 @@ if is_admin:
 
         st.markdown("---")
         
-        # BUSCA GABARITO MESTRE AUTOMÁTICO
         gab_mestre_detectado = dict_gabaritos_mestres.get((etapa_leitor, ano_leitor), "")
         gab_oficial = {}
         
@@ -418,9 +483,7 @@ if is_admin:
             for arquivo in up:
                 try:
                     if arquivo.type == "application/pdf": pages = convert_from_bytes(arquivo.read(), dpi=200)
-                    else: 
-                        from PIL import Image
-                        pages = [Image.open(arquivo)]
+                    else: pages = [Image.open(arquivo)]
                     for i, p in enumerate(pages):
                         img = np.array(p)
                         if img.ndim == 2: img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
@@ -453,50 +516,13 @@ if is_admin:
                 st.download_button("📥 Baixar CSV Corrigido e Padronizado", df_export.to_csv(index=False, sep=";"), nome_csv, "text/csv", type="primary")
 
 # ====================================================================
-# ABA 4 (ADMIN): TORRE DE CONTROLE + GABARITOS MESTRES
+# ABA 4 (ADMIN): TORRE DE CONTROLE, EXCLUSÃO EXATA E NOTAS INTELIGENTES
 # ====================================================================
 if is_admin:
     with tab4:
         st.markdown("### ☁️ Torre de Controle do Supabase")
-        
-        # GERENCIADOR DE GABARITOS MESTRES
-        with st.expander("🔑 Cadastrar Gabaritos Oficiais (Mestre)", expanded=False):
-            st.info("Cadastre o gabarito oficial para cada Ano de Ensino. O motor de notas vai procurar esta chave para corrigir os alunos daquela etapa.")
-            if usa_nuvem:
-                res_gab_db = supabase.table("gabaritos_oficiais").select("*").execute()
-                if res_gab_db.data:
-                    df_gabs = pd.DataFrame(res_gab_db.data)
-                    df_gabs.columns = ['ID', 'Etapa', 'Ano_Ensino', 'Gabarito']
-                else:
-                    df_gabs = pd.DataFrame(columns=['ID', 'Etapa', 'Ano_Ensino', 'Gabarito'])
-                    
-                config_cols_gab = {
-                    "ID": None,
-                    "Etapa": st.column_config.SelectboxColumn("Etapa / Ciclo", options=TODAS_ETAPAS, required=True),
-                    "Ano_Ensino": st.column_config.SelectboxColumn("Ano de Ensino", options=ANOS_ENSINO, required=True),
-                    "Gabarito": st.column_config.TextColumn("Letras do Gabarito", required=True)
-                }
-                
-                df_gabs_edit = st.data_editor(df_gabs, column_config=config_cols_gab, num_rows="dynamic", use_container_width=True, key="ed_gabs")
-                
-                if st.button("💾 Salvar Gabaritos no Banco", type="primary"):
-                    records_gab = []
-                    for _, r in df_gabs_edit.iterrows():
-                        if pd.notna(r["Etapa"]) and pd.notna(r["Ano_Ensino"]) and pd.notna(r["Gabarito"]):
-                            records_gab.append({
-                                "id": r["ID"] if pd.notna(r.get("ID")) else str(uuid.uuid4()),
-                                "etapa": str(r["Etapa"]),
-                                "ano_ensino": str(r["Ano_Ensino"]),
-                                "gabarito": str(r["Gabarito"]).upper().strip()
-                            })
-                    supabase.table("gabaritos_oficiais").delete().neq("etapa", "dummy").execute() 
-                    if records_gab: supabase.table("gabaritos_oficiais").insert(records_gab).execute()
-                    st.success("Chaves Mestras atualizadas!")
-                    st.rerun()
+        st.info("Visualize, edite, bloqueie ou exclua as turmas na nuvem. Exporte os dados utilizando os Gabaritos Oficiais.")
 
-        st.markdown("---")
-
-        # TORRE DE CONTROLE DE TURMAS E EXCLUSÃO RÍGIDA
         if usa_nuvem:
             res_nuvem = supabase.table("respostas_geral").select("*").execute()
             if res_nuvem.data:
@@ -590,8 +616,8 @@ if is_admin:
                     st.write("⬆️ Para ver e editar os dados, utilize os filtros acima e selecione uma Escola.")
 
                 st.markdown("---")
-                st.markdown("#### ⚙️ Motor Inteligente de Notas (ZIP com Pastas)")
-                st.caption("O sistema vai ler o Gabarito Mestre de cada Ano de Ensino e corrigir automaticamente os alunos que você filtrou acima.")
+                st.markdown("#### ⚙️ Motor Inteligente de Notas (Gabaritos Vinculados)")
+                st.caption(f"O sistema usará os Gabaritos Mestres configurados na Aba 7 para corrigir estes **{len(df_f3)} alunos**.")
 
                 if st.button("🚀 Calcular Notas Inteligentes e Empacotar (ZIP)", type="primary", use_container_width=True):
                     with st.spinner("Buscando gabaritos e corrigindo alunos..."):
@@ -604,9 +630,8 @@ if is_admin:
                                 # PUXA O GABARITO EXATO PARA AQUELE ALUNO
                                 gabarito_str = dict_gabaritos_mestres.get((eta_aluno, ano_aluno), "")
                                 
-                                # REGRA DE OURO: SE NÃO TEM GABARITO, PULA A CORREÇÃO DESTE ALUNO
-                                if not gabarito_str:
-                                    continue
+                                # REGRA: SE NÃO TEM GABARITO, PULA A CORREÇÃO DESTE ALUNO
+                                if not gabarito_str: continue
                                 
                                 gab_dict_admin = {}
                                 for i, char in enumerate(gabarito_str[:total_q_global]): 
@@ -663,9 +688,9 @@ if is_admin:
                             st.success(f"✅ {len(df_final_admin)} alunos avaliados foram separados em pastas e empacotados!")
                             st.download_button("📥 Baixar Arquivo ZIP Estruturado", data=zip_csv_buffer.getvalue(), file_name=f"Resultados_SAMAR_{datetime.now().strftime('%Y%m%d')}.zip", mime="application/zip", type="primary", use_container_width=True)
                         else:
-                            st.warning("⚠️ Nenhum aluno foi corrigido. Verifique se você cadastrou o Gabarito Mestre para o Ano de Ensino destes alunos.")
+                            st.warning("⚠️ Nenhum aluno foi corrigido. Verifique se você cadastrou o Gabarito Mestre na Aba 7 para o Ano de Ensino destes alunos.")
             else:
-                st.info("A Nuvem está vazia. Aguarde os digitadores enviarem os dados.")
+                st.info("A Nuvem está vazia.")
 
 # ====================================================================
 # ABA 5 E 6: GESTÃO DE USUÁRIOS E ATAS
@@ -737,26 +762,24 @@ if is_admin:
             else: st.success("Nenhuma ocorrência na nuvem.")
 
 # ====================================================================
-# ABA 3 COMPARTILHADA: A MÁGICA DO DIGITADOR (COM VALIDAÇÕES)
+# ABA 3 COMPARTILHADA: A MÁGICA DO DIGITADOR (COM VALIDAÇÕES RÍGIDAS)
 # ====================================================================
 with tab3:
     nome_operador = st.session_state['nome_logado']
     mapa_valores_global = {"A":"A", "B":"B", "C":"C", "D":"D", "Branco":"-", "Rasura":"*", None: "-"}
     
     def salvar_aluno_callback():
-        # VALIDAÇÃO 1: NOME EM BRANCO
         if not st.session_state.nome_aluno_input.strip():
             st.session_state.msg_erro = "⚠️ OBRIGATÓRIO: O campo 'Nome do Aluno' não pode ficar em branco."
             return
 
-        # VALIDAÇÃO 2: QUESTÕES NÃO MARCADAS
         questoes_vazias = []
         for q in range(1, total_q_global + 1):
             if st.session_state.get(f"q_{q}") is None:
                 questoes_vazias.append(str(q))
                 
         if questoes_vazias:
-            st.session_state.msg_erro = f"⚠️ OBRIGATÓRIO: Você esqueceu de preencher as questões: {', '.join(questoes_vazias)}. (Se o aluno não respondeu, marque 'Branco')."
+            st.session_state.msg_erro = f"⚠️ OBRIGATÓRIO: Faltou marcar as questões: {', '.join(questoes_vazias)}. (Se deixou em branco no papel, marque a opção 'Branco')."
             return
         
         nova_freq = st.session_state.freq_d + st.session_state.freq_u
@@ -787,9 +810,6 @@ with tab3:
         st.success(st.session_state.msg_sucesso)
         st.session_state.msg_sucesso = None
 
-    # ====================================================================
-    # FASE 1: NAVEGAÇÃO E TRAVA DE HOMÔNIMAS
-    # ====================================================================
     if not st.session_state['turma_confirmada']:
         tab_criar, tab_hist = st.tabs(["📝 Iniciar Nova Turma", "📂 Buscar do Meu Histórico (Nuvem)"])
         
@@ -813,7 +833,6 @@ with tab3:
                             st.session_state.msg_erro = "⚠️ Preencha todos os campos obrigatórios da turma!"
                             st.rerun()
                         else:
-                            # VALIDAÇÃO EXTRA: IMPEDE DUAS PESSOAS NA MESMA TURMA HOMÔNIMA
                             if usa_nuvem:
                                 check_exist = supabase.table("respostas_geral").select("digitador").eq("etapa", s_etapa).eq("escola", s_escola).eq("ano_ensino", s_ano).eq("turma", s_turma).eq("turno", s_turno).limit(1).execute()
                                 if check_exist.data:
@@ -861,9 +880,6 @@ with tab3:
                         else: st.info("Você não tem nenhuma turma salva na nuvem ainda.")
                     else: st.info("Você não tem nenhuma turma salva na nuvem ainda.")
 
-    # ====================================================================
-    # FASE 2: TELA DE DIGITAÇÃO E EDIÇÃO 
-    # ====================================================================
     else:
         st.success(f"📌 **Local de Trabalho Fixo:** {st.session_state.config_etapa} | {st.session_state.config_escola} | {st.session_state.config_ano} - Turma {st.session_state.config_turma} ({st.session_state.config_turno})")
         if st.button("⬅️ Sair Desta Turma (Voltar ao Menu)"):
@@ -921,7 +937,6 @@ with tab3:
 
         st.markdown("---")
         
-        # TABELA DE VISUALIZAÇÃO E EDIÇÃO + ZIP DE IMAGENS DE VOLTA
         st.markdown(f"#### 📁 Alunos Registrados nesta Turma")
         if usa_nuvem:
             res_turma = supabase.table("respostas_geral").select("*").eq("etapa", st.session_state.config_etapa).eq("escola", st.session_state.config_escola).eq("ano_ensino", st.session_state.config_ano).eq("turma", st.session_state.config_turma).eq("turno", st.session_state.config_turno).eq("digitador", nome_operador).execute()
@@ -963,10 +978,9 @@ with tab3:
                         st.success("Tabela sincronizada com sucesso na nuvem!")
                         st.rerun()
 
-                # BOTÃO DE ZIP PARA O DIGITADOR DE VOLTA À VIDA
                 st.write("")
-                with st.expander("📥 Exportar Comprovantes (Gabaritos em Imagem)", expanded=False):
-                    st.info("O sistema criará as imagens preenchidas para todos os alunos acima.")
+                with st.expander("📥 Exportar Comprovantes Visuais (Gabaritos em Imagem)", expanded=False):
+                    st.info("O sistema criará as imagens preenchidas para todos os alunos acima. Como são imagens, pode levar alguns segundos.")
                     if st.button("Empacotar Imagens (ZIP)", key="btn_zip_dig"):
                         st.session_state.gerar_zip_digitador = True
                     
