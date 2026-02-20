@@ -132,7 +132,7 @@ for key, valor in estados_padrao.items():
     if key not in st.session_state: st.session_state[key] = valor
 
 # ====================================================================
-# GERADORES DE ARQUIVOS (ALINHAMENTO CIRÚRGICO RECALCULADO)
+# GERADORES DE ARQUIVOS (ALINHAMENTO CIRÚRGICO E TEXTO PRETO)
 # ====================================================================
 def gerar_zip_gabaritos(df, conf_prova, modelo_prova):
     id_unico = uuid.uuid4().hex
@@ -166,14 +166,13 @@ def gerar_zip_gabaritos(df, conf_prova, modelo_prova):
             espessura = 2
             h, w = conf_prova.REF_H, conf_prova.REF_W
             
-            # MATEMÁTICA DO ESPAÇO: Coloca o texto em cima da linha pontilhada e tira prefixos extras
-            cv2.putText(img_aluno, escola, (int(w * 0.23), int(h * 0.146)), fonte, escala, cor_caneta, espessura)
-            cv2.putText(img_aluno, ano, (int(w * 0.11), int(h * 0.178)), fonte, escala, cor_caneta, espessura)
-            cv2.putText(img_aluno, turma, (int(w * 0.40), int(h * 0.178)), fonte, escala, cor_caneta, espessura)
-            cv2.putText(img_aluno, turno, (int(w * 0.63), int(h * 0.178)), fonte, escala, cor_caneta, espessura)
-            cv2.putText(img_aluno, nome, (int(w * 0.12), int(h * 0.213)), fonte, escala, cor_caneta, espessura)
-            # Imprime SÓ O NÚMERO da frequência, para não sobrepor o texto 'FREQ:' já existente no PDF
-            cv2.putText(img_aluno, freq, (int(w * 0.89), int(h * 0.213)), fonte, escala, cor_caneta, espessura)
+            # MATEMÁTICA DO ESPAÇO: Posicionado milimetricamente acima da linha pontilhada
+            cv2.putText(img_aluno, escola, (int(w * 0.27), int(h * 0.140)), fonte, escala, cor_caneta, espessura)
+            cv2.putText(img_aluno, ano, (int(w * 0.12), int(h * 0.172)), fonte, escala, cor_caneta, espessura)
+            cv2.putText(img_aluno, turma, (int(w * 0.39), int(h * 0.172)), fonte, escala, cor_caneta, espessura)
+            cv2.putText(img_aluno, turno, (int(w * 0.64), int(h * 0.172)), fonte, escala, cor_caneta, espessura)
+            cv2.putText(img_aluno, nome, (int(w * 0.12), int(h * 0.207)), fonte, escala, cor_caneta, espessura)
+            cv2.putText(img_aluno, freq, (int(w * 0.90), int(h * 0.207)), fonte, escala, cor_caneta, espessura)
             
             for grid in conf_prova.grids:
                 x1, x2 = int(grid.x_start * conf_prova.REF_W), int(grid.x_end * conf_prova.REF_W)
@@ -415,7 +414,7 @@ if is_admin:
         expected_total_leitor, blocos_esperados_leitor = get_padrao_por_ano(ano_leitor)
         
         if gab_mestre_detectado:
-            st.success(f"✅ **Gabarito Mestre Detectado:** O sistema usará as respostas do {ano_leitor}.")
+            st.success(f"✅ **Gabarito Mestre Detectado Automaticamente:** O sistema usará as respostas do {ano_leitor}.")
             for i, char in enumerate(gab_mestre_detectado[:expected_total_leitor]): 
                 gab_oficial[i+1] = "NULA" if char in ["X", "N"] else char
         else:
@@ -493,7 +492,7 @@ if is_admin:
                 st.download_button("📥 Baixar CSV Corrigido", df_export.to_csv(index=False, sep=";"), f"Resultados_Robo_{ano_leitor}_{turma_leitor}.csv", "text/csv", type="primary")
 
 # ====================================================================
-# ABA 4 (ADMIN): TORRE DE CONTROLE (FILTROS CORRIGIDOS E EXCLUSÃO)
+# ABA 4 (ADMIN): TORRE DE CONTROLE (FILTROS INTELIGENTES LIVRES)
 # ====================================================================
 if is_admin:
     with tab4:
@@ -511,41 +510,45 @@ if is_admin:
                 df_master = df_master[colunas_display]
                 df_master.columns = ['ID', 'Etapa', 'Escola', 'Ano_Ensino', 'Turma', 'Turno', 'Frequencia', 'Nome_Aluno', 'Respostas_Brutas', 'Digitador', 'Status']
 
-                # --- NOVO SISTEMA DE FILTROS LIVRES (CASCATA) ---
+                # FILTROS EM CASCATA LIVRES (PODE VER A REDE INTEIRA)
                 with st.container(border=True):
                     st.markdown("#### 🔍 Filtro Hierárquico Inteligente")
                     f_col0, f_col1, f_col2, f_col3 = st.columns(4)
                     
                     with f_col0:
-                        etapas_disp = ["Todas as Etapas"] + sorted(list(df_master['Etapa'].dropna().unique()))
+                        etapas_disp = [""] + sorted(list(df_master['Etapa'].dropna().unique()))
                         sel_etapa_admin = st.selectbox("1. Selecione a Etapa:", etapas_disp)
                     
-                    df_f1 = df_master if sel_etapa_admin == "Todas as Etapas" else df_master[df_master['Etapa'] == sel_etapa_admin]
+                    df_f1 = df_master[df_master['Etapa'] == sel_etapa_admin] if sel_etapa_admin else pd.DataFrame()
                     
                     with f_col1:
-                        anos_disp = ["Todos os Anos"] + sorted(list(df_f1['Ano_Ensino'].dropna().unique()))
-                        sel_ano_admin = st.selectbox("2. Selecione o Ano:", anos_disp)
+                        anos_disp = ["", "Todos os Anos"] + sorted(list(df_f1['Ano_Ensino'].dropna().unique())) if sel_etapa_admin else [""]
+                        sel_ano_admin = st.selectbox("2. Selecione o Ano:", anos_disp, disabled=not sel_etapa_admin)
                     
-                    df_f2 = df_f1 if sel_ano_admin == "Todos os Anos" else df_f1[df_f1['Ano_Ensino'] == sel_ano_admin]
+                    if sel_ano_admin == "Todos os Anos": df_f2 = df_f1
+                    elif sel_ano_admin: df_f2 = df_f1[df_f1['Ano_Ensino'] == sel_ano_admin]
+                    else: df_f2 = pd.DataFrame()
 
                     with f_col2:
-                        escolas_disp = ["Todas as Escolas"] + sorted(list(df_f2['Escola'].dropna().unique()))
-                        sel_esc_admin = st.selectbox("3. Selecione a Escola:", escolas_disp)
+                        escolas_disp = ["", "Todas as Escolas"] + sorted(list(df_f2['Escola'].dropna().unique())) if sel_ano_admin else [""]
+                        sel_esc_admin = st.selectbox("3. Selecione a Escola:", escolas_disp, disabled=not sel_ano_admin)
                     
-                    df_f3 = df_f2 if sel_esc_admin == "Todas as Escolas" else df_f2[df_f2['Escola'] == sel_esc_admin]
+                    if sel_esc_admin == "Todas as Escolas": df_f3 = df_f2
+                    elif sel_esc_admin: df_f3 = df_f2[df_f2['Escola'] == sel_esc_admin]
+                    else: df_f3 = pd.DataFrame()
 
                     with f_col3:
-                        turmas_disp = ["Todas as Turmas"] + sorted(list(df_f3['Turma'].dropna().unique()))
-                        sel_tur_admin = st.selectbox("4. Selecione a Turma:", turmas_disp)
+                        turmas_disp = ["", "Todas as Turmas"] + sorted(list(df_f3['Turma'].dropna().unique())) if sel_esc_admin else [""]
+                        sel_tur_admin = st.selectbox("4. Selecione a Turma:", turmas_disp, disabled=not sel_esc_admin)
                         
-                    df_final_filtro = df_f3 if sel_tur_admin == "Todas as Turmas" else df_f3[df_f3['Turma'] == sel_tur_admin]
+                    if sel_tur_admin == "Todas as Turmas": df_final_filtro = df_f3
+                    elif sel_tur_admin: df_final_filtro = df_f3[df_f3['Turma'] == sel_tur_admin]
+                    else: df_final_filtro = pd.DataFrame()
 
-                # EXIBIÇÃO DE TODAS AS TURMAS QUE CAÍREM NO FILTRO
+                # MOSTRA AS TABELAS ENCONTRADAS NO FILTRO (MESMO SENDO VÁRIAS ESCOLAS)
                 if not df_final_filtro.empty:
                     turmas_turnos = df_final_filtro[['Escola', 'Etapa', 'Ano_Ensino', 'Turma', 'Turno']].drop_duplicates().values.tolist()
-                    
-                    # Organiza alfabeticamente para ficar bonito na tela
-                    turmas_turnos.sort(key=lambda x: (x[0], x[2], x[3]))
+                    turmas_turnos.sort(key=lambda x: (x[2], x[0], x[3])) # Organiza Ano > Escola > Turma
                     
                     for (esc, eta_b, ano_b, tur, tur_no) in turmas_turnos:
                         with st.expander(f"🏫 {esc} | 📚 {eta_b} | {ano_b} | Turma {tur} ({tur_no})", expanded=False):
@@ -602,10 +605,11 @@ if is_admin:
                                     st.success("A turma foi apagada da nuvem instantaneamente.")
                                     st.rerun()
                 else:
-                    st.info("⬆️ Nenhum aluno encontrado com o filtro atual.")
+                    if sel_etapa_admin:
+                        st.info("⬆️ Nenhum dado encontrado para o filtro selecionado.")
 
                 st.markdown("---")
-                st.markdown("#### ⚙️ Motor Inteligente de Notas (ZIP com Pastas)")
+                st.markdown("#### ⚙️ Motor Inteligente de Notas (Gabaritos Vinculados)")
 
                 if st.button("🚀 Calcular Notas do Filtro Atual e Empacotar (ZIP)", type="primary", use_container_width=True):
                     with st.spinner("Buscando gabaritos mestres e corrigindo alunos..."):
@@ -677,10 +681,10 @@ if is_admin:
                                     nome_arquivo_csv = f"{eta_clean}/{esc_clean}/{ano_clean}/Turma_{tur_clean}_{turno_clean}.csv"
                                     zf.writestr(nome_arquivo_csv, group_df.to_csv(index=False, sep=";"))
                                     
-                            st.success(f"✅ {len(df_final_admin)} alunos do seu filtro foram corrigidos e empacotados!")
+                            st.success(f"✅ {len(df_final_admin)} alunos avaliados foram separados em pastas e empacotados!")
                             st.download_button("📥 Baixar Arquivo ZIP Estruturado", data=zip_csv_buffer.getvalue(), file_name=f"Resultados_SAMAR_{datetime.now().strftime('%Y%m%d')}.zip", mime="application/zip", type="primary", use_container_width=True)
                         else:
-                            st.warning("⚠️ O motor não corrigiu ninguém. Isso acontece se não houver dados no filtro selecionado ou se a Coordenação não tiver cadastrado o Gabarito Mestre desta Etapa/Ano na Aba 7.")
+                            st.warning("⚠️ O motor não corrigiu nenhum aluno. Verifique se as turmas selecionadas possuem Gabarito Mestre cadastrado na Aba 7.")
             else:
                 st.info("A Nuvem está vazia.")
 
@@ -747,7 +751,7 @@ if is_admin:
             else: st.success("Nenhuma ocorrência na nuvem.")
 
 # ====================================================================
-# ABA 3 COMPARTILHADA: A MÁGICA DO DIGITADOR 
+# ABA 3 COMPARTILHADA: A MÁGICA DO DIGITADOR (SEM ERRO DE TELA VERMELHA)
 # ====================================================================
 with tab3:
     nome_operador = st.session_state['nome_logado']
@@ -945,7 +949,8 @@ with tab3:
                     st.dataframe(df_turma[colunas_exibir], use_container_width=True, column_config=config_colunas, height=300)
                 else:
                     st.caption("Dê dois cliques na célula para corrigir uma letra ou aperte 'Delete' para apagar um aluno duplicado.")
-                    df_editado_ui = st.data_editor(df_turma[colunas_exibir], use_container_width=True, num_rows="dynamic", column_config=config_colunas, height=300, key=f"editor_atual_{st.session_state.reset_key}")
+                    # AQUI FOI ONDE TIREI O "RESET_KEY" QUE GERAVA A TELA VERMELHA
+                    df_editado_ui = st.data_editor(df_turma[colunas_exibir], use_container_width=True, num_rows="dynamic", column_config=config_colunas, height=300, key="editor_atual_dig")
                     
                     if st.button("Salvar Edições da Tabela na Nuvem", type="primary", use_container_width=True):
                         df_salvar = df_editado_ui.copy()
@@ -968,7 +973,7 @@ with tab3:
 
                 st.write("")
                 with st.expander("📥 Exportar Comprovantes Visuais (Gabaritos em Imagem)", expanded=False):
-                    st.info("O sistema criará as imagens preenchidas para todos os alunos da tabela.")
+                    st.info("O sistema criará as imagens preenchidas para todos os alunos da tabela. O texto agora tem formatação oficial e alinhada.")
                     if st.button("Empacotar Imagens (ZIP)", key="btn_zip_dig"):
                         st.session_state.gerar_zip_digitador = True
                     
