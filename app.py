@@ -469,7 +469,7 @@ if is_admin:
                 except Exception: pass
 
 # ====================================================================
-# ABA 3 COMPARTILHADA: CARTÃO-RESPOSTA DIGITAL (TRANSCRIÇÃO)
+# ABA 3 COMPARTILHADA: CARTÃO-RESPOSTA DIGITAL (TRANSCRIÇÃO BLINDADA)
 # ====================================================================
 with tab3:
     nome_operador = st.session_state['nome_logado']
@@ -478,7 +478,7 @@ with tab3:
     st.session_state['ARQUIVO_TEMP'] = ARQUIVO_TEMP
     
     # ---------------------------------------------------------
-    # RECUPERAÇÃO MÁGICA DE DADOS
+    # RECUPERAÇÃO MÁGICA: PUXA DADOS DO CSV SE A SESSÃO APAGAR
     # ---------------------------------------------------------
     if os.path.exists(ARQUIVO_TEMP):
         try:
@@ -496,7 +496,7 @@ with tab3:
         except: pass
 
     # ---------------------------------------------------------
-    # MEMÓRIA PERSISTENTE E CALLBACKS
+    # MEMÓRIA PERSISTENTE: O COFRE DOS CAMPOS
     # ---------------------------------------------------------
     for k in ["escola_val", "ano_val", "turma_val", "turno_val"]:
         if k not in st.session_state: st.session_state[k] = ""
@@ -625,16 +625,12 @@ with tab3:
     st.markdown("---")
     st.markdown("#### 📁 Progresso da Turma e Fechamento")
     
-    # ---------------------------------------------------------
-    # O NOVO EDITOR DE TABELA (COM COLUNAS FATIADAS E CABEÇALHO FIXO)
-    # ---------------------------------------------------------
     if os.path.exists(ARQUIVO_TEMP):
         df_temp = pd.read_csv(ARQUIVO_TEMP, sep=";", dtype=str)
         for col in ["Escola", "Ano_Ensino", "Turma", "Turno", "Nome_Aluno", "Frequencia", "Respostas_Brutas"]:
             if col not in df_temp.columns: df_temp[col] = ""
         df_temp = df_temp.fillna("")
         
-        # FATIANDO A TRIPA DE LETRAS EM COLUNAS INDIVIDUAIS
         for q in range(1, total_q_global + 1):
             df_temp[f"Q{q:02d}"] = df_temp["Respostas_Brutas"].apply(lambda x: x[q-1] if isinstance(x, str) and len(x) >= q else "-")
         
@@ -643,7 +639,6 @@ with tab3:
             st.write(f"**Total de Alunos Transcritos nesta sessão:** {len(df_temp)}")
             st.info("💡 **Dica de Edição:** Dê dois cliques na célula da questão abaixo para corrigir a letra. O cabeçalho fica fixo se você rolar a tabela!")
         
-        # CONFIGURAÇÃO DE COLUNAS: Define os menus suspensos e os limites da tabela
         colunas_exibir = ["Escola", "Ano_Ensino", "Turma", "Turno", "Frequencia", "Nome_Aluno"] + [f"Q{q:02d}" for q in range(1, total_q_global + 1)]
         
         config_colunas = {
@@ -651,11 +646,9 @@ with tab3:
             "Escola": st.column_config.TextColumn(width="medium"),
             "Nome_Aluno": st.column_config.TextColumn("Nome", width="medium"),
         }
-        # Adiciona a trava (menu suspenso) para todas as colunas de questão
         for q in range(1, total_q_global + 1):
             config_colunas[f"Q{q:02d}"] = st.column_config.SelectboxColumn(f"Q{q:02d}", options=["A", "B", "C", "D", "-", "*"], width="small", required=True)
 
-        # RENDERIZA A TABELA COM ALTURA FIXA (Isso ativa o Cabeçalho Fixo do Streamlit!)
         df_editado_ui = st.data_editor(
             df_temp[colunas_exibir], 
             use_container_width=True,
@@ -665,7 +658,6 @@ with tab3:
             key=f"editor_{nome_arquivo_seguro}"
         )
         
-        # RECONSTRUÇÃO SILENCIOSA: Junta as fatias de volta na "tripa" para o motor do Admin não quebrar
         df_salvar = df_editado_ui.copy()
         if not df_salvar.empty:
             df_salvar["Respostas_Brutas"] = df_salvar[[f"Q{q:02d}" for q in range(1, total_q_global + 1)]].agg(lambda x: ''.join(x.astype(str)), axis=1)
@@ -709,7 +701,6 @@ with tab3:
                         use_container_width=True
                     )
         with c3:
-            # GAVETA DE SEGURANÇA (Trava para não apagar sem querer)
             with st.expander("🗑️ Iniciar Nova Turma", expanded=False):
                 st.markdown("<p style='font-size:14px; color:#d32f2f;'><b>⚠️ Atenção:</b> Verifique se você já fez o download do CSV e do ZIP acima antes de prosseguir!</p>", unsafe_allow_html=True)
                 
@@ -717,13 +708,13 @@ with tab3:
                     try: os.remove(ARQUIVO_TEMP)
                     except Exception: pass
                     
-                    # Amnésia Forçada: Limpa a memória das variáveis
+                    # Amnésia Forçada 1: Limpa a memória das variáveis cofre
                     for campo in ["escola_val", "ano_val", "turma_val", "turno_val"]:
                         st.session_state[campo] = ""
                         
+                    # Amnésia Forçada 2: FORÇA os componentes visuais a ficarem em branco diretamente!
                     for widget in ["_escola", "_ano", "_turma", "_turno"]:
-                        if widget in st.session_state:
-                            del st.session_state[widget]
+                        st.session_state[widget] = ""
                             
                     st.rerun()
     else:
