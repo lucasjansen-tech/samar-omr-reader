@@ -17,6 +17,29 @@ from datetime import datetime
 st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
 
 # ====================================================================
+# LISTA OFICIAL DE ESCOLAS
+# ====================================================================
+ESCOLAS_SAMAR = [
+    "",
+    "COLÉGIO MILITAR TIRADENTES XII",
+    "UNIDADE ESCOLAR JOSÉ LISBOA",
+    "UNIDADE ESCOLAR MANOEL BATISTA",
+    "UNIDADE ESCOLAR NOVA ARAÇAGI",
+    "UNIDADE ESCOLAR SOCORRO MAGALHÃES",
+    "UNIDADE ESCOLAR SÃO JOAQUIM",
+    "UNIDADE ESCOLAR VILA NOVA",
+    "UNIDADE ESCOLAR VILA SÃO JOÃO",
+    "UNIDADE INTEGRADA CRIANÇA ESPERANÇA",
+    "UNIDADE INTEGRADA HENRIQUE DE LA ROQUE",
+    "UNIDADE INTEGRADA JARBAS PASSARINHO",
+    "UNIDADE INTEGRADA MARCONE CALDAS",
+    "UNIDADE INTEGRADA PROFESSORA MARIA ROSA REIS TRINDADE",
+    "UNIDADE INTEGRADA RURAL BOA ESPERANÇA",
+    "UNIDADE INTEGRADA SANTO ANTÔNIO",
+    "UNIDADE INTEGRADA SARNEY FILHO"
+]
+
+# ====================================================================
 # FUNÇÃO DE SEGURANÇA E INICIALIZAÇÃO DE BANCOS
 # ====================================================================
 def hash_senha(senha):
@@ -554,13 +577,12 @@ with tab3:
         if f"_turma_{rk}" in st.session_state: st.session_state.turma_val = st.session_state[f"_turma_{rk}"]
         if f"_turno_{rk}" in st.session_state: st.session_state.turno_val = st.session_state[f"_turno_{rk}"]
 
-    # INCLUSÃO DO MAPA DE VALORES PARA "NONE" (NENHUMA SELEÇÃO = EM BRANCO)
     mapa_valores_global = {"A":"A", "B":"B", "C":"C", "D":"D", "Branco":"-", "Rasura":"*", None: "-"}
     
     def salvar_e_limpar_callback():
         sync_header() 
         if not st.session_state.escola_val or not st.session_state.ano_val or not st.session_state.turma_val or not st.session_state.turno_val:
-            st.session_state.msg_erro = "⚠️ Atenção: Preencha a 'Escola', o 'Ano', a 'Turma' e o 'Turno' no topo antes de salvar."
+            st.session_state.msg_erro = "⚠️ Atenção: Selecione a 'Escola', o 'Ano', a 'Turma' e o 'Turno' no topo antes de salvar."
             return
             
         nova_freq = st.session_state.freq_d + st.session_state.freq_u
@@ -579,15 +601,13 @@ with tab3:
         st.session_state.nome_aluno_input = ""
         st.session_state.freq_d = "0"
         st.session_state.freq_u = "0"
-        
-        # AGORA AS QUESTÕES VOLTAM PARA "NONE" AO INVÉS DE "BRANCO"
         for q in range(1, total_q_global + 1): st.session_state[f"q_{q}"] = None
 
     if "freq_d" not in st.session_state: st.session_state.freq_d = "0"
     if "freq_u" not in st.session_state: st.session_state.freq_u = "0"
     if "nome_aluno_input" not in st.session_state: st.session_state.nome_aluno_input = ""
     for q in range(1, 100): 
-        if f"q_{q}" not in st.session_state: st.session_state[f"q_{q}"] = None # INICIALIZAÇÃO VAZIA (NENHUMA SELEÇÃO)
+        if f"q_{q}" not in st.session_state: st.session_state[f"q_{q}"] = None 
 
     st.markdown("### 🖱️ Transcrição Intuitiva do Aluno")
     st.info(f"Olá, **{nome_operador}**. Os dados que você digitar aqui serão salvos com segurança em sua sessão exclusiva.")
@@ -603,7 +623,11 @@ with tab3:
     
     with st.container(border=True):
         st.markdown("#### 🏫 1. Identificação da Turma e Escola")
-        st.text_input("Nome da Escola:", value=st.session_state.escola_val, placeholder="Ex: Escola Municipal...", key=f"_escola_{rk}", on_change=sync_header)
+        
+        # AGORA É UM SELECTBOX (CAIXA DE SELEÇÃO) COM A LISTA DE ESCOLAS OFICIAL
+        idx_escola = ESCOLAS_SAMAR.index(st.session_state.escola_val) if st.session_state.escola_val in ESCOLAS_SAMAR else 0
+        st.selectbox("Escola:", ESCOLAS_SAMAR, index=idx_escola, key=f"_escola_{rk}", on_change=sync_header)
+        
         col_t1, col_t2, col_t3 = st.columns(3)
         anos_lista = ["", "1º Ano", "2º Ano", "3º Ano", "4º Ano", "5º Ano", "6º Ano", "7º Ano", "8º Ano", "9º Ano"]
         idx_ano = anos_lista.index(st.session_state.ano_val) if st.session_state.ano_val in anos_lista else 0
@@ -644,7 +668,6 @@ with tab3:
                     st.caption(bloco.texto_extra)
                     for r in range(bloco.rows):
                         q = bloco.questao_inicial + r
-                        # INDEX=NONE GARANTE QUE COMECE SEM BOLINHA MARCADA
                         st.radio(f"Questão {q:02d}", options=opcoes_visuais, index=None, horizontal=True, key=f"q_{q}")
         st.write("")
         st.button("💾 Salvar Cartão deste Aluno e Limpar Tela", type="primary", use_container_width=True, on_click=salvar_e_limpar_callback)
@@ -749,7 +772,7 @@ with tab3:
             
             if st.form_submit_button("💾 Salvar Ata de Ocorrência", type="primary"):
                 if not st.session_state.escola_val or not st.session_state.turma_val:
-                    st.error("⚠️ Preencha a Escola e a Turma no topo da página antes de registrar a ata.")
+                    st.error("⚠️ Selecione a Escola e a Turma no topo da página antes de registrar a ata.")
                 elif not nome_aplicador or not texto_ata:
                     st.error("⚠️ Preencha o nome do Aplicador e a descrição da Ocorrência.")
                 else:
