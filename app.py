@@ -21,7 +21,6 @@ st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
 
 st.markdown("""
     <style>
-    /* Muda a cor dos botões principais para Azul Seguro */
     div.stButton > button[kind="primary"] {
         background-color: #0d6efd !important;
         color: white !important;
@@ -79,7 +78,6 @@ DB_ETAPAS = "etapas_samar.csv"
 if not os.path.exists(DB_ETAPAS): 
     pd.DataFrame([{"Nome_Etapa": "Avaliação Diagnóstica", "Data_Limite": "2030-12-31"}]).to_csv(DB_ETAPAS, index=False, sep=";")
 
-# --- NOVO: BANCOS DE ESCOLAS E ANOS DE ENSINO DINÂMICOS ---
 DB_ESCOLAS = "escolas_samar.csv"
 if not os.path.exists(DB_ESCOLAS):
     escolas_iniciais = [
@@ -97,7 +95,6 @@ if not os.path.exists(DB_ANOS):
     anos_iniciais = ["1º Ano", "2º Ano", "3º Ano", "4º Ano", "5º Ano", "6º Ano", "7º Ano", "8º Ano", "9º Ano"]
     pd.DataFrame([{"Ano_Ensino": a} for a in anos_iniciais]).to_csv(DB_ANOS, index=False, sep=";")
 
-# Carregamento das listas para os menus Dropdown do Digitador
 df_esc_lida = pd.read_csv(DB_ESCOLAS, sep=";", dtype=str)
 ESCOLAS_SAMAR = [""] + df_esc_lida['Nome_Escola'].dropna().tolist()
 
@@ -107,22 +104,24 @@ ANOS_ENSINO = [""] + df_ano_lida['Ano_Ensino'].dropna().tolist()
 TURMAS_DISP = ["", "A", "B", "C", "D", "E", "F", "G", "H", "Única"]
 TURNOS_DISP = ["", "Manhã", "Tarde", "Integral", "Noite"]
 
-# --- INTELIGÊNCIA DE PRAZOS (ETAPAS ATIVAS) ---
+# --- INTELIGÊNCIA DE PRAZOS ---
 df_etapas_lidas = pd.read_csv(DB_ETAPAS, sep=";", dtype=str)
 hoje = datetime.now().date()
 ETAPAS_ATIVAS = []
+TODAS_ETAPAS = []
 for _, row in df_etapas_lidas.iterrows():
     nome_etapa = str(row.get('Nome_Etapa', '')).strip()
     if not nome_etapa or nome_etapa == 'nan': continue
+    TODAS_ETAPAS.append(nome_etapa)
     try:
         data_limite_str = str(row.get('Data_Limite', '2030-12-31')).split()[0]
         if '/' in data_limite_str: dt_limite = datetime.strptime(data_limite_str, "%d/%m/%Y").date()
         else: dt_limite = datetime.strptime(data_limite_str, "%Y-%m-%d").date()
-        
-        if hoje <= dt_limite:
-            ETAPAS_ATIVAS.append(nome_etapa)
-    except:
-        ETAPAS_ATIVAS.append(nome_etapa) 
+        if hoje <= dt_limite: ETAPAS_ATIVAS.append(nome_etapa)
+    except: ETAPAS_ATIVAS.append(nome_etapa) 
+
+if not TODAS_ETAPAS: TODAS_ETAPAS = ["Padrão"]
+if not ETAPAS_ATIVAS: ETAPAS_ATIVAS = TODAS_ETAPAS # Failsafe
 
 # --- ESTADOS DA SESSÃO ---
 estados_padrao = {
@@ -288,26 +287,20 @@ else:
     tab3 = tabs[0]
 
 # ====================================================================
-# ABA 7 (ADMIN): CONFIGURAÇÕES GERAIS (TUDO DINÂMICO AGORA)
+# ABA 7 (ADMIN): CONFIGURAÇÕES GERAIS (DINÂMICAS)
 # ====================================================================
 if is_admin:
     with tab7:
         st.markdown("### ⚙️ Configurações Gerais do Sistema")
-        st.info("Defina as opções que aparecerão nos menus para os digitadores. A personalização das listas de Escolas e Anos melhora a organização no Looker Studio.")
+        st.info("Personalize as listas que aparecem nos menus. Estas configurações afetam como os dados são arquivados e organizados na exportação do ZIP.")
         
         c_cfg1, c_cfg2, c_cfg3 = st.columns(3)
-        
         with c_cfg1:
             st.markdown("#### 📅 Ciclos e Prazos")
             df_etapas_edit = pd.read_csv(DB_ETAPAS, sep=";", dtype=str)
             df_etapas_edit['Data_Limite'] = pd.to_datetime(df_etapas_edit['Data_Limite'], dayfirst=True, errors='coerce').dt.date
             df_etapas_edit['Data_Limite'] = df_etapas_edit['Data_Limite'].fillna(datetime(2030, 12, 31).date())
-            
-            edited_etapas = st.data_editor(
-                df_etapas_edit,
-                column_config={"Nome_Etapa": st.column_config.TextColumn("Nome do Ciclo", required=True), "Data_Limite": st.column_config.DateColumn("Prazo Final", format="DD/MM/YYYY", required=True)},
-                num_rows="dynamic", use_container_width=True, key="ed_etp"
-            )
+            edited_etapas = st.data_editor(df_etapas_edit, column_config={"Nome_Etapa": st.column_config.TextColumn("Nome do Ciclo", required=True), "Data_Limite": st.column_config.DateColumn("Prazo Final", format="DD/MM/YYYY", required=True)}, num_rows="dynamic", use_container_width=True, key="ed_etp")
             if st.button("💾 Salvar Ciclos", type="primary", use_container_width=True):
                 edited_etapas['Data_Limite'] = edited_etapas['Data_Limite'].apply(lambda x: x.strftime('%Y-%m-%d') if pd.notna(x) else '2030-12-31')
                 edited_etapas.to_csv(DB_ETAPAS, index=False, sep=";")
@@ -317,11 +310,7 @@ if is_admin:
         with c_cfg2:
             st.markdown("#### 🏫 Escolas da Rede")
             df_esc_edit = pd.read_csv(DB_ESCOLAS, sep=";", dtype=str)
-            edited_escolas = st.data_editor(
-                df_esc_edit,
-                column_config={"Nome_Escola": st.column_config.TextColumn("Nome da Escola", required=True)},
-                num_rows="dynamic", use_container_width=True, key="ed_esc"
-            )
+            edited_escolas = st.data_editor(df_esc_edit, column_config={"Nome_Escola": st.column_config.TextColumn("Nome da Escola", required=True)}, num_rows="dynamic", use_container_width=True, key="ed_esc")
             if st.button("💾 Salvar Escolas", type="primary", use_container_width=True):
                 edited_escolas.to_csv(DB_ESCOLAS, index=False, sep=";")
                 st.success("Escolas atualizadas!")
@@ -330,18 +319,142 @@ if is_admin:
         with c_cfg3:
             st.markdown("#### 🎓 Anos de Ensino")
             df_ano_edit = pd.read_csv(DB_ANOS, sep=";", dtype=str)
-            edited_anos = st.data_editor(
-                df_ano_edit,
-                column_config={"Ano_Ensino": st.column_config.TextColumn("Ano / Série / Etapa", required=True)},
-                num_rows="dynamic", use_container_width=True, key="ed_ano"
-            )
+            edited_anos = st.data_editor(df_ano_edit, column_config={"Ano_Ensino": st.column_config.TextColumn("Ano / Série / Etapa", required=True)}, num_rows="dynamic", use_container_width=True, key="ed_ano")
             if st.button("💾 Salvar Anos", type="primary", use_container_width=True):
                 edited_anos.to_csv(DB_ANOS, index=False, sep=";")
                 st.success("Anos de ensino atualizados!")
                 st.rerun()
 
 # ====================================================================
-# ABA 4 (ADMIN): TORRE DE CONTROLE E EXPORTAÇÃO EM PASTAS ZIP
+# ABA 1: GERADOR DE PDF (AGORA COM REFERÊNCIA DE ESCOLA E ETAPA)
+# ====================================================================
+if is_admin:
+    with tab1:
+        st.markdown("### 🎨 Personalização do Cabeçalho e Arquivo")
+        st.info("Gere as folhas de respostas em branco. Opcionalmente, selecione a Etapa e Escola para que o nome do arquivo baixado já saia organizado.")
+        
+        col_t1, col_t2 = st.columns(2)
+        with col_t1: custom_titulo = st.text_input("Título da Avaliação (Opcional):", conf.titulo_prova)
+        with col_t2: custom_sub = st.text_input("Etapa/Ano (Subtítulo Opcional):", conf.subtitulo)
+        
+        col_ref1, col_ref2 = st.columns(2)
+        with col_ref1: sel_etapa_gerador = st.selectbox("Referência para salvar o arquivo (Etapa):", TODAS_ETAPAS, key="ger_etapa")
+        with col_ref2: sel_escola_gerador = st.selectbox("Referência para salvar o arquivo (Escola):", ESCOLAS_SAMAR, key="ger_escola")
+
+        col_l1, col_l2, col_l3 = st.columns(3)
+        with col_l1: logo_esq = st.file_uploader("Logo Esquerda", type=["png", "jpg"])
+        with col_l2: logo_cen = st.file_uploader("Logo Centro", type=["png", "jpg"])
+        with col_l3: logo_dir = st.file_uploader("Logo Direita", type=["png", "jpg"])
+        
+        col_fmt1, col_fmt2 = st.columns(2)
+        with col_fmt1: fmt = st.radio("Formato de Saída:", ["PDF", "PNG", "JPEG"], horizontal=True)
+        with col_fmt2:
+            st.write("")
+            if st.button("Gerar Arquivo Pronto para Impressão", type="primary", use_container_width=True):
+                logos_dict = {'esq': logo_esq, 'cen': logo_cen, 'dir': logo_dir}
+                ext = fmt.split()[0].lower()
+                
+                # Nomenclatura Organizada
+                eta_cln = str(sel_etapa_gerador).replace(" ", "_") if sel_etapa_gerador else "Geral"
+                esc_cln = str(sel_escola_gerador).replace(" ", "_") if sel_escola_gerador else "S-Escola"
+                fn = f"Gabaritos_{eta_cln}_{esc_cln}_{modelo}.{ext}"
+                
+                if ext == "pdf": gerar_pdf(conf, fn, custom_titulo, custom_sub, logos_dict)
+                else: gerar_imagem_a4(conf, fn, ext, custom_titulo, custom_sub, logos_dict)
+                
+                if os.path.exists(fn):
+                    with open(fn, "rb") as f: st.download_button(f"📥 Baixar {fn}", f, fn, mime="application/octet-stream", use_container_width=True)
+
+# ====================================================================
+# ABA 2: LEITOR ROBÔ (AGORA EXIGE CONTEXTO PARA O CSV)
+# ====================================================================
+if is_admin:
+    with tab2:
+        st.markdown("### 📝 Passo 1: Informar o Contexto do Lote e o Gabarito")
+        st.info("Antes de subir as imagens da turma que o robô vai ler, selecione de onde essas provas vieram. Assim, o CSV gerado sairá com o padrão perfeito.")
+        
+        with st.container(border=True):
+            c_l1, c_l2 = st.columns([1, 2])
+            with c_l1: etapa_leitor = st.selectbox("Etapa Avaliativa (Leitor):", TODAS_ETAPAS, key="leitor_etapa")
+            with c_l2: escola_leitor = st.selectbox("Escola (Leitor):", ESCOLAS_SAMAR, key="leitor_escola")
+
+            c_l3, c_l4, c_l5 = st.columns(3)
+            with c_l3: ano_leitor = st.selectbox("Ano de Ensino:", ANOS_ENSINO, key="leitor_ano")
+            with c_l4: turma_leitor = st.selectbox("Turma:", TURMAS_DISP, key="leitor_turma")
+            with c_l5: turno_leitor = st.selectbox("Turno:", TURNOS_DISP, key="leitor_turno")
+
+        st.markdown("---")
+        modo_gab = st.radio("Como deseja inserir o gabarito?", ["Texto Rápido", "Preenchimento Manual"], horizontal=True)
+        gab_oficial = {}
+        blocos = len([g for g in conf.grids if g.questao_inicial > 0])
+        questoes_por_bloco = total_q_global // blocos if blocos > 0 else 0
+        if "Texto Rápido" in modo_gab:
+            gabarito_str = st.text_input(f"Cole as {total_q_global} respostas:", value="A" * total_q_global).upper().strip()
+            q_count = 1
+            for char in gabarito_str:
+                if char in "ABCDXN":
+                    gab_oficial[q_count] = "NULA" if char in ["X", "N"] else char
+                    q_count += 1
+        else:
+            cols = st.columns(blocos)
+            for bloco in range(blocos):
+                with cols[bloco]:
+                    for q in range(questoes_por_bloco):
+                        q_num = (bloco * questoes_por_bloco) + q + 1
+                        gab_oficial[q_num] = st.selectbox(f"Q.{q_num:02d}", ["A", "B", "C", "D", "NULA"], key=f"q_t2_{q_num}")
+        
+        st.markdown("---")
+        st.markdown("### 📸 Passo 2: Subir as Imagens/Provas Scaneadas")
+        up = st.file_uploader("Upload das Imagens/PDF do lote selecionado acima:", type=["pdf", "png", "jpg"], accept_multiple_files=True)
+        if up:
+            resultados_lote = []
+            for arquivo in up:
+                try:
+                    if arquivo.type == "application/pdf": pages = convert_from_bytes(arquivo.read(), dpi=200)
+                    else: 
+                        from PIL import Image
+                        pages = [Image.open(arquivo)]
+                    for i, p in enumerate(pages):
+                        img = np.array(p)
+                        if img.ndim == 2: img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+                        else: img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+                        res, vis, _ = processar_gabarito(img, conf, gab_oficial)
+                        freq, acertos = res.get("frequencia", "00"), res.get("total_acertos", 0)
+                        
+                        # INJEÇÃO DO CONTEXTO NO RELATÓRIO DO ROBÔ
+                        aluno_dados = {
+                            "Etapa": etapa_leitor,
+                            "Escola": escola_leitor,
+                            "Ano_Ensino": ano_leitor,
+                            "Turma": turma_leitor,
+                            "Turno": turno_leitor,
+                            "Frequencia": freq
+                        }
+                        
+                        acertos_disciplina = {disc: 0 for disc in tot_disc_global}
+                        for q_num in range(1, total_q_global + 1):
+                            resp_str = res["respostas"].get(q_num, ".")
+                            aluno_dados[f"Letra_Q{q_num:02d}"] = "Múltiplas" if resp_str == "*" else resp_str
+                            is_correct = 1 if "Correto" in res.get("correcao_detalhada", {}).get(q_num, {}).get("Status", "") else 0
+                            aluno_dados[f"Q{q_num:02d}"] = is_correct
+                            if mapa_disc_global.get(q_num) and is_correct: acertos_disciplina[mapa_disc_global[q_num]] += 1
+                        aluno_dados["Total_Acertos_Geral"] = acertos
+                        for disc, total in tot_disc_global.items(): aluno_dados[f"Acertos_{disc.replace(' ', '_')}"] = acertos_disciplina[disc]
+                        resultados_lote.append(aluno_dados)
+                except Exception as e: st.error(f"Erro no arquivo {arquivo.name}")
+            if resultados_lote:
+                df_export = pd.DataFrame(resultados_lote)
+                
+                # NOME DO ARQUIVO ORGANIZADO PARA O LEITOR
+                eta_cln2 = str(etapa_leitor).replace(" ", "_") if etapa_leitor else "Etapa"
+                esc_cln2 = str(escola_leitor).replace(" ", "_") if escola_leitor else "Escola"
+                ano_cln2 = str(ano_leitor).replace(" ", "_") if ano_leitor else "Ano"
+                nome_csv = f"Resultados_Robo_{eta_cln2}_{esc_cln2}_{ano_cln2}_{turma_leitor}.csv"
+                
+                st.download_button("📥 Baixar CSV Corrigido e Padronizado", df_export.to_csv(index=False, sep=";"), nome_csv, "text/csv", type="primary")
+
+# ====================================================================
+# ABA 4 (ADMIN): TORRE DE CONTROLE NUVEM (E EXPORTAÇÃO ESTRUTURADA)
 # ====================================================================
 if is_admin:
     with tab4:
@@ -509,81 +622,9 @@ if is_admin:
                 st.info("A Nuvem está vazia. Aguarde os digitadores enviarem os dados.")
 
 # ====================================================================
-# ABA 1, 2, 5 e 6: SEÇÕES GENÉRICAS DO ADMIN (MANTIDAS INTACTAS)
+# ABA 5 E 6: GESTÃO DE USUÁRIOS E ATAS
 # ====================================================================
 if is_admin:
-    with tab1:
-        st.markdown("### 🎨 Personalização do Cabeçalho")
-        col_t1, col_t2 = st.columns(2)
-        with col_t1: custom_titulo = st.text_input("Título da Avaliação:", conf.titulo_prova)
-        with col_t2: custom_sub = st.text_input("Etapa/Ano (Subtítulo):", conf.subtitulo)
-        col_l1, col_l2, col_l3 = st.columns(3)
-        with col_l1: logo_esq = st.file_uploader("Logo Esquerda", type=["png", "jpg"])
-        with col_l2: logo_cen = st.file_uploader("Logo Centro", type=["png", "jpg"])
-        with col_l3: logo_dir = st.file_uploader("Logo Direita", type=["png", "jpg"])
-        col1, col2 = st.columns(2)
-        with col1: fmt = st.radio("Formato de Saída:", ["PDF", "PNG", "JPEG"], horizontal=True)
-        with col2:
-            st.write("")
-            if st.button("Gerar Arquivo Pronto para Impressão", type="primary", use_container_width=True):
-                logos_dict = {'esq': logo_esq, 'cen': logo_cen, 'dir': logo_dir}
-                ext = fmt.split()[0].lower()
-                fn = f"Gabarito_{modelo}.{ext}"
-                if ext == "pdf": gerar_pdf(conf, fn, custom_titulo, custom_sub, logos_dict)
-                else: gerar_imagem_a4(conf, fn, ext, custom_titulo, custom_sub, logos_dict)
-                if os.path.exists(fn):
-                    with open(fn, "rb") as f: st.download_button(f"📥 Baixar Arquivo {ext.upper()}", f, fn, mime="application/octet-stream", use_container_width=True)
-
-    with tab2:
-        st.markdown("### 📝 Passo 1: Configurar Gabarito de Correção")
-        modo_gab = st.radio("Como deseja inserir o gabarito?", ["Texto Rápido", "Preenchimento Manual"], horizontal=True)
-        gab_oficial = {}
-        blocos = len([g for g in conf.grids if g.questao_inicial > 0])
-        questoes_por_bloco = total_q_global // blocos if blocos > 0 else 0
-        if "Texto Rápido" in modo_gab:
-            gabarito_str = st.text_input(f"Cole as {total_q_global} respostas:", value="A" * total_q_global).upper().strip()
-            q_count = 1
-            for char in gabarito_str:
-                if char in "ABCDXN":
-                    gab_oficial[q_count] = "NULA" if char in ["X", "N"] else char
-                    q_count += 1
-        else:
-            cols = st.columns(blocos)
-            for bloco in range(blocos):
-                with cols[bloco]:
-                    for q in range(questoes_por_bloco):
-                        q_num = (bloco * questoes_por_bloco) + q + 1
-                        gab_oficial[q_num] = st.selectbox(f"Q.{q_num:02d}", ["A", "B", "C", "D", "NULA"], key=f"q_t2_{q_num}")
-        st.markdown("---")
-        up = st.file_uploader("Upload das Imagens/PDF:", type=["pdf", "png", "jpg"], accept_multiple_files=True)
-        if up:
-            resultados_lote = []
-            for arquivo in up:
-                try:
-                    if arquivo.type == "application/pdf": pages = convert_from_bytes(arquivo.read(), dpi=200)
-                    else: pages = [Image.open(arquivo)]
-                    for i, p in enumerate(pages):
-                        img = np.array(p)
-                        if img.ndim == 2: img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-                        else: img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-                        res, vis, _ = processar_gabarito(img, conf, gab_oficial)
-                        freq, acertos = res.get("frequencia", "00"), res.get("total_acertos", 0)
-                        aluno_dados = {"Frequencia": freq}
-                        acertos_disciplina = {disc: 0 for disc in tot_disc_global}
-                        for q_num in range(1, total_q_global + 1):
-                            resp_str = res["respostas"].get(q_num, ".")
-                            aluno_dados[f"Letra_Q{q_num:02d}"] = "Múltiplas" if resp_str == "*" else resp_str
-                            is_correct = 1 if "Correto" in res.get("correcao_detalhada", {}).get(q_num, {}).get("Status", "") else 0
-                            aluno_dados[f"Q{q_num:02d}"] = is_correct
-                            if mapa_disc_global.get(q_num) and is_correct: acertos_disciplina[mapa_disc_global[q_num]] += 1
-                        aluno_dados["Total_Acertos_Geral"] = acertos
-                        for disc, total in tot_disc_global.items(): aluno_dados[f"Acertos_{disc.replace(' ', '_')}"] = acertos_disciplina[disc]
-                        resultados_lote.append(aluno_dados)
-                except Exception as e: st.error(f"Erro no arquivo {arquivo.name}")
-            if resultados_lote:
-                df_export = pd.DataFrame(resultados_lote)
-                st.download_button("Baixar CSV Corrigido", df_export.to_csv(index=False, sep=";"), "samar_robo.csv", "text/csv", type="primary")
-
     with tab5:
         st.markdown("### 👥 Controle de Usuários")
         df_usuarios = pd.read_csv(DB_USUARIOS, sep=";", dtype=str)
@@ -808,7 +849,7 @@ with tab3:
 
         st.markdown("---")
         
-        # TABELA DE VISUALIZAÇÃO E EDIÇÃO
+        # TABELA ESPELHO DA TURMA ATUAL
         st.markdown(f"#### 📁 Alunos Registrados nesta Turma")
         if usa_nuvem:
             res_turma = supabase.table("respostas_geral").select("*").eq("etapa", st.session_state.config_etapa).eq("escola", st.session_state.config_escola).eq("ano_ensino", st.session_state.config_ano).eq("turma", st.session_state.config_turma).eq("turno", st.session_state.config_turno).eq("digitador", nome_operador).execute()
@@ -831,7 +872,7 @@ with tab3:
                     st.caption("Dê dois cliques na célula para corrigir uma letra ou aperte 'Delete' para apagar um aluno duplicado.")
                     df_editado_ui = st.data_editor(df_turma[colunas_exibir], use_container_width=True, num_rows="dynamic", column_config=config_colunas, height=300, key=f"editor_atual")
                     
-                    if st.button("Salvar Edições na Nuvem", type="primary", use_container_width=True):
+                    if st.button("Salvar Edições da Tabela na Nuvem", type="primary", use_container_width=True):
                         df_salvar = df_editado_ui.copy()
                         df_salvar["Respostas_Brutas"] = df_salvar[[f"Q{q:02d}" for q in range(1, total_q_global + 1)]].agg(lambda x: ''.join(x.astype(str)), axis=1)
                         
