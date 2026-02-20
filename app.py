@@ -21,7 +21,6 @@ from datetime import datetime
 # ====================================================================
 def limpar_texto_imagem(txt):
     if not isinstance(txt, str): return ""
-    # Transforma "Manhã" em "Manha" para o OpenCV não gerar erro de "Manh??"
     return ''.join(c for c in unicodedata.normalize('NFD', txt) if unicodedata.category(c) != 'Mn')
 
 # ====================================================================
@@ -145,7 +144,7 @@ for key, valor in estados_padrao.items():
     if key not in st.session_state: st.session_state[key] = valor
 
 # ====================================================================
-# GERADORES DE ARQUIVOS (COM ACENTOS ARRUMADOS E COR PRETA)
+# GERADORES DE ARQUIVOS (PREENCHIMENTO CIRÚRGICO NO CABEÇALHO)
 # ====================================================================
 def gerar_zip_gabaritos(df, conf_prova, modelo_prova):
     id_unico = uuid.uuid4().hex
@@ -174,11 +173,20 @@ def gerar_zip_gabaritos(df, conf_prova, modelo_prova):
             freq = str(row.get("Frequencia", "00")).zfill(2)
             respostas = str(row.get("Respostas_Brutas", ""))
             
-            cor_caneta = (0, 0, 0) # COR PRETA (RESOLVE O PROBLEMA DO TEXTO AZUL)
+            # PREENCHIMENTO EXATO NAS LINHAS PONTILHADAS DO GABARITO SAMAR
+            cor_caneta = (0, 0, 0) # Cor preta absoluta
+            fonte = cv2.FONT_HERSHEY_SIMPLEX
+            escala = 0.65
+            espessura = 2
+            h, w = conf_prova.REF_H, conf_prova.REF_W
             
-            cv2.putText(img_aluno, f"ESCOLA: {escola}", (45, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.7, cor_caneta, 2)
-            cv2.putText(img_aluno, f"ALUNO(A): {nome}", (45, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, cor_caneta, 2)
-            cv2.putText(img_aluno, f"ANO: {ano}   TURMA: {turma}   TURNO: {turno}   FREQ: {freq}", (45, 125), cv2.FONT_HERSHEY_SIMPLEX, 0.7, cor_caneta, 2)
+            # Posições calculadas com base nas frações exatas do documento oficial
+            cv2.putText(img_aluno, escola, (int(w * 0.20), int(h * 0.151)), fonte, escala, cor_caneta, espessura)
+            cv2.putText(img_aluno, ano, (int(w * 0.07), int(h * 0.185)), fonte, escala, cor_caneta, espessura)
+            cv2.putText(img_aluno, turma, (int(w * 0.32), int(h * 0.185)), fonte, escala, cor_caneta, espessura)
+            cv2.putText(img_aluno, turno, (int(w * 0.58), int(h * 0.185)), fonte, escala, cor_caneta, espessura)
+            cv2.putText(img_aluno, nome, (int(w * 0.10), int(h * 0.218)), fonte, escala, cor_caneta, espessura)
+            cv2.putText(img_aluno, f"FREQ: {freq}", (int(w * 0.80), int(h * 0.218)), fonte, escala, cor_caneta, espessura)
             
             for grid in conf_prova.grids:
                 x1, x2 = int(grid.x_start * conf_prova.REF_W), int(grid.x_end * conf_prova.REF_W)
@@ -285,8 +293,6 @@ for q in range(1, total_q_global + 1):
 
 mapa_disc_global = {}
 tot_disc_global = {}
-blocos_prova_global = [g for g in conf.grids if g.questao_inicial > 0] # Identifica as disciplinas
-
 for g in conf.grids:
     if g.questao_inicial > 0:
         disc = g.texto_extra if g.texto_extra else "Geral"
@@ -302,7 +308,7 @@ else:
     tab3 = tabs[0]
 
 # ====================================================================
-# ABA 7 (ADMIN): CONFIGURAÇÕES INTEGRADAS E GABARITOS COPIADOS DO EXCEL
+# ABA 7 (ADMIN): CONFIGURAÇÕES E GABARITOS (INPUT ÚNICO DO EXCEL)
 # ====================================================================
 if is_admin:
     with tab7:
@@ -310,7 +316,6 @@ if is_admin:
         
         with st.container(border=True):
             st.markdown("#### 📅 1. Definir Ciclos e Prazos de Acesso")
-            st.info("O sistema só aceitará digitações no período entre a Data de Abertura e o Prazo Final.")
             df_etapas_edit = pd.read_csv(DB_ETAPAS, sep=";", dtype=str)
             df_etapas_edit['Data_Abertura'] = pd.to_datetime(df_etapas_edit['Data_Abertura'], dayfirst=True, errors='coerce').dt.date
             df_etapas_edit['Data_Abertura'] = df_etapas_edit['Data_Abertura'].fillna(datetime(2020, 1, 1).date())
@@ -331,47 +336,31 @@ if is_admin:
 
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # O NOVO GERENCIADOR DE GABARITOS (PERMITE COLAR DO EXCEL)
         with st.container(border=True):
             st.markdown("#### 🔑 2. Atribuir Gabaritos Mestres por Ciclo")
-            st.info("Cole as letras das respostas separadas por disciplina (você pode copiar direto das colunas do Excel).")
+            st.info("Cole a coluna do Excel com todas as respostas juntas de uma vez. O sistema ignora espaços e ajusta automaticamente.")
             
             c_gab1, c_gab2 = st.columns(2)
             with c_gab1: sel_eta_gab = st.selectbox("Selecione o Ciclo:", TODAS_ETAPAS, key="sel_eta_gab")
             with c_gab2: sel_ano_gab = st.selectbox("Selecione o Ano de Ensino Avaliado:", ANOS_ENSINO, key="sel_ano_gab")
             
             if sel_eta_gab and sel_ano_gab:
-                # Mostra o status atual
                 gab_existente = dict_gabaritos_mestres.get((sel_eta_gab, sel_ano_gab), "")
                 if gab_existente:
                     st.success(f"✅ Já existe um gabarito cadastrado para o **{sel_ano_gab}** na etapa **{sel_eta_gab}**.")
                 else:
                     st.warning(f"⚠️ O **{sel_ano_gab}** ainda não possui gabarito para a etapa **{sel_eta_gab}**.")
 
-                st.markdown("**Insira ou Substitua as Respostas (Cole do Excel):**")
-                cols_gab_input = st.columns(len(blocos_prova_global))
-                inputs_gab = []
-
-                for i, b in enumerate(blocos_prova_global):
-                    with cols_gab_input[i]:
-                        nome_disc = b.texto_extra if b.texto_extra else f"Bloco {i+1}"
-                        # TEXT AREA PERMITE COLAR COLUNAS INTEIRAS DO EXCEL
-                        val = st.text_area(f"{nome_disc} ({b.rows} q.)", height=150, key=f"gab_bloco_{i}")
-                        inputs_gab.append(val)
-
+                gab_str_input = st.text_area(f"Cole o gabarito completo copiado do Excel ({total_q_global} questões esperadas):", height=100, key="gab_master_input")
+                
                 if st.button(f"💾 Salvar Gabarito do {sel_ano_gab}", type="primary"):
-                    # O "Regex" mágico que limpa quebras de linha do Excel e junta tudo numa tripa só
-                    gab_str = "".join([re.sub(r'[^A-Z]', '', p.upper()) for p in inputs_gab])
+                    gab_str = re.sub(r'[^A-Z]', '', gab_str_input.upper())
                     
                     if len(gab_str) != total_q_global:
-                        st.error(f"⚠️ Erro: O sistema detectou {len(gab_str)} respostas válidas, mas o modelo da prova exige {total_q_global}.")
+                        st.error(f"⚠️ Erro de Preenchimento: Você colou {len(gab_str)} respostas válidas, mas o modelo da prova exige exatamente {total_q_global} questões.")
                     else:
                         if usa_nuvem:
-                            records_gab = [{
-                                "id": str(uuid.uuid4()), "etapa": sel_eta_gab,
-                                "ano_ensino": sel_ano_gab, "gabarito": gab_str
-                            }]
-                            # Apaga a chave velha se existir, e salva a nova
+                            records_gab = [{"id": str(uuid.uuid4()), "etapa": sel_eta_gab, "ano_ensino": sel_ano_gab, "gabarito": gab_str}]
                             supabase.table("gabaritos_oficiais").delete().eq("etapa", sel_eta_gab).eq("ano_ensino", sel_ano_gab).execute() 
                             supabase.table("gabaritos_oficiais").insert(records_gab).execute()
                             st.success(f"Gabarito Mestre do {sel_ano_gab} salvo com sucesso!")
@@ -434,7 +423,7 @@ if is_admin:
                     with open(fn, "rb") as f: st.download_button(f"📥 Baixar {fn}", f, fn, mime="application/octet-stream", use_container_width=True)
 
 # ====================================================================
-# ABA 2: LEITOR ROBÔ (COPIAR DO EXCEL OU USAR AUTOMÁTICO)
+# ABA 2: LEITOR ROBÔ (INPUT ÚNICO PARA GABARITO)
 # ====================================================================
 if is_admin:
     with tab2:
@@ -455,29 +444,25 @@ if is_admin:
         gab_oficial = {}
         
         if gab_mestre_detectado:
-            st.success(f"✅ **Gabarito Mestre Detectado Automaticamente:** O sistema já sabe as respostas do {ano_leitor} para a etapa {etapa_leitor}.")
+            st.success(f"✅ **Gabarito Mestre Detectado Automaticamente:** O sistema usará as respostas já cadastradas para o {ano_leitor}.")
             for i, char in enumerate(gab_mestre_detectado[:total_q_global]): 
                 gab_oficial[i+1] = "NULA" if char in ["X", "N"] else char
         else:
-            st.warning("⚠️ Nenhum Gabarito Mestre cadastrado para esta Etapa e Ano de Ensino. Insira um temporário para poder ler as provas.")
-            modo_gab = st.radio("Como deseja inserir o gabarito?", ["Colar por Disciplina (Modo Matriz)", "Preenchimento Manual Unitário"], horizontal=True)
+            st.warning("⚠️ Nenhum Gabarito Mestre cadastrado. Insira as respostas temporárias abaixo.")
+            modo_gab = st.radio("Como deseja inserir o gabarito temporário?", ["Texto Rápido (Colar Tudo)", "Preenchimento Manual Unitário"], horizontal=True)
             
-            if "Modo Matriz" in modo_gab:
-                st.write("Cole as colunas de respostas copiadas do Excel:")
-                cols_gb = st.columns(len(blocos_prova_global))
-                gab_parts = []
-                for i, b in enumerate(blocos_prova_global):
-                    with cols_gb[i]:
-                        nome_disc = b.texto_extra if b.texto_extra else f"Bloco {i+1}"
-                        gab_parts.append(st.text_area(f"{nome_disc} ({b.rows} q.):", height=100, key=f"gab_r_{i}"))
-                
-                gab_temp_str = "".join([re.sub(r'[^A-Z]', '', part.upper()) for part in gab_parts])
-                if len(gab_temp_str) == total_q_global:
-                    for i, char in enumerate(gab_temp_str[:total_q_global]):
+            if "Texto Rápido" in modo_gab:
+                gabarito_str = st.text_area(f"Cole as {total_q_global} respostas de uma vez:", height=100).upper().strip()
+                gab_cln = re.sub(r'[^A-Z]', '', gabarito_str)
+                if len(gab_cln) == total_q_global:
+                    for i, char in enumerate(gab_cln[:total_q_global]):
                         gab_oficial[i+1] = "NULA" if char in ["X", "N"] else char
+                elif len(gab_cln) > 0:
+                    st.error(f"Faltam respostas ou sobraram letras. Lidas: {len(gab_cln)}")
             else:
-                cols = st.columns(len(blocos_prova_global))
-                for bloco_idx, b in enumerate(blocos_prova_global):
+                cols = st.columns(len([g for g in conf.grids if g.questao_inicial > 0]))
+                blocos_p = [g for g in conf.grids if g.questao_inicial > 0]
+                for bloco_idx, b in enumerate(blocos_p):
                     with cols[bloco_idx]:
                         for q in range(b.rows):
                             q_num = b.questao_inicial + q
@@ -524,7 +509,7 @@ if is_admin:
                 st.download_button("📥 Baixar CSV Corrigido e Padronizado", df_export.to_csv(index=False, sep=";"), nome_csv, "text/csv", type="primary")
 
 # ====================================================================
-# ABA 4 (ADMIN): TORRE DE CONTROLE, EXCLUSÃO EXATA E MOTOR DE NOTAS
+# ABA 4 (ADMIN): TORRE DE CONTROLE
 # ====================================================================
 if is_admin:
     with tab4:
@@ -617,7 +602,6 @@ if is_admin:
                             st.write("")
                             with st.expander("🚨 ZONA DE PERIGO: Excluir Turma", expanded=False):
                                 if st.button(f"🗑️ Excluir Turma {tur} Permanentemente", key=f"del_{eta_b}_{sel_esc_admin}_{ano_b}_{tur}_{tur_no}"):
-                                    # O BUG DA EXCLUSÃO MORRE AQUI: PARÂMETROS PRECISOS
                                     supabase.table("respostas_geral").delete().eq("etapa", eta_b).eq("escola", sel_esc_admin).eq("ano_ensino", ano_b).eq("turma", tur).eq("turno", tur_no).execute()
                                     st.success("A turma foi apagada da nuvem instantaneamente.")
                                     st.rerun()
@@ -626,19 +610,16 @@ if is_admin:
 
                 st.markdown("---")
                 st.markdown("#### ⚙️ Motor Inteligente de Notas (ZIP com Pastas)")
-                st.caption("O sistema cruzará a tabela dos alunos com os Gabaritos Mestres configurados na Aba 7 para gerar as notas oficiais.")
 
-                if st.button("🚀 Calcular Notas e Exportar Turmas", type="primary", use_container_width=True):
-                    with st.spinner("Buscando gabaritos mestres e corrigindo alunos..."):
+                if st.button("🚀 Calcular Notas Inteligentes e Empacotar (ZIP)", type="primary", use_container_width=True):
+                    with st.spinner("Buscando gabaritos e corrigindo alunos..."):
                         todos_resultados = []
                         if not df_f3.empty:
                             for index, row in df_f3.iterrows():
                                 eta_aluno = row["Etapa"]
                                 ano_aluno = row["Ano_Ensino"]
-                                
                                 gabarito_str = dict_gabaritos_mestres.get((eta_aluno, ano_aluno), "")
-                                
-                                if not gabarito_str: continue # Ignora alunos de turmas sem gabarito cadastrado
+                                if not gabarito_str: continue 
                                 
                                 gab_dict_admin = {}
                                 for i, char in enumerate(gabarito_str[:total_q_global]): 
@@ -776,19 +757,17 @@ with tab3:
     mapa_valores_global = {"A":"A", "B":"B", "C":"C", "D":"D", "Branco":"-", "Rasura":"*", None: "-"}
     
     def salvar_aluno_callback():
-        # VALIDAÇÃO 1: NOME NÃO PODE SER VAZIO
+        # VALIDAÇÃO OBRIGATÓRIA
         if not st.session_state.nome_aluno_input.strip():
             st.session_state.msg_erro = "⚠️ OBRIGATÓRIO: O campo 'Nome do Aluno' não pode ficar em branco."
             return
 
-        # VALIDAÇÃO 2: NENHUMA QUESTÃO PODE PASSAR SEM SELEÇÃO
         questoes_vazias = []
         for q in range(1, total_q_global + 1):
-            if st.session_state.get(f"q_{q}") is None:
-                questoes_vazias.append(str(q))
+            if st.session_state.get(f"q_{q}") is None: questoes_vazias.append(str(q))
                 
         if questoes_vazias:
-            st.session_state.msg_erro = f"⚠️ OBRIGATÓRIO: Você esqueceu de preencher as questões: {', '.join(questoes_vazias)}. (Se o aluno não respondeu, marque a bolinha 'Branco')."
+            st.session_state.msg_erro = f"⚠️ OBRIGATÓRIO: Faltou marcar as questões: {', '.join(questoes_vazias)}. (Se o aluno não respondeu, marque a bolinha 'Branco')."
             return
         
         nova_freq = st.session_state.freq_d + st.session_state.freq_u
@@ -987,6 +966,7 @@ with tab3:
                         st.success("Tabela sincronizada com sucesso na nuvem!")
                         st.rerun()
 
+                # ZIP DE IMAGENS DE VOLTA
                 st.write("")
                 with st.expander("📥 Exportar Comprovantes Visuais (Gabaritos em Imagem)", expanded=False):
                     st.info("O sistema criará as imagens preenchidas para todos os alunos da tabela. Isso pode levar alguns segundos.")
