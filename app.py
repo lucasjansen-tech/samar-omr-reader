@@ -11,6 +11,7 @@ import io
 import zipfile
 import hashlib
 import uuid
+import base64
 from datetime import datetime
 
 st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
@@ -107,8 +108,18 @@ def gerar_zip_gabaritos(df, conf_prova, modelo_prova):
                 zf.writestr(f"Gabarito_F{freq}_{nome_arq}.jpg", buffer.tobytes())
     return zip_buffer.getvalue()
 
-# NOVO: Transforma a tabela da Ata em um documento oficial com a estrutura do seu Word original
 def gerar_html_ata(escola, ano, turma, turno, aplicador, ocorrencia, revisor, data):
+    # Lógica para converter a imagem em código e embutir no arquivo
+    logo_html = ""
+    img_path = "Frame 18.png"
+    if os.path.exists(img_path):
+        try:
+            with open(img_path, "rb") as img_file:
+                encoded_string = base64.b64encode(img_file.read()).decode()
+                logo_html = f'<div style="text-align: center; margin-bottom: 30px;"><img src="data:image/png;base64,{encoded_string}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0px 4px 6px rgba(0,0,0,0.1);" /></div>'
+        except Exception:
+            pass
+
     html = f"""
     <html>
     <head>
@@ -117,15 +128,16 @@ def gerar_html_ata(escola, ano, turma, turno, aplicador, ocorrencia, revisor, da
         <style>
             body {{ font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; max-width: 800px; margin: auto; padding: 20px; }}
             .header {{ text-align: center; font-weight: bold; font-size: 20px; text-decoration: underline; margin-bottom: 40px; }}
-            .linha {{ margin-bottom: 15px; font-size: 16px; }}
-            .label {{ font-weight: bold; }}
-            .caixa-ocorrencia {{ border: 1px solid #000; padding: 20px; min-height: 250px; margin-top: 10px; margin-bottom: 50px; white-space: pre-wrap; }}
+            .linha {{ margin-bottom: 15px; font-size: 16px; border-bottom: 1px dotted #ccc; padding-bottom: 5px; }}
+            .label {{ font-weight: bold; color: #333; }}
+            .caixa-ocorrencia {{ border: 1px solid #000; padding: 20px; min-height: 250px; margin-top: 10px; margin-bottom: 50px; white-space: pre-wrap; background-color: #fcfcfc; }}
             .assinatura {{ margin-top: 80px; text-align: center; }}
             .linha-assinatura {{ border-top: 1px solid #000; width: 400px; margin: 0 auto; margin-bottom: 10px; }}
             .sub-info {{ font-size: 12px; color: #555; margin-top: 5px; }}
         </style>
     </head>
     <body>
+        {logo_html}
         <div class="header">ATA DE OCORRÊNCIAS DE CORREÇÃO DO SAMAR</div>
         <div class="linha"><span class="label">ESCOLA:</span> {escola}</div>
         <div class="linha"><span class="label">TURMA / ANO:</span> {turma} - {ano} ({turno})</div>
@@ -489,7 +501,7 @@ if is_admin:
                         use_container_width=True
                     )
                 with c2:
-                    # Lógica parecida com a de gerar gabaritos, mas agora para os documentos HTML das atas
+                    # BAIXA TODAS AS ATAS EM FORMATO DOCUMENTO HTML NUM ARQUIVO ZIP!
                     zip_atas = gerar_zip_atas(df_atas)
                     st.download_button(
                         label="🖨️ Baixar Documentos das Atas Oficiais (ZIP)",
@@ -505,7 +517,7 @@ if is_admin:
             st.success("Nenhuma ocorrência registrada até o momento.")
 
 # ====================================================================
-# ABA 3 COMPARTILHADA: CARTÃO-RESPOSTA E ATAS (TRANSCRIÇÃO BLINDADA)
+# ABA 3 COMPARTILHADA: CARTÃO-RESPOSTA E ATAS (TRANSCRIÇÃO)
 # ====================================================================
 with tab3:
     nome_operador = st.session_state['nome_logado']
@@ -742,7 +754,6 @@ with tab3:
                     df_ata = pd.DataFrame([nova_ata])
                     df_ata.to_csv(DB_OCORRENCIAS, mode='a', header=False, index=False, sep=";")
                     
-                    # Gera o HTML do documento para download imediato do digitador
                     html_documento = gerar_html_ata(
                         st.session_state.escola_val, st.session_state.ano_val, st.session_state.turma_val, 
                         st.session_state.turno_val, nome_aplicador, texto_ata, nome_operador, data_atual
@@ -752,10 +763,9 @@ with tab3:
                     
                     st.success("✅ Ata enviada com sucesso para a Coordenação!")
 
-        # Botão liberado fora do form após o salvamento para baixar a via do Digitador
         if st.session_state.get('ultima_ata_html'):
             st.download_button(
-                label="🖨️ Baixar Documento da Ata Preenchida (Abrir p/ Impressão)",
+                label="🖨️ Baixar Documento da Ata Preenchida (Pronto p/ Impressão)",
                 data=st.session_state['ultima_ata_html'],
                 file_name=st.session_state['ultima_ata_nome'],
                 mime="text/html",
