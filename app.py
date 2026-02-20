@@ -10,9 +10,22 @@ import os
 import io
 import zipfile
 import hashlib
-import uuid  # <-- NOVO: Biblioteca para criar IDs únicos e evitar colisão no servidor
+import uuid
 
 st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
+
+# ====================================================================
+# INJEÇÃO CSS: BLINDAGEM VISUAL DO LOGIN (Oculta o "Olhinho")
+# ====================================================================
+st.markdown("""
+    <style>
+        /* Desativa o botão de revelar senha (eye icon) em todos os inputs */
+        div[data-baseweb="input"] button {
+            display: none !important;
+            pointer-events: none !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 # ====================================================================
 # FUNÇÃO DE SEGURANÇA: CRIPTOGRAFIA DE SENHAS
@@ -32,10 +45,9 @@ if 'usuario_logado' not in st.session_state:
     st.session_state['nome_logado'] = None
 
 # ====================================================================
-# FUNÇÃO GERADORA DE GABARITOS DIGITAIS (AGORA ANTI-COLISÃO)
+# FUNÇÃO GERADORA DE GABARITOS DIGITAIS (ANTI-COLISÃO)
 # ====================================================================
 def gerar_zip_gabaritos(df, conf_prova, modelo_prova, ano_turma, nome_turma):
-    # Cria um ID único para este arquivo temporário, garantindo que usuários não colidam
     id_unico = uuid.uuid4().hex
     fn_pdf = f"base_temp_{modelo_prova}_{id_unico}.pdf"
     
@@ -47,7 +59,6 @@ def gerar_zip_gabaritos(df, conf_prova, modelo_prova, ano_turma, nome_turma):
     else: base_cv = cv2.cvtColor(base_cv, cv2.COLOR_RGB2BGR)
     base_cv = cv2.resize(base_cv, (conf_prova.REF_W, conf_prova.REF_H))
     
-    # Exclusão segura do arquivo temporário base
     try:
         os.remove(fn_pdf)
     except:
@@ -100,8 +111,8 @@ perfil = st.sidebar.radio("Selecione seu Perfil:", ["👨‍💻 Digitador (Tran
 is_authenticated = False
 is_admin = False
 
-# Senha do Admin agora é processada via Hash para evitar exposição cruzada de memória
-HASH_ADMIN = hash_senha("coted2026")
+# Senha do Admin Master agora está blindada! O hash abaixo corresponde à senha "coted2026"
+HASH_ADMIN = "d731835cdccf6874e0e5a871926c45f448e6fb10b37f4cfbd571066c1f727c00"
 
 if perfil == "⚙️ Coordenação (Admin)":
     senha = st.sidebar.text_input("Senha de Acesso:", type="password")
@@ -128,7 +139,7 @@ else:
         
         with st.container(border=True):
             email_input = st.text_input("E-mail de Acesso:")
-            senha_input = st.text_input("Senha:", type="password")
+            senha_input = st.text_input("Senha:", type="password") # O TYPE PASSWORD ESCONDE AS LETRAS
             
             if st.button("Entrar no Sistema", type="primary"):
                 df_users = pd.read_csv(DB_USUARIOS, sep=";", dtype=str)
@@ -160,7 +171,6 @@ for g in conf.grids:
         tot_disc_global[disc] += g.rows
         for r in range(g.rows): mapa_disc_global[g.questao_inicial + r] = disc
 
-# Renderização das Abas Baseadas no Nível de Acesso
 if is_admin:
     tabs = st.tabs(["1. Gerador", "2. Leitor Robô", "3. Cartão Digital", "4. Corretor Lotes", "5. 👥 Usuários"])
     tab1, tab2, tab3, tab4, tab5 = tabs
@@ -301,7 +311,7 @@ if is_admin:
                 st.download_button("📥 Baixar CSV Corrigido", df_export.to_csv(index=False, sep=";"), nome_arq_t2, "text/csv", type="primary")
 
 # ====================================================================
-# ABA 4: MOTOR DE CORREÇÃO EM LOTE PARA CSVs (Admin) - COM PROTEÇÃO ANTI-CRASH
+# ABA 4: MOTOR DE CORREÇÃO EM LOTE PARA CSVs (Admin)
 # ====================================================================
 if is_admin:
     with tab4:
@@ -327,9 +337,8 @@ if is_admin:
                 try:
                     df_bruto = pd.read_csv(arq, sep=";", dtype=str)
                     
-                    # Verificação de segurança: checar se o arquivo tem as colunas básicas
                     if "Respostas_Brutas" not in df_bruto.columns or "Frequencia" not in df_bruto.columns:
-                        st.error(f"⚠️ Arquivo ignorado: '{arq.name}' não possui as colunas padrão do SAMAR. Ele foi salvo errado ou corrompido.")
+                        st.error(f"⚠️ Arquivo ignorado: '{arq.name}' não possui as colunas padrão do SAMAR.")
                         arquivos_com_erro += 1
                         continue
                         
@@ -551,7 +560,6 @@ with tab3:
                         use_container_width=True
                     )
         with c3:
-            # TRAVA DE SEGURANÇA NA EXCLUSÃO: Se algo prender o arquivo no SO, não crasha!
             if st.button("🗑️ Limpar Sessão (Iniciar Nova Turma)", use_container_width=True):
                 try:
                     os.remove(ARQUIVO_TEMP)
