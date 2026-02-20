@@ -446,55 +446,77 @@ if is_admin:
                                 st.divider()
 
                 st.markdown("---")
-                st.markdown("#### ⚙️ Motor Gerador de Notas (Toda a Rede)")
+                st.markdown("#### ⚙️ Motor Gerador de Notas (Exportação Final em ZIP)")
                 gabarito_admin = st.text_input(f"Gabarito Oficial ({total_q_global} questões):", value="A"*total_q_global).upper().strip()
                 gab_dict_admin = {}
                 if len(gabarito_admin) >= total_q_global:
                     for i, char in enumerate(gabarito_admin[:total_q_global]): gab_dict_admin[i+1] = "NULA" if char in ["X", "N"] else char
 
-                if st.button("🚀 Calcular Notas do Banco e Baixar Planilha Consolidada", type="primary", use_container_width=True):
-                    with st.spinner("Corrigindo todos os milhares de alunos da nuvem..."):
+                if st.button("🚀 Calcular Notas de Todo o Banco e Empacotar em ZIP", type="primary", use_container_width=True):
+                    with st.spinner("Corrigindo alunos e separando planilhas por escola e turma..."):
                         todos_resultados = []
                         # Repuxa tudo direto do banco para calcular geral
                         res_todas_notas = supabase.table("respostas_geral").select("*").execute()
                         df_total = pd.DataFrame(res_todas_notas.data)
                         
-                        for index, row in df_total.iterrows():
-                            aluno_processado = {
-                                "Escola": row["escola"], "Ano_Ensino": row["ano_ensino"], 
-                                "Turma": row["turma"], "Turno": row["turno"], 
-                                "Frequencia": row["frequencia"], "Nome": row["nome_aluno"],
-                                "Digitador_Responsavel": row["digitador"]
-                            }
-                            acertos_geral = 0
-                            acertos_disc = {disc: 0 for disc in tot_disc_global}
-                            respostas_brutas = str(row["respostas_brutas"])
-                            
-                            for q in range(1, total_q_global + 1):
-                                letra_marcada = respostas_brutas[q-1] if (q-1 < len(respostas_brutas)) else "-"
-                                gabarito_certo = gab_dict_admin.get(q, "NULA")
-                                aluno_processado[f"Letra_Q{q:02d}"] = letra_marcada
-                                is_correct = 1 if gabarito_certo == "NULA" or letra_marcada == gabarito_certo else 0
-                                if is_correct:
-                                    acertos_geral += 1
-                                    if mapa_disc_global.get(q): acertos_disc[mapa_disc_global[q]] += 1
-                                aluno_processado[f"Q{q:02d}"] = is_correct
-                            
-                            aluno_processado["Total_Acertos_Geral"] = acertos_geral
-                            aluno_processado["%_Acerto_Geral"] = round((acertos_geral / total_q_global) * 100, 2) if total_q_global > 0 else 0
-                            for disc, total in tot_disc_global.items():
-                                qtd_acertos = acertos_disc[disc]
-                                aluno_processado[f"Acertos_{disc.replace(' ', '_')}"] = qtd_acertos
-                                aluno_processado[f"%_{disc.replace(' ', '_')}"] = round((qtd_acertos / total) * 100, 2) if total > 0 else 0
+                        if not df_total.empty:
+                            for index, row in df_total.iterrows():
+                                aluno_processado = {
+                                    "Escola": row["escola"], "Ano_Ensino": row["ano_ensino"], 
+                                    "Turma": row["turma"], "Turno": row["turno"], 
+                                    "Frequencia": row["frequencia"], "Nome": row["nome_aluno"],
+                                    "Digitador_Responsavel": row["digitador"]
+                                }
+                                acertos_geral = 0
+                                acertos_disc = {disc: 0 for disc in tot_disc_global}
+                                respostas_brutas = str(row["respostas_brutas"])
                                 
-                            todos_resultados.append(aluno_processado)
+                                for q in range(1, total_q_global + 1):
+                                    letra_marcada = respostas_brutas[q-1] if (q-1 < len(respostas_brutas)) else "-"
+                                    gabarito_certo = gab_dict_admin.get(q, "NULA")
+                                    aluno_processado[f"Letra_Q{q:02d}"] = letra_marcada
+                                    is_correct = 1 if gabarito_certo == "NULA" or letra_marcada == gabarito_certo else 0
+                                    if is_correct:
+                                        acertos_geral += 1
+                                        if mapa_disc_global.get(q): acertos_disc[mapa_disc_global[q]] += 1
+                                    aluno_processado[f"Q{q:02d}"] = is_correct
+                                
+                                aluno_processado["Total_Acertos_Geral"] = acertos_geral
+                                aluno_processado["%_Acerto_Geral"] = round((acertos_geral / total_q_global) * 100, 2) if total_q_global > 0 else 0
+                                for disc, total in tot_disc_global.items():
+                                    qtd_acertos = acertos_disc[disc]
+                                    aluno_processado[f"Acertos_{disc.replace(' ', '_')}"] = qtd_acertos
+                                    aluno_processado[f"%_{disc.replace(' ', '_')}"] = round((qtd_acertos / total) * 100, 2) if total > 0 else 0
+                                    
+                                todos_resultados.append(aluno_processado)
 
                         if todos_resultados:
                             df_final_admin = pd.DataFrame(todos_resultados)
                             df_final_admin['Ordem_Num'] = pd.to_numeric(df_final_admin['Frequencia'], errors='coerce')
                             df_final_admin = df_final_admin.sort_values(by=['Escola', 'Ano_Ensino', 'Turma', 'Turno', 'Ordem_Num'], ascending=[True, True, True, True, True], na_position='last').drop(columns=['Ordem_Num']) 
-                            st.success(f"✅ Sucesso! {len(df_final_admin)} alunos foram corrigidos e processados.")
-                            st.download_button("📥 Baixar Planilha Final (CSV)", df_final_admin.to_csv(index=False, sep=";"), f"samar_dados_consolidados_nuvem.csv", "text/csv", type="primary")
+                            
+                            # MAGIA DA EXPORTAÇÃO EM LOTE: Cria um ZIP com um CSV para cada turma
+                            zip_csv_buffer = io.BytesIO()
+                            with zipfile.ZipFile(zip_csv_buffer, "w") as zf:
+                                grouped = df_final_admin.groupby(['Escola', 'Ano_Ensino', 'Turma', 'Turno'])
+                                for name, group_df in grouped:
+                                    esc_g, ano_g, tur_g, turno_g = name
+                                    esc_clean = str(esc_g).replace(' ', '_').replace('/', '-')
+                                    ano_clean = str(ano_g).replace(' ', '_')
+                                    nome_arquivo_csv = f"Notas_{esc_clean}_{ano_clean}_{tur_g}_{turno_g}.csv"
+                                    
+                                    csv_data = group_df.to_csv(index=False, sep=";")
+                                    zf.writestr(nome_arquivo_csv, csv_data)
+                                    
+                            st.success(f"✅ Sucesso! {len(df_final_admin)} alunos foram corrigidos e as turmas foram separadas e empacotadas no ZIP.")
+                            st.download_button(
+                                label="📥 Baixar Todas as Planilhas Organizadas (ZIP com CSVs de cada Turma)", 
+                                data=zip_csv_buffer.getvalue(), 
+                                file_name=f"SAMAR_Notas_Por_Turma_{datetime.now().strftime('%Y%m%d')}.zip", 
+                                mime="application/zip", 
+                                type="primary",
+                                use_container_width=True
+                            )
             else:
                 st.info("A Nuvem está vazia. Aguarde os digitadores enviarem os dados.")
 
@@ -706,7 +728,7 @@ with tab3:
             
             df_editado_ui = st.data_editor(df_turma[colunas_exibir], use_container_width=True, num_rows="dynamic", column_config=config_colunas, height=300, key=f"editor_atual_{rk}")
             
-            if st.button("💾 Salvar Edições Desta Turma", type="primary", use_container_width=True):
+            if st.button("Salvar Edições Desta Turma", type="primary", use_container_width=True):
                 df_salvar = df_editado_ui.copy()
                 df_salvar["Respostas_Brutas"] = df_salvar[[f"Q{q:02d}" for q in range(1, total_q_global + 1)]].agg(lambda x: ''.join(x.astype(str)), axis=1)
                 
@@ -719,8 +741,10 @@ with tab3:
                         "frequencia": str(row["Frequencia"]), "nome_aluno": str(row["Nome_Aluno"]),
                         "respostas_brutas": str(row["Respostas_Brutas"]), "digitador": nome_operador
                     })
+                # Apaga os registros antigos deste lote para substituir pela visão limpa (caso o digitador tenha apagado uma linha)
                 supabase.table("respostas_geral").delete().eq("escola", st.session_state.escola_val).eq("ano_ensino", st.session_state.ano_val).eq("turma", st.session_state.turma_val).eq("digitador", nome_operador).execute()
                 supabase.table("respostas_geral").upsert(records_upsert).execute()
+                
                 st.success("Tabela sincronizada com sucesso na nuvem!")
                 st.rerun()
         else:
@@ -729,7 +753,7 @@ with tab3:
         st.info("💡 Preencha o Ano, Escola e Turma no topo. Os alunos aparecerão aqui embaixo.")
 
     st.write("")
-    if st.button("🧹 Limpar Campos e Trocar de Turma/Escola", use_container_width=True): # Note que tirei o type="primary" daqui para ficar cinza!
+    if st.button("🧹 Limpar Campos e Trocar de Turma/Escola", use_container_width=True): # O botão de apagar sem a cor primária (Azul) para evitar erros
         for campo in ["escola_val", "ano_val", "turma_val", "turno_val"]: st.session_state[campo] = ""
         st.session_state.reset_key += 1
         st.rerun()
@@ -739,7 +763,7 @@ with tab3:
     # ------------------------------------------------------------------
     st.markdown("---")
     st.markdown("#### ☁️ Meu Histórico de Digitação")
-    st.info("Esqueceu de corrigir um aluno de uma escola que você já fechou? Encontre ele aqui.")
+    st.info("Esqueceu de corrigir um aluno de uma escola que você já fechou? Encontre-o aqui.")
     
     with st.expander("📂 Abrir Histórico (Suas Escolas Anteriores)", expanded=False):
         if usa_nuvem:
@@ -755,38 +779,39 @@ with tab3:
                     
                     escolas_minhas = sorted(list(df_ano_meu['Escola'].dropna().unique()))
                     for esc_m in escolas_minhas:
-                        st.markdown(f"**🏫 {esc_m}**")
-                        df_esc_m = df_ano_meu[df_ano_meu['Escola'] == esc_m]
-                        turmas_minhas = df_esc_m[['Turma', 'Turno']].drop_duplicates().values.tolist()
-                        
-                        for (tur_m, tur_no_m) in turmas_minhas:
-                            df_tur_m = df_esc_m[(df_esc_m['Turma'] == tur_m) & (df_esc_m['Turno'] == tur_no_m)].copy()
-                            st.caption(f"Turma {tur_m} ({tur_no_m}) - {len(df_tur_m)} alunos")
+                        with st.expander(f"🏫 {esc_m}", expanded=False):
+                            df_esc_m = df_ano_meu[df_ano_meu['Escola'] == esc_m]
+                            turmas_minhas = df_esc_m[['Turma', 'Turno']].drop_duplicates().values.tolist()
                             
-                            for q in range(1, total_q_global + 1):
-                                df_tur_m[f"Q{q:02d}"] = df_tur_m["Respostas_Brutas"].apply(lambda x: x[q-1] if isinstance(x, str) and len(x) >= q else "-")
-                            
-                            cols_ed_m = ["id", "Frequencia", "Nome_Aluno"] + [f"Q{q:02d}" for q in range(1, total_q_global+1)]
-                            conf_ed_m = {"id": None, "Frequencia": st.column_config.TextColumn(width="small")}
-                            for q in range(1, total_q_global+1): conf_ed_m[f"Q{q:02d}"] = st.column_config.SelectboxColumn(options=["A", "B", "C", "D", "-", "*"])
-                            
-                            df_ed_meu = st.data_editor(df_tur_m[cols_ed_m], column_config=conf_ed_m, use_container_width=True, num_rows="dynamic", key=f"hist_{sel_ano_meu}_{esc_m}_{tur_m}_{tur_no_m}")
-                            
-                            if st.button(f"💾 Salvar Correção Histórica - Turma {tur_m}", key=f"btn_hist_{sel_ano_meu}_{esc_m}_{tur_m}_{tur_no_m}", type="primary"):
-                                df_salvar_hist = df_ed_meu.copy()
-                                df_salvar_hist["Respostas_Brutas"] = df_salvar_hist[[f"Q{q:02d}" for q in range(1, total_q_global + 1)]].agg(lambda x: ''.join(x.astype(str)), axis=1)
+                            for (tur_m, tur_no_m) in turmas_minhas:
+                                df_tur_m = df_esc_m[(df_esc_m['Turma'] == tur_m) & (df_esc_m['Turno'] == tur_no_m)].copy()
+                                st.markdown(f"**Turma {tur_m} | Turno: {tur_no_m}** - {len(df_tur_m)} alunos")
                                 
-                                records_upsert = []
-                                for _, row in df_salvar_hist.iterrows():
-                                    records_upsert.append({
-                                        "id": row["id"] if pd.notna(row.get("id")) else str(uuid.uuid4()),
-                                        "escola": esc_m, "ano_ensino": sel_ano_meu, "turma": tur_m, "turno": tur_no_m,
-                                        "frequencia": str(row["Frequencia"]), "nome_aluno": str(row["Nome_Aluno"]),
-                                        "respostas_brutas": str(row["Respostas_Brutas"]), "digitador": nome_operador
-                                    })
-                                supabase.table("respostas_geral").upsert(records_upsert).execute()
-                                st.success(f"✅ Histórico da turma atualizado!")
-                                st.rerun()
+                                for q in range(1, total_q_global + 1):
+                                    df_tur_m[f"Q{q:02d}"] = df_tur_m["Respostas_Brutas"].apply(lambda x: x[q-1] if isinstance(x, str) and len(x) >= q else "-")
+                                
+                                cols_ed_m = ["id", "Frequencia", "Nome_Aluno"] + [f"Q{q:02d}" for q in range(1, total_q_global+1)]
+                                conf_ed_m = {"id": None, "Frequencia": st.column_config.TextColumn(width="small")}
+                                for q in range(1, total_q_global+1): conf_ed_m[f"Q{q:02d}"] = st.column_config.SelectboxColumn(options=["A", "B", "C", "D", "-", "*"])
+                                
+                                df_ed_meu = st.data_editor(df_tur_m[cols_ed_m], column_config=conf_ed_m, use_container_width=True, num_rows="dynamic", key=f"hist_{sel_ano_meu}_{esc_m}_{tur_m}_{tur_no_m}")
+                                
+                                if st.button(f"Salvar Correção - Turma {tur_m}", key=f"btn_hist_{sel_ano_meu}_{esc_m}_{tur_m}_{tur_no_m}", type="primary"):
+                                    df_salvar_hist = df_ed_meu.copy()
+                                    df_salvar_hist["Respostas_Brutas"] = df_salvar_hist[[f"Q{q:02d}" for q in range(1, total_q_global + 1)]].agg(lambda x: ''.join(x.astype(str)), axis=1)
+                                    
+                                    records_upsert = []
+                                    for _, row in df_salvar_hist.iterrows():
+                                        records_upsert.append({
+                                            "id": row["id"] if pd.notna(row.get("id")) else str(uuid.uuid4()),
+                                            "escola": esc_m, "ano_ensino": sel_ano_meu, "turma": tur_m, "turno": tur_no_m,
+                                            "frequencia": str(row["Frequencia"]), "nome_aluno": str(row["Nome_Aluno"]),
+                                            "respostas_brutas": str(row["Respostas_Brutas"]), "digitador": nome_operador
+                                        })
+                                    supabase.table("respostas_geral").upsert(records_upsert).execute()
+                                    st.success(f"✅ Histórico da turma atualizado!")
+                                    st.rerun()
+                                st.divider()
             else:
                 st.write("Você ainda não tem histórico salvo na nuvem.")
 
