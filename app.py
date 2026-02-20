@@ -68,17 +68,17 @@ def gerar_zip_gabaritos(df, conf_prova, modelo_prova):
             escola = str(row.get("Escola", ""))
             ano = str(row.get("Ano_Ensino", ""))
             turma = str(row.get("Turma", ""))
+            turno = str(row.get("Turno", "")) # Puxando o turno do banco
             freq = str(row.get("Frequencia", "00")).zfill(2)
             nome = str(row.get("Nome_Aluno", ""))
             respostas = str(row.get("Respostas_Brutas", ""))
             
-            # ESCRITA DO CABEÇALHO DIGITAL SIMULANDO CANETA AZUL
-            cor_caneta = (139, 0, 0) # Azul Escuro no padrão BGR do OpenCV
+            cor_caneta = (139, 0, 0) 
             cv2.putText(img_aluno, f"ESCOLA: {escola}", (45, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.7, cor_caneta, 2)
             cv2.putText(img_aluno, f"ALUNO(A): {nome}", (45, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, cor_caneta, 2)
-            cv2.putText(img_aluno, f"ANO: {ano}      TURMA: {turma}      FREQUENCIA: {freq}", (45, 125), cv2.FONT_HERSHEY_SIMPLEX, 0.7, cor_caneta, 2)
+            # Adicionando o Turno no cabeçalho desenhado
+            cv2.putText(img_aluno, f"ANO: {ano}   TURMA: {turma}   TURNO: {turno}   FREQ: {freq}", (45, 125), cv2.FONT_HERSHEY_SIMPLEX, 0.7, cor_caneta, 2)
             
-            # PINTURA DAS BOLINHAS
             for grid in conf_prova.grids:
                 x1, x2 = int(grid.x_start * conf_prova.REF_W), int(grid.x_end * conf_prova.REF_W)
                 y1, y2 = int(grid.y_start * conf_prova.REF_H), int(grid.y_end * conf_prova.REF_H)
@@ -98,7 +98,7 @@ def gerar_zip_gabaritos(df, conf_prova, modelo_prova):
                     
                     if marcada_col != -1:
                         cx, cy = int(x1 + (marcada_col * cell_w) + (cell_w / 2)), int(y1 + (r * cell_h) + (cell_h / 2))
-                        cv2.circle(img_aluno, (cx, cy), raio + 4, (0, 0, 0), -1) # Bolinha preta
+                        cv2.circle(img_aluno, (cx, cy), raio + 4, (0, 0, 0), -1) 
             
             is_success, buffer = cv2.imencode(".jpg", img_aluno)
             if is_success:
@@ -151,11 +151,10 @@ if st.sidebar.button("🚪 Sair do Sistema (Logout)"):
 is_admin = (st.session_state['perfil_logado'] == "Administrador")
 
 # ====================================================================
-# CARREGAMENTO DO MODELO DE PROVA (AGORA COM PADRÃO 18 QUESTÕES)
+# CARREGAMENTO DO MODELO DE PROVA
 # ====================================================================
 st.title("🖨️ Sistema SAMAR - Operação Descentralizada")
 
-# Força o modelo de 18 questões ser o primeiro a carregar automaticamente
 modelos_disponiveis = list(TIPOS_PROVA.keys())
 idx_padrao = next((i for i, m in enumerate(modelos_disponiveis) if "18" in m), 0)
 
@@ -343,8 +342,8 @@ if is_admin:
                         arquivos_com_erro += 1
                         continue
                         
-                    # Agora o Motor lida perfeitamente com a Escola também
-                    for col in ["Escola", "Ano_Ensino", "Turma", "Nome_Aluno"]:
+                    # Verifica a existência das colunas para manter a compatibilidade
+                    for col in ["Escola", "Ano_Ensino", "Turma", "Turno", "Nome_Aluno"]:
                         if col not in df_bruto.columns: df_bruto[col] = ""
                     df_bruto = df_bruto.fillna("")
                     
@@ -352,11 +351,19 @@ if is_admin:
                         aluno_escola = row["Escola"]
                         aluno_ano = row["Ano_Ensino"]
                         aluno_turma = row["Turma"]
+                        aluno_turno = row["Turno"] # Lendo o novo campo Turno
                         aluno_f = row["Frequencia"]
                         aluno_nome = row["Nome_Aluno"]
                         respostas_brutas = row["Respostas_Brutas"]
                         
-                        aluno_processado = {"Escola": aluno_escola, "Ano_Ensino": aluno_ano, "Turma": aluno_turma, "Frequencia": aluno_f, "Nome": aluno_nome}
+                        aluno_processado = {
+                            "Escola": aluno_escola, 
+                            "Ano_Ensino": aluno_ano, 
+                            "Turma": aluno_turma, 
+                            "Turno": aluno_turno, 
+                            "Frequencia": aluno_f, 
+                            "Nome": aluno_nome
+                        }
                         acertos_geral = 0
                         acertos_disc = {disc: 0 for disc in tot_disc_global}
                         
@@ -387,8 +394,8 @@ if is_admin:
             if todos_resultados:
                 df_final_admin = pd.DataFrame(todos_resultados)
                 df_final_admin['Ordem_Num'] = pd.to_numeric(df_final_admin['Frequencia'], errors='coerce')
-                # Agora organiza por Escola, depois Ano, depois Turma e depois Frequência
-                df_final_admin = df_final_admin.sort_values(by=['Escola', 'Ano_Ensino', 'Turma', 'Ordem_Num'], ascending=[True, True, True, True], na_position='last').drop(columns=['Ordem_Num']) 
+                # Adicionando o Turno na ordem da classificação do Excel
+                df_final_admin = df_final_admin.sort_values(by=['Escola', 'Ano_Ensino', 'Turma', 'Turno', 'Ordem_Num'], ascending=[True, True, True, True, True], na_position='last').drop(columns=['Ordem_Num']) 
                 
                 if arquivos_com_erro == 0:
                     st.success(f"✅ Sucesso absoluto! {len(df_final_admin)} alunos foram processados sem nenhum erro.")
@@ -484,14 +491,16 @@ with tab3:
     with st.container(border=True):
         st.markdown("#### 🏫 1. Identificação da Turma e Escola (Preencha 1 vez)")
         
-        # NOVO CAMPO DE ESCOLA ADICIONADO AQUI:
         nome_escola = st.text_input("Nome da Escola:", placeholder="Ex: Escola Municipal...")
         
-        col_t1, col_t2 = st.columns(2)
+        # DIVIDIDO EM 3 COLUNAS AGORA PARA CABER O TURNO!
+        col_t1, col_t2, col_t3 = st.columns(3)
         with col_t1: 
             ano_ensino = st.selectbox("Ano de Ensino:", ["", "1º Ano", "2º Ano", "3º Ano", "4º Ano", "5º Ano", "6º Ano", "7º Ano", "8º Ano", "9º Ano"])
         with col_t2: 
             turma_aluno = st.selectbox("Turma:", ["", "A", "B", "C", "D", "E", "F", "G", "H", "Única"])
+        with col_t3:
+            turno_aluno = st.selectbox("Turno:", ["", "Manhã", "Tarde", "Integral", "Noite"])
 
     st.write("")
 
@@ -529,12 +538,13 @@ with tab3:
             
         st.write("")
         if st.form_submit_button("💾 Salvar Cartão deste Aluno e Limpar Tela", type="primary", use_container_width=True):
-            if not nome_escola or not ano_ensino or not turma_aluno:
-                st.error("⚠️ Atenção: Preencha a 'Escola', o 'Ano de Ensino' e a 'Turma' na etapa 1 antes de salvar.")
+            # A TRAVA AGORA EXIGE O TURNO TAMBÉM!
+            if not nome_escola or not ano_ensino or not turma_aluno or not turno_aluno:
+                st.error("⚠️ Atenção: Preencha a 'Escola', o 'Ano', a 'Turma' e o 'Turno' na etapa 1 antes de salvar.")
             else:
                 nova_freq = freq_d + freq_u
                 resp_str = "".join([respostas_marcadas[q] for q in range(1, total_q_global + 1)])
-                novo_dado = {"Escola": nome_escola, "Ano_Ensino": ano_ensino, "Turma": turma_aluno, "Frequencia": nova_freq, "Nome_Aluno": nome_aluno, "Respostas_Brutas": resp_str}
+                novo_dado = {"Escola": nome_escola, "Ano_Ensino": ano_ensino, "Turma": turma_aluno, "Turno": turno_aluno, "Frequencia": nova_freq, "Nome_Aluno": nome_aluno, "Respostas_Brutas": resp_str}
                 df_novo = pd.DataFrame([novo_dado])
                 
                 if os.path.exists(ARQUIVO_TEMP): df_novo.to_csv(ARQUIVO_TEMP, mode='a', header=False, index=False, sep=";")
@@ -546,16 +556,15 @@ with tab3:
     
     if os.path.exists(ARQUIVO_TEMP):
         df_temp = pd.read_csv(ARQUIVO_TEMP, sep=";", dtype=str)
-        # Garante que as colunas existam mesmo em CSVs da sessão passada
-        for col in ["Escola", "Ano_Ensino", "Turma", "Nome_Aluno"]:
+        for col in ["Escola", "Ano_Ensino", "Turma", "Turno", "Nome_Aluno"]:
             if col not in df_temp.columns: df_temp[col] = ""
         df_temp = df_temp.fillna("")
         
         st.write(f"**Total de Alunos Transcritos nesta sessão:** {len(df_temp)}")
-        st.dataframe(df_temp[["Escola", "Ano_Ensino", "Turma", "Frequencia", "Nome_Aluno", "Respostas_Brutas"]], use_container_width=True)
+        st.dataframe(df_temp[["Escola", "Ano_Ensino", "Turma", "Turno", "Frequencia", "Nome_Aluno", "Respostas_Brutas"]], use_container_width=True)
         
         escola_str = nome_escola.replace(" ", "_") if nome_escola else "Escola"
-        nome_sugerido = f"respostas_brutas_{escola_str}_{ano_ensino.replace(' ', '_')}_Turma_{turma_aluno}_{modelo}.csv"
+        nome_sugerido = f"respostas_brutas_{escola_str}_{ano_ensino.replace(' ', '_')}_{turma_aluno}_{turno_aluno}.csv"
         nome_arq_dig = st.text_input("Nome do arquivo de dados que será baixado:", value=nome_sugerido)
         
         c1, c2, c3 = st.columns(3)
@@ -575,7 +584,7 @@ with tab3:
                     st.download_button(
                         label="📥 Download Completo (ZIP)",
                         data=zip_data,
-                        file_name=f"Gabaritos_Imagens_{escola_str}_{ano_ensino}_{turma_aluno}.zip",
+                        file_name=f"Gabaritos_Imagens_{escola_str}_{ano_ensino}_{turma_aluno}_{turno_aluno}.zip",
                         mime="application/zip",
                         type="primary",
                         use_container_width=True
