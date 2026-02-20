@@ -980,7 +980,7 @@ with tab3:
                 st.info("Nenhum aluno registrado para esta turma no momento.")
 
         st.markdown("---")
-        st.markdown("#### 📋 Registrar Ata de Ocorrência")
+        st.markdown("#### 📋 Registrar Ata de Ocorrência da Transcrição")
         if turma_esta_bloqueada:
             st.error("🔒 O envio de atas para este ciclo/turma foi encerrado.")
         else:
@@ -1007,3 +1007,4 @@ with tab3:
                             st.success("✅ Ata enviada com sucesso!")
                 if st.session_state.get('ultima_ata_html'):
                     st.download_button("🖨️ Baixar Via da Ata (HTML)", data=st.session_state['ultima_ata_html'], file_name="Ata.html", mime="text/html")
+
