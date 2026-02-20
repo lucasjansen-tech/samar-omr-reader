@@ -129,7 +129,7 @@ estados_padrao = {
     'turma_confirmada': False, 'config_etapa': "", 'config_escola': "",
     'config_ano': "", 'config_turma': "", 'config_turno': "",
     'freq_d': "0", 'freq_u': "0", 'nome_aluno_input': "",
-    'msg_erro': None, 'msg_sucesso': None, 'reset_key': 0
+    'msg_erro': None, 'msg_sucesso': None, 'reset_key': 0, 'gerar_zip_digitador': False
 }
 for key, valor in estados_padrao.items():
     if key not in st.session_state: st.session_state[key] = valor
@@ -287,12 +287,12 @@ else:
     tab3 = tabs[0]
 
 # ====================================================================
-# ABA 7 (ADMIN): CONFIGURAÇÕES GERAIS (DINÂMICAS)
+# ABA 7 (ADMIN): CONFIGURAÇÕES GERAIS
 # ====================================================================
 if is_admin:
     with tab7:
         st.markdown("### ⚙️ Configurações Gerais do Sistema")
-        st.info("Personalize as listas que aparecem nos menus. Estas configurações afetam como os dados são arquivados e organizados na exportação do ZIP.")
+        st.info("Personalize as listas que aparecem nos menus. Estas configurações afetam como os dados são arquivados.")
         
         c_cfg1, c_cfg2, c_cfg3 = st.columns(3)
         with c_cfg1:
@@ -326,13 +326,11 @@ if is_admin:
                 st.rerun()
 
 # ====================================================================
-# ABA 1: GERADOR DE PDF (AGORA COM REFERÊNCIA DE ESCOLA E ETAPA)
+# ABA 1: GERADOR DE PDF
 # ====================================================================
 if is_admin:
     with tab1:
         st.markdown("### 🎨 Personalização do Cabeçalho e Arquivo")
-        st.info("Gere as folhas de respostas em branco. Opcionalmente, selecione a Etapa e Escola para que o nome do arquivo baixado já saia organizado.")
-        
         col_t1, col_t2 = st.columns(2)
         with col_t1: custom_titulo = st.text_input("Título da Avaliação (Opcional):", conf.titulo_prova)
         with col_t2: custom_sub = st.text_input("Etapa/Ano (Subtítulo Opcional):", conf.subtitulo)
@@ -353,26 +351,21 @@ if is_admin:
             if st.button("Gerar Arquivo Pronto para Impressão", type="primary", use_container_width=True):
                 logos_dict = {'esq': logo_esq, 'cen': logo_cen, 'dir': logo_dir}
                 ext = fmt.split()[0].lower()
-                
-                # Nomenclatura Organizada
                 eta_cln = str(sel_etapa_gerador).replace(" ", "_") if sel_etapa_gerador else "Geral"
                 esc_cln = str(sel_escola_gerador).replace(" ", "_") if sel_escola_gerador else "S-Escola"
                 fn = f"Gabaritos_{eta_cln}_{esc_cln}_{modelo}.{ext}"
                 
                 if ext == "pdf": gerar_pdf(conf, fn, custom_titulo, custom_sub, logos_dict)
                 else: gerar_imagem_a4(conf, fn, ext, custom_titulo, custom_sub, logos_dict)
-                
                 if os.path.exists(fn):
                     with open(fn, "rb") as f: st.download_button(f"📥 Baixar {fn}", f, fn, mime="application/octet-stream", use_container_width=True)
 
 # ====================================================================
-# ABA 2: LEITOR ROBÔ (AGORA EXIGE CONTEXTO PARA O CSV)
+# ABA 2: LEITOR ROBÔ
 # ====================================================================
 if is_admin:
     with tab2:
         st.markdown("### 📝 Passo 1: Informar o Contexto do Lote e o Gabarito")
-        st.info("Antes de subir as imagens da turma que o robô vai ler, selecione de onde essas provas vieram. Assim, o CSV gerado sairá com o padrão perfeito.")
-        
         with st.container(border=True):
             c_l1, c_l2 = st.columns([1, 2])
             with c_l1: etapa_leitor = st.selectbox("Etapa Avaliativa (Leitor):", TODAS_ETAPAS, key="leitor_etapa")
@@ -421,14 +414,9 @@ if is_admin:
                         res, vis, _ = processar_gabarito(img, conf, gab_oficial)
                         freq, acertos = res.get("frequencia", "00"), res.get("total_acertos", 0)
                         
-                        # INJEÇÃO DO CONTEXTO NO RELATÓRIO DO ROBÔ
                         aluno_dados = {
-                            "Etapa": etapa_leitor,
-                            "Escola": escola_leitor,
-                            "Ano_Ensino": ano_leitor,
-                            "Turma": turma_leitor,
-                            "Turno": turno_leitor,
-                            "Frequencia": freq
+                            "Etapa": etapa_leitor, "Escola": escola_leitor, "Ano_Ensino": ano_leitor,
+                            "Turma": turma_leitor, "Turno": turno_leitor, "Frequencia": freq
                         }
                         
                         acertos_disciplina = {disc: 0 for disc in tot_disc_global}
@@ -444,22 +432,19 @@ if is_admin:
                 except Exception as e: st.error(f"Erro no arquivo {arquivo.name}")
             if resultados_lote:
                 df_export = pd.DataFrame(resultados_lote)
-                
-                # NOME DO ARQUIVO ORGANIZADO PARA O LEITOR
                 eta_cln2 = str(etapa_leitor).replace(" ", "_") if etapa_leitor else "Etapa"
                 esc_cln2 = str(escola_leitor).replace(" ", "_") if escola_leitor else "Escola"
                 ano_cln2 = str(ano_leitor).replace(" ", "_") if ano_leitor else "Ano"
                 nome_csv = f"Resultados_Robo_{eta_cln2}_{esc_cln2}_{ano_cln2}_{turma_leitor}.csv"
-                
                 st.download_button("📥 Baixar CSV Corrigido e Padronizado", df_export.to_csv(index=False, sep=";"), nome_csv, "text/csv", type="primary")
 
 # ====================================================================
-# ABA 4 (ADMIN): TORRE DE CONTROLE NUVEM (E EXPORTAÇÃO ESTRUTURADA)
+# ABA 4 (ADMIN): TORRE DE CONTROLE E EXCLUSÃO CORRIGIDA
 # ====================================================================
 if is_admin:
     with tab4:
         st.markdown("### ☁️ Torre de Controle do Supabase")
-        st.info("Visualize, edite, bloqueie turmas ou exporte os dados organizados em pastas para o arquivo da Coordenação.")
+        st.info("Visualize, edite, bloqueie ou exclua as turmas na nuvem com segurança.")
 
         if usa_nuvem:
             res_nuvem = supabase.table("respostas_geral").select("*").execute()
@@ -496,10 +481,11 @@ if is_admin:
                         df_f3 = df_f2
 
                 if sel_esc_admin != "Todas as Escolas":
-                    turmas_turnos = df_f3[['Turma', 'Turno', 'Etapa']].drop_duplicates().values.tolist()
-                    for (tur, tur_no, eta_b) in turmas_turnos:
-                        with st.expander(f"📚 {eta_b} | Turma {tur} ({tur_no})", expanded=False):
-                            df_tur = df_f3[(df_f3['Turma'] == tur) & (df_f3['Turno'] == tur_no) & (df_f3['Etapa'] == eta_b)].copy()
+                    # O BUG DA EXCLUSÃO MORRE AQUI: AGRUPAMOS O ANO DE ENSINO JUNTO!
+                    turmas_turnos = df_f3[['Etapa', 'Ano_Ensino', 'Turma', 'Turno']].drop_duplicates().values.tolist()
+                    for (eta_b, ano_b, tur, tur_no) in turmas_turnos:
+                        with st.expander(f"📚 {eta_b} | {ano_b} | Turma {tur} ({tur_no})", expanded=False):
+                            df_tur = df_f3[(df_f3['Turma'] == tur) & (df_f3['Turno'] == tur_no) & (df_f3['Etapa'] == eta_b) & (df_f3['Ano_Ensino'] == ano_b)].copy()
                             status_turma = "Bloqueado" if 'Bloqueado' in df_tur['Status'].values else "Aberto"
                             icone_status = "🔒 BLOQUEADA" if status_turma == "Bloqueado" else "🔓 ABERTA"
                             
@@ -508,12 +494,12 @@ if is_admin:
                             c_lock1, c_lock2 = st.columns([2, 2])
                             with c_lock1:
                                 if status_turma == "Aberto":
-                                    if st.button(f"🔒 Bloquear Turma", key=f"lk_{eta_b}_{sel_esc_admin}_{tur}_{tur_no}"):
-                                        supabase.table("respostas_geral").update({"status": "Bloqueado"}).eq("etapa", eta_b).eq("escola", sel_esc_admin).eq("ano_ensino", sel_ano_admin).eq("turma", tur).eq("turno", tur_no).execute()
+                                    if st.button(f"🔒 Bloquear Turma", key=f"lk_{eta_b}_{sel_esc_admin}_{ano_b}_{tur}_{tur_no}"):
+                                        supabase.table("respostas_geral").update({"status": "Bloqueado"}).eq("etapa", eta_b).eq("escola", sel_esc_admin).eq("ano_ensino", ano_b).eq("turma", tur).eq("turno", tur_no).execute()
                                         st.rerun()
                                 else:
-                                    if st.button(f"🔓 Desbloquear Turma", key=f"un_{eta_b}_{sel_esc_admin}_{tur}_{tur_no}"):
-                                        supabase.table("respostas_geral").update({"status": "Aberto"}).eq("etapa", eta_b).eq("escola", sel_esc_admin).eq("ano_ensino", sel_ano_admin).eq("turma", tur).eq("turno", tur_no).execute()
+                                    if st.button(f"🔓 Desbloquear Turma", key=f"un_{eta_b}_{sel_esc_admin}_{ano_b}_{tur}_{tur_no}"):
+                                        supabase.table("respostas_geral").update({"status": "Aberto"}).eq("etapa", eta_b).eq("escola", sel_esc_admin).eq("ano_ensino", ano_b).eq("turma", tur).eq("turno", tur_no).execute()
                                         st.rerun()
                             
                             for q in range(1, total_q_global + 1):
@@ -523,10 +509,10 @@ if is_admin:
                             config_cols_admin = {"ID": None, "Frequencia": st.column_config.TextColumn(width="small"), "Digitador": st.column_config.TextColumn(disabled=True), "Status": st.column_config.TextColumn(disabled=True)}
                             for q in range(1, total_q_global+1): config_cols_admin[f"Q{q:02d}"] = st.column_config.SelectboxColumn(options=["A", "B", "C", "D", "-", "*"], width="small")
 
-                            key_ed = f"ed_adm_{eta_b}_{sel_esc_admin}_{tur}_{tur_no}"
+                            key_ed = f"ed_adm_{eta_b}_{sel_esc_admin}_{ano_b}_{tur}_{tur_no}"
                             df_ed = st.data_editor(df_tur[cols_editar], column_config=config_cols_admin, use_container_width=True, num_rows="dynamic", key=key_ed)
 
-                            if st.button(f"💾 Salvar Edições da Coordenação", key=f"btn_adm_{eta_b}_{sel_esc_admin}_{tur}_{tur_no}", type="primary"):
+                            if st.button(f"💾 Salvar Edições da Coordenação", key=f"btn_adm_{eta_b}_{sel_esc_admin}_{ano_b}_{tur}_{tur_no}", type="primary"):
                                 with st.spinner("Sincronizando..."):
                                     df_salvar = df_ed.copy()
                                     df_salvar["Respostas_Brutas"] = df_salvar[[f"Q{q:02d}" for q in range(1, total_q_global + 1)]].agg(lambda x: ''.join(x.astype(str)), axis=1)
@@ -534,7 +520,7 @@ if is_admin:
                                     for _, row in df_salvar.iterrows():
                                         records_upsert.append({
                                             "id": row["ID"] if pd.notna(row.get("ID")) else str(uuid.uuid4()),
-                                            "etapa": eta_b, "escola": sel_esc_admin, "ano_ensino": sel_ano_admin, 
+                                            "etapa": eta_b, "escola": sel_esc_admin, "ano_ensino": ano_b, 
                                             "turma": tur, "turno": tur_no, "frequencia": str(row["Frequencia"]), 
                                             "nome_aluno": str(row["Nome_Aluno"]), "respostas_brutas": str(row["Respostas_Brutas"]), 
                                             "digitador": str(row["Digitador"]) if pd.notna(row.get("Digitador")) else st.session_state['nome_logado'],
@@ -546,16 +532,17 @@ if is_admin:
                                     
                             st.write("")
                             with st.expander("🚨 ZONA DE PERIGO: Excluir Turma", expanded=False):
-                                if st.button(f"🗑️ Excluir Turma {tur} Permanentemente", key=f"del_{eta_b}_{sel_esc_admin}_{tur}_{tur_no}"):
-                                    supabase.table("respostas_geral").delete().eq("etapa", eta_b).eq("escola", sel_esc_admin).eq("ano_ensino", sel_ano_admin).eq("turma", tur).eq("turno", tur_no).execute()
-                                    st.success("A turma foi apagada da nuvem.")
+                                if st.button(f"🗑️ Excluir Turma {tur} Permanentemente", key=f"del_{eta_b}_{sel_esc_admin}_{ano_b}_{tur}_{tur_no}"):
+                                    # DELEÇÃO COM PARÂMETROS PRECISOS E 100% GARANTIDOS
+                                    supabase.table("respostas_geral").delete().eq("etapa", eta_b).eq("escola", sel_esc_admin).eq("ano_ensino", ano_b).eq("turma", tur).eq("turno", tur_no).execute()
+                                    st.success("A turma foi apagada da nuvem instantaneamente.")
                                     st.rerun()
                 else:
                     st.write("⬆️ Para ver e editar os dados, utilize os filtros acima e selecione uma Escola.")
 
                 st.markdown("---")
                 st.markdown("#### ⚙️ Motor Gerador de Notas (ZIP Organizado em Pastas)")
-                st.caption(f"Este motor processará **{len(df_f3)} alunos** e criará um ZIP com as planilhas separadas por hierarquia (Etapa > Escola > Ano > Turma.csv).")
+                st.caption(f"Este motor processará **{len(df_f3)} alunos** e criará um ZIP com as planilhas separadas por hierarquia.")
                 gabarito_admin = st.text_input(f"Gabarito Oficial ({total_q_global} questões):", value="A"*total_q_global).upper().strip()
                 gab_dict_admin = {}
                 if len(gabarito_admin) >= total_q_global:
@@ -600,7 +587,6 @@ if is_admin:
                             df_final_admin['Ordem_Num'] = pd.to_numeric(df_final_admin['Frequencia'], errors='coerce')
                             df_final_admin = df_final_admin.sort_values(by=['Etapa', 'Escola', 'Ano_Ensino', 'Turma', 'Turno', 'Ordem_Num'], ascending=[True, True, True, True, True, True], na_position='last').drop(columns=['Ordem_Num']) 
                             
-                            # MAGIA DA EXPORTAÇÃO: Cria as Pastas Hierárquicas dentro do ZIP
                             zip_csv_buffer = io.BytesIO()
                             with zipfile.ZipFile(zip_csv_buffer, "w") as zf:
                                 grouped = df_final_admin.groupby(['Etapa', 'Escola', 'Ano_Ensino', 'Turma', 'Turno'])
@@ -612,7 +598,6 @@ if is_admin:
                                     tur_clean = str(tur_g).replace(' ', '_')
                                     turno_clean = str(turno_g).replace(' ', '_')
                                     
-                                    # Formato de Pasta/Pasta/Pasta/Arquivo.csv
                                     nome_arquivo_csv = f"{eta_clean}/{esc_clean}/{ano_clean}/Turma_{tur_clean}_{turno_clean}.csv"
                                     zf.writestr(nome_arquivo_csv, group_df.to_csv(index=False, sep=";"))
                                     
@@ -691,13 +676,28 @@ if is_admin:
             else: st.success("Nenhuma ocorrência na nuvem.")
 
 # ====================================================================
-# ABA 3 COMPARTILHADA: A MÁGICA DO DIGITADOR (COM ABAS ESTÁVEIS)
+# ABA 3 COMPARTILHADA: A MÁGICA DO DIGITADOR (COM VALIDAÇÕES RÍGIDAS)
 # ====================================================================
 with tab3:
     nome_operador = st.session_state['nome_logado']
     mapa_valores_global = {"A":"A", "B":"B", "C":"C", "D":"D", "Branco":"-", "Rasura":"*", None: "-"}
     
     def salvar_aluno_callback():
+        # VALIDAÇÃO 1: SPAM DE NOME EM BRANCO
+        if not st.session_state.nome_aluno_input.strip():
+            st.session_state.msg_erro = "⚠️ OBRIGATÓRIO: O campo 'Nome do Aluno' não pode ficar em branco."
+            return
+
+        # VALIDAÇÃO 2: SPAM DE QUESTÕES NÃO MARCADAS
+        questoes_vazias = []
+        for q in range(1, total_q_global + 1):
+            if st.session_state.get(f"q_{q}") is None:
+                questoes_vazias.append(str(q))
+                
+        if questoes_vazias:
+            st.session_state.msg_erro = f"⚠️ OBRIGATÓRIO: Você esqueceu de preencher as questões: {', '.join(questoes_vazias)}. (Se o aluno não respondeu, marque a opção 'Branco')."
+            return
+        
         nova_freq = st.session_state.freq_d + st.session_state.freq_u
         resp_str = "".join([mapa_valores_global.get(st.session_state.get(f"q_{q}"), "-") for q in range(1, total_q_global + 1)])
         
@@ -752,6 +752,18 @@ with tab3:
                             st.session_state.msg_erro = "⚠️ Preencha todos os campos obrigatórios da turma!"
                             st.rerun()
                         else:
+                            # VALIDAÇÃO EXTRA: IMPEDE DUAS PESSOAS NA MESMA TURMA HOMÔNIMA
+                            if usa_nuvem:
+                                check_exist = supabase.table("respostas_geral").select("digitador").eq("etapa", s_etapa).eq("escola", s_escola).eq("ano_ensino", s_ano).eq("turma", s_turma).eq("turno", s_turno).limit(1).execute()
+                                if check_exist.data:
+                                    dono = check_exist.data[0]['digitador']
+                                    if dono != nome_operador:
+                                        st.session_state.msg_erro = f"⚠️ ERRO DE COLISÃO: A turma {s_turma} ({s_turno}) já foi iniciada pelo usuário '{dono}'. Você não pode recriar a mesma turma."
+                                        st.rerun()
+                                    else:
+                                        st.session_state.msg_erro = f"⚠️ AVISO: Você já iniciou essa turma anteriormente! Vá para a aba 'Buscar do Meu Histórico'."
+                                        st.rerun()
+
                             st.session_state.config_etapa = s_etapa
                             st.session_state.config_escola = s_escola
                             st.session_state.config_ano = s_ano
@@ -800,9 +812,9 @@ with tab3:
             st.session_state.config_ano = ""
             st.session_state.config_turma = ""
             st.session_state.config_turno = ""
+            st.session_state.gerar_zip_digitador = False
             st.rerun()
 
-        # VERIFICA SE A ETAPA JÁ PASSOU DO PRAZO OU SE FOI BLOQUEADA PELA COORDENAÇÃO
         turma_esta_bloqueada = False
         etapa_vencida = st.session_state.config_etapa not in ETAPAS_ATIVAS
         
@@ -817,7 +829,6 @@ with tab3:
         elif turma_esta_bloqueada:
             st.error("🔒 **TURMA BLOQUEADA PELA COORDENAÇÃO:** O boletim desta turma já foi gerado. A edição e inclusão de alunos está bloqueada.")
 
-        # CARTÃO DO ALUNO (SÓ APARECE SE A TURMA NÃO ESTIVER BLOQUEADA)
         if not turma_esta_bloqueada:
             with st.container(border=True):
                 st.markdown("#### 👤 Inserir Novo Cartão-Resposta")
@@ -849,7 +860,7 @@ with tab3:
 
         st.markdown("---")
         
-        # TABELA ESPELHO DA TURMA ATUAL
+        # TABELA DE VISUALIZAÇÃO E EDIÇÃO + ZIP DE IMAGENS
         st.markdown(f"#### 📁 Alunos Registrados nesta Turma")
         if usa_nuvem:
             res_turma = supabase.table("respostas_geral").select("*").eq("etapa", st.session_state.config_etapa).eq("escola", st.session_state.config_escola).eq("ano_ensino", st.session_state.config_ano).eq("turma", st.session_state.config_turma).eq("turno", st.session_state.config_turno).eq("digitador", nome_operador).execute()
@@ -870,7 +881,7 @@ with tab3:
                     st.dataframe(df_turma[colunas_exibir], use_container_width=True, column_config=config_colunas, height=300)
                 else:
                     st.caption("Dê dois cliques na célula para corrigir uma letra ou aperte 'Delete' para apagar um aluno duplicado.")
-                    df_editado_ui = st.data_editor(df_turma[colunas_exibir], use_container_width=True, num_rows="dynamic", column_config=config_colunas, height=300, key=f"editor_atual")
+                    df_editado_ui = st.data_editor(df_turma[colunas_exibir], use_container_width=True, num_rows="dynamic", column_config=config_colunas, height=300, key=f"editor_atual_{st.session_state.reset_key}")
                     
                     if st.button("Salvar Edições da Tabela na Nuvem", type="primary", use_container_width=True):
                         df_salvar = df_editado_ui.copy()
@@ -890,6 +901,25 @@ with tab3:
                         supabase.table("respostas_geral").upsert(records_upsert).execute()
                         st.success("Tabela sincronizada com sucesso na nuvem!")
                         st.rerun()
+
+                # NOVO: DEVOLVENDO O ZIP DE IMAGENS GABARITO PARA O DIGITADOR
+                st.write("")
+                with st.expander("📥 Exportar Comprovantes (Gabaritos em Imagem)", expanded=False):
+                    st.info("O sistema criará as imagens preenchidas para todos os alunos acima. Como são imagens, isso pode levar alguns segundos.")
+                    if st.button("Empacotar Imagens (ZIP)", key="btn_zip_dig"):
+                        st.session_state.gerar_zip_digitador = True
+                    
+                    if st.session_state.get('gerar_zip_digitador', False):
+                        with st.spinner("Gerando imagens, aguarde..."):
+                            zip_data = gerar_zip_gabaritos(df_turma, conf, modelo)
+                            esc_cln = st.session_state.config_escola.replace(' ','_')
+                            st.download_button(
+                                label="✅ Clique aqui para Baixar o Arquivo ZIP", 
+                                data=zip_data, 
+                                file_name=f"Gabaritos_{esc_cln}_{st.session_state.config_turma}.zip", 
+                                mime="application/zip", 
+                                type="primary"
+                            )
             else:
                 st.info("Nenhum aluno registrado para esta turma no momento.")
 
