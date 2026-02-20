@@ -15,11 +15,14 @@ import uuid
 st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
 
 # ====================================================================
-# FUNÇÃO DE SEGURANÇA E INICIALIZAÇÃO
+# FUNÇÃO DE SEGURANÇA: CRIPTOGRAFIA DE SENHAS
 # ====================================================================
 def hash_senha(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
 
+# ====================================================================
+# INICIALIZAÇÃO DO BANCO DE USUÁRIOS E SESSÃO
+# ====================================================================
 DB_USUARIOS = "usuarios_samar.csv"
 if not os.path.exists(DB_USUARIOS):
     pd.DataFrame([{
@@ -41,7 +44,7 @@ if 'usuario_logado' not in st.session_state:
     st.session_state['perfil_logado'] = None
 
 # ====================================================================
-# FUNÇÃO GERADORA DE GABARITOS DIGITAIS (ZIP)
+# FUNÇÃO GERADORA DE GABARITOS DIGITAIS
 # ====================================================================
 def gerar_zip_gabaritos(df, conf_prova, modelo_prova):
     id_unico = uuid.uuid4().hex
@@ -139,9 +142,8 @@ if not st.session_state['usuario_logado']:
 st.sidebar.markdown("### 👤 Sessão Ativa")
 st.sidebar.success(f"**{st.session_state['nome_logado']}**\n\nNível: {st.session_state['perfil_logado']}")
 if st.sidebar.button("🚪 Sair do Sistema (Logout)"):
-    st.session_state['usuario_logado'] = None
-    st.session_state['nome_logado'] = None
-    st.session_state['perfil_logado'] = None
+    # Limpa as variáveis de sessão completas
+    st.session_state.clear()
     st.rerun()
 
 is_admin = (st.session_state['perfil_logado'] == "Administrador")
@@ -471,7 +473,7 @@ if is_admin:
                 except Exception: pass
 
 # ====================================================================
-# ABA 3 COMPARTILHADA: CARTÃO-RESPOSTA DIGITAL (TRANSCRIÇÃO BLINDADA)
+# ABA 3 COMPARTILHADA: CARTÃO-RESPOSTA DIGITAL (TRANSCRIÇÃO)
 # ====================================================================
 with tab3:
     nome_operador = st.session_state['nome_logado']
@@ -480,13 +482,30 @@ with tab3:
     st.session_state['ARQUIVO_TEMP'] = ARQUIVO_TEMP
     
     # ---------------------------------------------------------
-    # MEMÓRIA PERSISTENTE: O COFRE DOS CAMPOS DE CABEÇALHO
+    # RECUPERAÇÃO MÁGICA: PUXA DADOS DO CSV SE A SESSÃO APAGAR
+    # ---------------------------------------------------------
+    if os.path.exists(ARQUIVO_TEMP):
+        try:
+            df_recuperacao = pd.read_csv(ARQUIVO_TEMP, sep=";", dtype=str)
+            if not df_recuperacao.empty:
+                ultima_linha = df_recuperacao.iloc[-1]
+                if not st.session_state.get("escola_val") and "Escola" in ultima_linha:
+                    st.session_state.escola_val = str(ultima_linha["Escola"])
+                if not st.session_state.get("ano_val") and "Ano_Ensino" in ultima_linha:
+                    st.session_state.ano_val = str(ultima_linha["Ano_Ensino"])
+                if not st.session_state.get("turma_val") and "Turma" in ultima_linha:
+                    st.session_state.turma_val = str(ultima_linha["Turma"])
+                if not st.session_state.get("turno_val") and "Turno" in ultima_linha:
+                    st.session_state.turno_val = str(ultima_linha["Turno"])
+        except: pass
+
+    # ---------------------------------------------------------
+    # MEMÓRIA PERSISTENTE: O COFRE DOS CAMPOS
     # ---------------------------------------------------------
     for k in ["escola_val", "ano_val", "turma_val", "turno_val"]:
         if k not in st.session_state: st.session_state[k] = ""
         
     def sync_header():
-        # Quando qualquer um dos campos for mexido, essa função atualiza o cofre instantaneamente
         if "_escola" in st.session_state: st.session_state.escola_val = st.session_state._escola
         if "_ano" in st.session_state: st.session_state.ano_val = st.session_state._ano
         if "_turma" in st.session_state: st.session_state.turma_val = st.session_state._turma
@@ -495,7 +514,7 @@ with tab3:
     mapa_valores_global = {"A":"A", "B":"B", "C":"C", "D":"D", "Branco":"-", "Rasura":"*"}
     
     def salvar_e_limpar_callback():
-        sync_header() # Puxa do cofre na hora de salvar só por segurança
+        sync_header() 
         
         if not st.session_state.escola_val or not st.session_state.ano_val or not st.session_state.turma_val or not st.session_state.turno_val:
             st.session_state.msg_erro = "⚠️ Atenção: Preencha a 'Escola', o 'Ano', a 'Turma' e o 'Turno' no topo antes de salvar."
@@ -544,10 +563,10 @@ with tab3:
         del st.session_state.msg_sucesso
 
     # ---------------------------------------------------------
-    # CABEÇALHO LIGADO À MEMÓRIA PERSISTENTE
+    # CABEÇALHO LIGADO À MEMÓRIA PERSISTENTE E À RECUPERAÇÃO
     # ---------------------------------------------------------
     with st.container(border=True):
-        st.markdown("#### 🏫 1. Identificação da Turma e Escola (Sobrevive a mudanças de Aba)")
+        st.markdown("#### 🏫 1. Identificação da Turma e Escola (Sobrevive a mudanças de Aba e Logouts)")
         st.text_input("Nome da Escola:", value=st.session_state.escola_val, placeholder="Ex: Escola Municipal...", key="_escola", on_change=sync_header)
         
         col_t1, col_t2, col_t3 = st.columns(3)
@@ -666,7 +685,6 @@ with tab3:
             if st.button("🗑️ Limpar Sessão (Iniciar Nova Turma)", use_container_width=True):
                 try: os.remove(ARQUIVO_TEMP)
                 except Exception: pass
-                # A mágica do botão limpar: além de apagar o arquivo, ele detona o cofre da memória!
                 st.session_state.escola_val = ""
                 st.session_state.ano_val = ""
                 st.session_state.turma_val = ""
