@@ -68,7 +68,7 @@ def gerar_zip_gabaritos(df, conf_prova, modelo_prova):
             escola = str(row.get("Escola", ""))
             ano = str(row.get("Ano_Ensino", ""))
             turma = str(row.get("Turma", ""))
-            turno = str(row.get("Turno", "")) # Puxando o turno do banco
+            turno = str(row.get("Turno", ""))
             freq = str(row.get("Frequencia", "00")).zfill(2)
             nome = str(row.get("Nome_Aluno", ""))
             respostas = str(row.get("Respostas_Brutas", ""))
@@ -76,7 +76,6 @@ def gerar_zip_gabaritos(df, conf_prova, modelo_prova):
             cor_caneta = (139, 0, 0) 
             cv2.putText(img_aluno, f"ESCOLA: {escola}", (45, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.7, cor_caneta, 2)
             cv2.putText(img_aluno, f"ALUNO(A): {nome}", (45, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, cor_caneta, 2)
-            # Adicionando o Turno no cabeçalho desenhado
             cv2.putText(img_aluno, f"ANO: {ano}   TURMA: {turma}   TURNO: {turno}   FREQ: {freq}", (45, 125), cv2.FONT_HERSHEY_SIMPLEX, 0.7, cor_caneta, 2)
             
             for grid in conf_prova.grids:
@@ -342,7 +341,6 @@ if is_admin:
                         arquivos_com_erro += 1
                         continue
                         
-                    # Verifica a existência das colunas para manter a compatibilidade
                     for col in ["Escola", "Ano_Ensino", "Turma", "Turno", "Nome_Aluno"]:
                         if col not in df_bruto.columns: df_bruto[col] = ""
                     df_bruto = df_bruto.fillna("")
@@ -351,7 +349,7 @@ if is_admin:
                         aluno_escola = row["Escola"]
                         aluno_ano = row["Ano_Ensino"]
                         aluno_turma = row["Turma"]
-                        aluno_turno = row["Turno"] # Lendo o novo campo Turno
+                        aluno_turno = row["Turno"] 
                         aluno_f = row["Frequencia"]
                         aluno_nome = row["Nome_Aluno"]
                         respostas_brutas = row["Respostas_Brutas"]
@@ -394,7 +392,6 @@ if is_admin:
             if todos_resultados:
                 df_final_admin = pd.DataFrame(todos_resultados)
                 df_final_admin['Ordem_Num'] = pd.to_numeric(df_final_admin['Frequencia'], errors='coerce')
-                # Adicionando o Turno na ordem da classificação do Excel
                 df_final_admin = df_final_admin.sort_values(by=['Escola', 'Ano_Ensino', 'Turma', 'Turno', 'Ordem_Num'], ascending=[True, True, True, True, True], na_position='last').drop(columns=['Ordem_Num']) 
                 
                 if arquivos_com_erro == 0:
@@ -493,7 +490,6 @@ with tab3:
         
         nome_escola = st.text_input("Nome da Escola:", placeholder="Ex: Escola Municipal...")
         
-        # DIVIDIDO EM 3 COLUNAS AGORA PARA CABER O TURNO!
         col_t1, col_t2, col_t3 = st.columns(3)
         with col_t1: 
             ano_ensino = st.selectbox("Ano de Ensino:", ["", "1º Ano", "2º Ano", "3º Ano", "4º Ano", "5º Ano", "6º Ano", "7º Ano", "8º Ano", "9º Ano"])
@@ -538,7 +534,6 @@ with tab3:
             
         st.write("")
         if st.form_submit_button("💾 Salvar Cartão deste Aluno e Limpar Tela", type="primary", use_container_width=True):
-            # A TRAVA AGORA EXIGE O TURNO TAMBÉM!
             if not nome_escola or not ano_ensino or not turma_aluno or not turno_aluno:
                 st.error("⚠️ Atenção: Preencha a 'Escola', o 'Ano', a 'Turma' e o 'Turno' na etapa 1 antes de salvar.")
             else:
@@ -556,13 +551,33 @@ with tab3:
     
     if os.path.exists(ARQUIVO_TEMP):
         df_temp = pd.read_csv(ARQUIVO_TEMP, sep=";", dtype=str)
-        for col in ["Escola", "Ano_Ensino", "Turma", "Turno", "Nome_Aluno"]:
+        for col in ["Escola", "Ano_Ensino", "Turma", "Turno", "Nome_Aluno", "Frequencia", "Respostas_Brutas"]:
             if col not in df_temp.columns: df_temp[col] = ""
         df_temp = df_temp.fillna("")
         
-        st.write(f"**Total de Alunos Transcritos nesta sessão:** {len(df_temp)}")
-        st.dataframe(df_temp[["Escola", "Ano_Ensino", "Turma", "Turno", "Frequencia", "Nome_Aluno", "Respostas_Brutas"]], use_container_width=True)
+        # O SUPER EDITOR DE TABELA COMEÇA AQUI:
+        col_info, col_save = st.columns([4, 1])
+        with col_info:
+            st.write(f"**Total de Alunos Transcritos nesta sessão:** {len(df_temp)}")
+            st.info("💡 **Dica de Edição:** Se você digitou algo errado, dê **dois cliques na célula da tabela abaixo** para corrigir. Para apagar um aluno, clique na linha dele e aperte a tecla 'Delete'.")
         
+        # Transformando st.dataframe em st.data_editor (O Excel do Python)
+        df_editado = st.data_editor(
+            df_temp[["Escola", "Ano_Ensino", "Turma", "Turno", "Frequencia", "Nome_Aluno", "Respostas_Brutas"]], 
+            use_container_width=True,
+            num_rows="dynamic", # Permite que linhas sejam apagadas
+            key=f"editor_{nome_arquivo_seguro}"
+        )
+        
+        with col_save:
+            st.write("")
+            if st.button("💾 Salvar Edições na Tabela", use_container_width=True):
+                # Substitui o arquivo temporário inteiro pela tabela corrigida
+                df_editado.to_csv(ARQUIVO_TEMP, index=False, sep=";")
+                st.success("Tabela atualizada com sucesso!")
+                st.rerun()
+        
+        st.write("")
         escola_str = nome_escola.replace(" ", "_") if nome_escola else "Escola"
         nome_sugerido = f"respostas_brutas_{escola_str}_{ano_ensino.replace(' ', '_')}_{turma_aluno}_{turno_aluno}.csv"
         nome_arq_dig = st.text_input("Nome do arquivo de dados que será baixado:", value=nome_sugerido)
@@ -571,7 +586,7 @@ with tab3:
         with c1:
             st.download_button(
                 label="📊 Baixar Dados (CSV)", 
-                data=df_temp.to_csv(index=False, sep=";"), 
+                data=df_editado.to_csv(index=False, sep=";"), # Baixa já pegando as edições ao vivo
                 file_name=nome_arq_dig, 
                 mime="text/csv", 
                 type="primary",
@@ -580,7 +595,7 @@ with tab3:
         with c2:
             if st.button("🖼️ Gerar Gabaritos Digitais (ZIP)", use_container_width=True):
                 with st.spinner("Gerando backup em imagens..."):
-                    zip_data = gerar_zip_gabaritos(df_temp, conf, modelo)
+                    zip_data = gerar_zip_gabaritos(df_editado, conf, modelo) # Pega os dados editados ao vivo
                     st.download_button(
                         label="📥 Download Completo (ZIP)",
                         data=zip_data,
