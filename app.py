@@ -15,13 +15,13 @@ import base64
 from datetime import datetime
 
 # ====================================================================
-# INJEÇÃO DE DESIGN (CORES SEGURAS PARA AÇÃO)
+# INJEÇÃO DE DESIGN E CORES (AZUL CORPORATIVO)
 # ====================================================================
 st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
 
 st.markdown("""
     <style>
-    /* Muda a cor dos botões principais para Azul Seguro */
+    /* Transforma botões de ação principal em Azul Seguro */
     div.stButton > button[kind="primary"] {
         background-color: #0d6efd !important;
         color: white !important;
@@ -38,7 +38,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ====================================================================
-# CONEXÃO COM O BANCO DE DADOS EM NUVEM (SUPABASE)
+# CONEXÃO COM A NUVEM SUPABASE
 # ====================================================================
 try:
     from supabase import create_client, Client
@@ -56,10 +56,10 @@ if HAS_SUPABASE:
         usa_nuvem = True
     except Exception: pass
 
-if not HAS_SUPABASE: st.error("⚠️ Atenção: A biblioteca do Supabase não foi carregada.")
+if not HAS_SUPABASE: st.error("⚠️ A biblioteca supabase não está instalada.")
 
 # ====================================================================
-# LISTAS OFICIAIS E BANCOS LOCAIS
+# CONFIGURAÇÕES E INICIALIZAÇÕES DA SESSÃO (BLINDAGEM CONTRA ERROS)
 # ====================================================================
 ESCOLAS_SAMAR = [
     "", "COLÉGIO MILITAR TIRADENTES XII", "UNIDADE ESCOLAR JOSÉ LISBOA", "UNIDADE ESCOLAR MANOEL BATISTA",
@@ -78,12 +78,6 @@ def hash_senha(senha): return hashlib.sha256(senha.encode()).hexdigest()
 
 DB_USUARIOS = "usuarios_samar.csv"
 if not os.path.exists(DB_USUARIOS): pd.DataFrame([{"Nome": "Coordenação Master", "Email": "admin", "Senha": hash_senha("coted2026"), "Perfil": "Administrador"}]).to_csv(DB_USUARIOS, index=False, sep=";")
-else:
-    df_check = pd.read_csv(DB_USUARIOS, sep=";", dtype=str)
-    if 'Perfil' not in df_check.columns:
-        df_check['Perfil'] = 'Digitador'
-        df_check.loc[0, 'Perfil'] = 'Administrador' 
-        df_check.to_csv(DB_USUARIOS, index=False, sep=";")
 
 DB_OCORRENCIAS = "atas_ocorrencias_samar.csv"
 if not os.path.exists(DB_OCORRENCIAS): pd.DataFrame(columns=["etapa", "Data_Registro", "Escola", "Ano_Ensino", "Turma", "Turno", "Aplicador", "Revisor_Digitador", "Ocorrencia"]).to_csv(DB_OCORRENCIAS, index=False, sep=";")
@@ -97,31 +91,35 @@ else:
         df_e["Data_Limite"] = "2030-12-31"
         df_e.to_csv(DB_ETAPAS, index=False, sep=";")
 
-# --- INTELIGÊNCIA DOS CICLOS ATIVOS ---
+# --- INTELIGÊNCIA DE PRAZOS (ETAPAS ATIVAS X VENCIDAS) ---
 df_etapas_lidas = pd.read_csv(DB_ETAPAS, sep=";", dtype=str)
 hoje = datetime.now().date()
 ETAPAS_ATIVAS = []
-TODAS_ETAPAS = []
 for _, row in df_etapas_lidas.iterrows():
     nome_etapa = row.get('Nome_Etapa', '')
-    TODAS_ETAPAS.append(nome_etapa)
+    if not nome_etapa: continue
     try:
         data_limite_str = str(row.get('Data_Limite', '2030-12-31')).split()[0]
         data_limite = datetime.strptime(data_limite_str, "%Y-%m-%d").date()
         if hoje <= data_limite:
             ETAPAS_ATIVAS.append(nome_etapa)
     except:
-        ETAPAS_ATIVAS.append(nome_etapa) # Assume ativo se a data estiver com formato incorreto para não quebrar
+        ETAPAS_ATIVAS.append(nome_etapa) # Assume ativo se o Admin errou a formatação da data
 
-if 'usuario_logado' not in st.session_state:
-    st.session_state['usuario_logado'] = None
-    st.session_state['nome_logado'] = None
-    st.session_state['perfil_logado'] = None
-
-if 'turma_confirmada' not in st.session_state: st.session_state['turma_confirmada'] = False
+# --- INICIALIZA TODAS AS VARIÁVEIS NA SESSÃO PARA NUNCA MAIS DAR ERRO ---
+default_states = {
+    'usuario_logado': None, 'nome_logado': None, 'perfil_logado': None,
+    'turma_confirmada': False, 'config_etapa': "", 'config_escola': "",
+    'config_ano': "", 'config_turma': "", 'config_turno': "",
+    'freq_d': "0", 'freq_u': "0", 'nome_aluno_input': "",
+    'msg_erro': None, 'msg_sucesso': None
+}
+for key, val in default_states.items():
+    if key not in st.session_state:
+        st.session_state[key] = val
 
 # ====================================================================
-# GERADORES DE DOCUMENTOS
+# GERADORES DE ARQUIVOS (PDF E ZIP)
 # ====================================================================
 def gerar_zip_gabaritos(df, conf_prova, modelo_prova):
     id_unico = uuid.uuid4().hex
@@ -178,10 +176,9 @@ def gerar_zip_gabaritos(df, conf_prova, modelo_prova):
 
 def gerar_html_ata(etapa, escola, ano, turma, turno, aplicador, ocorrencia, revisor, data):
     logo_html = ""
-    img_path = "Frame 18.png"
-    if os.path.exists(img_path):
+    if os.path.exists("Frame 18.png"):
         try:
-            with open(img_path, "rb") as img_file:
+            with open("Frame 18.png", "rb") as img_file:
                 encoded_string = base64.b64encode(img_file.read()).decode()
                 logo_html = f'<div style="text-align: center; margin-bottom: 30px;"><img src="data:image/png;base64,{encoded_string}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0px 4px 6px rgba(0,0,0,0.1);" /></div>'
         except Exception: pass
@@ -204,11 +201,11 @@ def gerar_zip_atas(df_atas):
     return zip_buffer.getvalue()
 
 # ====================================================================
-# TELA CENTRAL DE LOGIN
+# TELA DE LOGIN
 # ====================================================================
 if not st.session_state['usuario_logado']:
     st.title("🖨️ Sistema SAMAR - Acesso Restrito")
-    st.info("Insira suas credenciais corporativas para acessar a nuvem.")
+    st.info("Insira suas credenciais corporativas para acessar o painel em nuvem.")
     with st.container(border=True):
         email_input = st.text_input("E-mail ou Usuário:")
         senha_input = st.text_input("Senha:", type="password")
@@ -232,12 +229,12 @@ if not st.session_state['usuario_logado']:
     st.stop()
 
 # ====================================================================
-# BARRA LATERAL
+# BARRA LATERAL (LOGOUT) E DADOS DA PROVA
 # ====================================================================
 st.sidebar.markdown("### 👤 Sessão Ativa")
 st.sidebar.success(f"**{st.session_state['nome_logado']}**\n\nNível: {st.session_state['perfil_logado']}")
-if usa_nuvem: st.sidebar.caption("🟢 Conectado ao Banco em Nuvem")
-else: st.sidebar.caption("🔴 Banco em Nuvem Offline")
+if usa_nuvem: st.sidebar.caption("🟢 Conectado ao Supabase")
+else: st.sidebar.caption("🔴 Banco Offline")
 
 if st.sidebar.button("🚪 Sair do Sistema"):
     st.session_state.clear()
@@ -252,6 +249,9 @@ idx_padrao = next((i for i, m in enumerate(modelos_disponiveis) if "18" in m), 0
 modelo = st.selectbox("Modelo da Prova / Gabarito:", modelos_disponiveis, index=idx_padrao)
 conf = TIPOS_PROVA[modelo]
 total_q_global = int(modelo.split('_')[1])
+
+for q in range(1, total_q_global + 1):
+    if f"q_{q}" not in st.session_state: st.session_state[f"q_{q}"] = None
 
 mapa_disc_global = {}
 tot_disc_global = {}
@@ -270,12 +270,12 @@ else:
     tab3 = tabs[0]
 
 # ====================================================================
-# ABA 7 (ADMIN): CRIAÇÃO DE ETAPAS E PRAZOS (TEMPO DE PERMANÊNCIA)
+# ABA 7: ADMIN DEFINE O TEMPO DE VIDA DOS DADOS
 # ====================================================================
 if is_admin:
     with tab7:
         st.markdown("### ⚙️ Configuração de Ciclos / Etapas Avaliativas")
-        st.info("Defina os períodos e o **Prazo Limite de Permanência**. Após a data limite, o ciclo fecha automaticamente, impedindo que os digitadores alterem ou incluam dados atrasados.")
+        st.info("Defina os períodos e o **Prazo Limite de Permanência**. Após a data limite, o ciclo fecha automaticamente e a edição é desativada na tela dos digitadores.")
         
         df_etapas_edit = pd.read_csv(DB_ETAPAS, sep=";", dtype=str)
         df_etapas_edit['Data_Limite'] = pd.to_datetime(df_etapas_edit['Data_Limite'], errors='coerce').dt.date
@@ -284,7 +284,7 @@ if is_admin:
             df_etapas_edit,
             column_config={
                 "Nome_Etapa": st.column_config.TextColumn("Nome do Ciclo (Etapa)", required=True),
-                "Data_Limite": st.column_config.DateColumn("Prazo de Fechamento (Data Limite)", format="DD/MM/YYYY", required=True)
+                "Data_Limite": st.column_config.DateColumn("Prazo de Fechamento", format="DD/MM/YYYY", required=True)
             },
             num_rows="dynamic",
             use_container_width=True,
@@ -298,12 +298,12 @@ if is_admin:
             st.rerun()
 
 # ====================================================================
-# ABA 4 (ADMIN): TORRE DE CONTROLE NUVEM (COM EXCLUSÃO DE TURMA)
+# ABA 4: TORRE DE CONTROLE NUVEM (ADMIN - ZONA DE PERIGO)
 # ====================================================================
 if is_admin:
     with tab4:
         st.markdown("### ☁️ Torre de Controle do Supabase")
-        st.info("Selecione a **Etapa Avaliativa** e a hierarquia da escola para visualizar, corrigir, bloquear ou EXCLUIR as turmas na nuvem.")
+        st.info("Utilize os filtros abaixo para organizar a visualização em cascata (Ano > Escola > Turma).")
 
         if usa_nuvem:
             res_nuvem = supabase.table("respostas_geral").select("*").execute()
@@ -388,10 +388,10 @@ if is_admin:
                                     st.success(f"✅ Atualizado!")
                                     st.rerun()
                                     
-                            # NOVO: EXCLUSÃO DE TURMA PELO ADMIN
+                            # ZONA DE PERIGO PARA O ADMIN APAGAR TURMA ERRADA
                             st.write("")
-                            with st.expander("🚨 ZONA DE PERIGO: Apagar Turma Inteira do Banco", expanded=False):
-                                st.warning(f"Se você cadastrou essa turma com a escola ou ano errado, você pode exterminar todos os alunos dessa tabela de uma vez só clicando no botão abaixo.")
+                            with st.expander("🚨 ZONA DE PERIGO: Excluir Turma do Banco", expanded=False):
+                                st.warning("Extermina todos os alunos desta turma da nuvem de uma vez só.")
                                 if st.button(f"🗑️ Excluir Turma {tur} Permanentemente", key=f"del_{eta_b}_{sel_esc_admin}_{tur}_{tur_no}"):
                                     supabase.table("respostas_geral").delete().eq("etapa", eta_b).eq("escola", sel_esc_admin).eq("ano_ensino", sel_ano_admin).eq("turma", tur).eq("turno", tur_no).execute()
                                     st.success("A turma inteira foi apagada do banco de dados na nuvem.")
@@ -462,7 +462,7 @@ if is_admin:
                 st.info("A Nuvem está vazia. Aguarde os digitadores enviarem os dados.")
 
 # ====================================================================
-# ABA 1, 2, 5 E 6: MANTIDAS (OMITIDO DETALHAMENTO AQUI PARA POUPAR ESPAÇO, MAS TOTALMENTE FUNCIONAIS)
+# ABA 1, 2, 5 e 6: SEÇÕES GENÉRICAS DO ADMIN (MANTIDAS PERFEITAS)
 # ====================================================================
 if is_admin:
     with tab1:
@@ -603,26 +603,13 @@ if is_admin:
             else: st.success("Nenhuma ocorrência na nuvem.")
 
 # ====================================================================
-# ABA 3 COMPARTILHADA: A MÁGICA DO DIGITADOR (COM TRAVA DE CICLOS)
+# ABA 3 COMPARTILHADA: A MÁGICA DO DIGITADOR (COM FLUXO EM ABAS)
 # ====================================================================
 with tab3:
     nome_operador = st.session_state['nome_logado']
-    
-    def sync_header():
-        rk = st.session_state.reset_key
-        if f"_escola_{rk}" in st.session_state: st.session_state.escola_val = st.session_state[f"_escola_{rk}"]
-        if f"_ano_{rk}" in st.session_state: st.session_state.ano_val = st.session_state[f"_ano_{rk}"]
-        if f"_turma_{rk}" in st.session_state: st.session_state.turma_val = st.session_state[f"_turma_{rk}"]
-        if f"_turno_{rk}" in st.session_state: st.session_state.turno_val = st.session_state[f"_turno_{rk}"]
-
     mapa_valores_global = {"A":"A", "B":"B", "C":"C", "D":"D", "Branco":"-", "Rasura":"*", None: "-"}
     
     def salvar_aluno_callback():
-        sync_header() 
-        if not st.session_state.escola_val or not st.session_state.ano_val or not st.session_state.turma_val or not st.session_state.turno_val:
-            st.session_state.msg_erro = "⚠️ Selecione a Escola, Ano, Turma e Turno no topo."
-            return
-            
         nova_freq = st.session_state.freq_d + st.session_state.freq_u
         resp_str = "".join([mapa_valores_global.get(st.session_state.get(f"q_{q}"), "-") for q in range(1, total_q_global + 1)])
         
@@ -633,73 +620,61 @@ with tab3:
             "nome_aluno": st.session_state.nome_aluno_input, "respostas_brutas": resp_str, 
             "digitador": nome_operador, "status": "Aberto"
         }
-        
         if usa_nuvem:
             try: supabase.table("respostas_geral").insert([novo_dado]).execute()
             except Exception as e: print("Erro:", e)
         
-        st.session_state.msg_sucesso = f"✅ Aluno {nova_freq} inserido na turma {st.session_state.turma_val} com sucesso!"
+        st.session_state.msg_sucesso = f"✅ Aluno {nova_freq} cadastrado com sucesso!"
         st.session_state.nome_aluno_input = ""
         st.session_state.freq_d = "0"
         st.session_state.freq_u = "0"
         for q in range(1, total_q_global + 1): st.session_state[f"q_{q}"] = None
 
-    if "freq_d" not in st.session_state: st.session_state.freq_d = "0"
-    if "freq_u" not in st.session_state: st.session_state.freq_u = "0"
-    if "nome_aluno_input" not in st.session_state: st.session_state.nome_aluno_input = ""
-    for q in range(1, 100): 
-        if f"q_{q}" not in st.session_state: st.session_state[f"q_{q}"] = None 
-
     st.markdown("### 🖱️ Painel de Transcrição OMR")
-    
-    if "msg_erro" in st.session_state:
+    if st.session_state.msg_erro:
         st.error(st.session_state.msg_erro)
-        del st.session_state.msg_erro
-    if "msg_sucesso" in st.session_state:
+        st.session_state.msg_erro = None
+    if st.session_state.msg_sucesso:
         st.success(st.session_state.msg_sucesso)
-        del st.session_state.msg_sucesso
+        st.session_state.msg_sucesso = None
 
-    rk = st.session_state.reset_key 
-    
     # ====================================================================
-    # FASE 1: DIGITADOR ESCOLHE CRIAR OU EDITAR (COM TRAVA DE CICLO VAZIO)
+    # FASE 1: DIGITADOR ESCOLHE EM ABAS (CRIAR OU HISTÓRICO)
     # ====================================================================
     if not st.session_state['turma_confirmada']:
-        with st.container(border=True):
+        tab_nova, tab_hist = st.tabs(["📝 Iniciar Nova Turma", "📂 Continuar do Meu Banco de Dados"])
+        
+        with tab_nova:
             if not ETAPAS_ATIVAS:
-                st.error("🚨 **SISTEMA FECHADO:** Não há nenhum ciclo avaliativo ativo no momento. Aguarde a Coordenação abrir um novo prazo na configuração para iniciar as digitações.")
-                fluxo = st.radio("Apenas o modo leitura (Histórico) está disponível:", ["📂 Acessar Meu Histórico (Somente Leitura)"])
+                st.error("🚨 **SISTEMA FECHADO:** Não há nenhum ciclo avaliativo com prazo aberto no momento. O cadastro de novas turmas está bloqueado pela Coordenação. Vá para a aba ao lado para visualizar o seu histórico em modo leitura.")
             else:
-                st.markdown("#### Passo 1: Como você deseja iniciar o trabalho?")
-                fluxo = st.radio("Selecione a ação:", ["📝 CRIAR Nova Turma (Iniciar Digitação)", "📂 CONTINUAR Turma Existente (Acessar Meu Histórico)"])
-            
-            st.divider()
-            
-            if "CRIAR" in fluxo:
-                st.markdown("**Defina a nova turma que será criada:**")
-                c_etapa, c_escola = st.columns([1, 2])
-                with c_etapa: s_etapa = st.selectbox("Etapa Avaliativa Ativa:", ETAPAS_ATIVAS) # Mostra SÓ as ativas
-                with c_escola: s_escola = st.selectbox("Escola:", ESCOLAS_SAMAR)
-                
-                c_ano, c_turma, c_turno = st.columns(3)
-                with c_ano: s_ano = st.selectbox("Ano de Ensino:", ANOS_ENSINO)
-                with c_turma: s_turma = st.selectbox("Turma:", TURMAS_DISP)
-                with c_turno: s_turno = st.selectbox("Turno:", TURNOS_DISP)
-                
-                if st.button("✅ Confirmar Dados e Abrir Cartão", type="primary", use_container_width=True):
-                    if not s_escola or not s_ano or not s_turma or not s_turno:
-                        st.error("⚠️ Preencha todos os campos obrigatórios da turma!")
-                    else:
-                        st.session_state.config_etapa = s_etapa
-                        st.session_state.config_escola = s_escola
-                        st.session_state.config_ano = s_ano
-                        st.session_state.config_turma = s_turma
-                        st.session_state.config_turno = s_turno
-                        st.session_state['turma_confirmada'] = True
-                        st.rerun()
-            
-            else:
-                st.markdown("**Buscar no Meu Banco de Dados na Nuvem:**")
+                with st.container(border=True):
+                    st.markdown("**Defina os dados da turma que será iniciada:**")
+                    c_etapa, c_escola = st.columns([1, 2])
+                    with c_etapa: s_etapa = st.selectbox("Ciclo Ativo:", ETAPAS_ATIVAS)
+                    with c_escola: s_escola = st.selectbox("Escola:", ESCOLAS_SAMAR)
+                    
+                    c_ano, c_turma, c_turno = st.columns(3)
+                    with c_ano: s_ano = st.selectbox("Ano de Ensino:", ANOS_ENSINO)
+                    with c_turma: s_turma = st.selectbox("Turma:", TURMAS_DISP)
+                    with c_turno: s_turno = st.selectbox("Turno:", TURNOS_DISP)
+                    
+                    if st.button("✅ Confirmar Dados e Abrir Cartão", type="primary", use_container_width=True):
+                        if not s_escola or not s_ano or not s_turma or not s_turno:
+                            st.session_state.msg_erro = "⚠️ Preencha todos os campos obrigatórios da turma!"
+                            st.rerun()
+                        else:
+                            st.session_state.config_etapa = s_etapa
+                            st.session_state.config_escola = s_escola
+                            st.session_state.config_ano = s_ano
+                            st.session_state.config_turma = s_turma
+                            st.session_state.config_turno = s_turno
+                            st.session_state['turma_confirmada'] = True
+                            st.rerun()
+        
+        with tab_hist:
+            with st.container(border=True):
+                st.markdown("**Puxar Turma do Banco de Dados (Nuvem):**")
                 if usa_nuvem:
                     res_historico = supabase.table("respostas_geral").select("etapa, escola, ano_ensino, turma, turno").eq("digitador", nome_operador).execute()
                     if res_historico.data:
@@ -726,28 +701,31 @@ with tab3:
                     else: st.info("Você não tem nenhuma turma salva na nuvem ainda.")
 
     # ====================================================================
-    # FASE 2: TELA DE DIGITAÇÃO COM O CABEÇALHO TRAVADO E AVALIAÇÃO DE TEMPO
+    # FASE 2: TELA DE DIGITAÇÃO E EDIÇÃO (TURMA TRAVADA)
     # ====================================================================
     else:
         st.success(f"📌 **Acessando:** {st.session_state.config_etapa} | {st.session_state.config_escola} | {st.session_state.config_ano} - Turma {st.session_state.config_turma} ({st.session_state.config_turno})")
         if st.button("🔄 Fechar esta Turma e Voltar ao Menu Principal"):
             st.session_state['turma_confirmada'] = False
+            st.session_state.config_etapa = ""
+            st.session_state.config_escola = ""
+            st.session_state.config_ano = ""
+            st.session_state.config_turma = ""
+            st.session_state.config_turno = ""
             st.rerun()
 
+        # VERIFICA SE A ETAPA JÁ PASSOU DO PRAZO OU SE FOI BLOQUEADA
         turma_esta_bloqueada = False
-        
-        # 1. VERIFICA SE A ETAPA JÁ PASSOU DO PRAZO DE VALIDADE
         etapa_vencida = st.session_state.config_etapa not in ETAPAS_ATIVAS
         
-        # 2. VERIFICA SE O ADMIN TRANCOU MANUALMENTE A TURMA
         if usa_nuvem:
             res_check_lock = supabase.table("respostas_geral").select("status").eq("etapa", st.session_state.config_etapa).eq("escola", st.session_state.config_escola).eq("ano_ensino", st.session_state.config_ano).eq("turma", st.session_state.config_turma).eq("turno", st.session_state.config_turno).execute()
             if res_check_lock.data and any(r.get('status') == 'Bloqueado' for r in res_check_lock.data):
                 turma_esta_bloqueada = True
 
         if etapa_vencida:
-            turma_esta_bloqueada = True # Ativa a trava geral
-            st.error(f"⏳ **PRAZO ENCERRADO:** O período de digitação para a etapa **{st.session_state.config_etapa}** foi finalizado pela Coordenação. Seus dados estão protegidos em Modo de Leitura.")
+            turma_esta_bloqueada = True
+            st.error(f"⏳ **PRAZO ENCERRADO:** O período de digitação para a etapa **{st.session_state.config_etapa}** foi finalizado. Seus dados estão protegidos em Modo de Leitura.")
         elif turma_esta_bloqueada:
             st.error("🔒 **TURMA BLOQUEADA PELA COORDENAÇÃO:** O boletim desta turma já foi processado. Você não pode adicionar alunos ou modificar os existentes.")
 
@@ -783,7 +761,7 @@ with tab3:
 
         st.markdown("---")
         
-        # TABELA ESPELHO DA TURMA ATUAL
+        # TABELA DE VISUALIZAÇÃO E EDIÇÃO
         st.markdown(f"#### 📁 Alunos Registrados nesta Turma")
         if usa_nuvem:
             res_turma = supabase.table("respostas_geral").select("*").eq("etapa", st.session_state.config_etapa).eq("escola", st.session_state.config_escola).eq("ano_ensino", st.session_state.config_ano).eq("turma", st.session_state.config_turma).eq("turno", st.session_state.config_turno).eq("digitador", nome_operador).execute()
@@ -800,11 +778,11 @@ with tab3:
                 for q in range(1, total_q_global + 1): config_colunas[f"Q{q:02d}"] = st.column_config.SelectboxColumn(f"Q{q:02d}", options=["A", "B", "C", "D", "-", "*"], width="small", required=True)
 
                 if turma_esta_bloqueada:
-                    st.caption("🔒 MODO LEITURA: Você só pode visualizar as notas inseridas.")
+                    st.caption("🔒 MODO LEITURA: A tabela abaixo está bloqueada devido às travas de segurança da Coordenação.")
                     st.dataframe(df_turma[colunas_exibir], use_container_width=True, column_config=config_colunas, height=300)
                 else:
                     st.caption("Dê dois cliques na célula para corrigir uma letra ou aperte 'Delete' para apagar um aluno duplicado.")
-                    df_editado_ui = st.data_editor(df_turma[colunas_exibir], use_container_width=True, num_rows="dynamic", column_config=config_colunas, height=300, key=f"editor_atual_{rk}")
+                    df_editado_ui = st.data_editor(df_turma[colunas_exibir], use_container_width=True, num_rows="dynamic", column_config=config_colunas, height=300, key="editor_atual")
                     
                     if st.button("Salvar Edições na Nuvem", type="primary", use_container_width=True):
                         df_salvar = df_editado_ui.copy()
