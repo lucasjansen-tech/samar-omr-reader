@@ -474,42 +474,110 @@ if is_admin:
                 except Exception: pass
 
 # ====================================================================
-# ABA 3 COMPARTILHADA: CARTÃO-RESPOSTA DIGITAL (TRANSCRIÇÃO)
+# ABA 3 COMPARTILHADA: CARTÃO-RESPOSTA DIGITAL (TRANSCRIÇÃO REATIVA)
 # ====================================================================
 with tab3:
     nome_operador = st.session_state['nome_logado']
     nome_arquivo_seguro = st.session_state['usuario_logado'].replace("@", "_").replace(".", "_")
-        
     ARQUIVO_TEMP = f"temp_transcricao_{modelo}_{nome_arquivo_seguro}.csv"
+    st.session_state['ARQUIVO_TEMP'] = ARQUIVO_TEMP
     
+    # ---------------------------------------------------------
+    # CALLBACK DE SALVAMENTO E LIMPEZA AUTOMÁTICA
+    # ---------------------------------------------------------
+    mapa_valores_global = {"A":"A", "B":"B", "C":"C", "D":"D", "Branco":"-", "Rasura":"*"}
+    
+    def salvar_e_limpar_callback():
+        if not st.session_state.get('escola_input') or not st.session_state.get('ano_input') or not st.session_state.get('turma_input') or not st.session_state.get('turno_input'):
+            st.session_state.msg_erro = "⚠️ Atenção: Preencha a 'Escola', o 'Ano', a 'Turma' e o 'Turno' no topo antes de salvar."
+            return
+            
+        nova_freq = st.session_state.freq_d + st.session_state.freq_u
+        resp_str = "".join([mapa_valores_global[st.session_state[f"q_{q}"]] for q in range(1, total_q_global + 1)])
+        
+        novo_dado = {
+            "Escola": st.session_state.escola_input, 
+            "Ano_Ensino": st.session_state.ano_input, 
+            "Turma": st.session_state.turma_input, 
+            "Turno": st.session_state.turno_input, 
+            "Frequencia": nova_freq, 
+            "Nome_Aluno": st.session_state.nome_aluno_input, 
+            "Respostas_Brutas": resp_str
+        }
+        df_novo = pd.DataFrame([novo_dado])
+        
+        arq = st.session_state.ARQUIVO_TEMP
+        if os.path.exists(arq): df_novo.to_csv(arq, mode='a', header=False, index=False, sep=";")
+        else: df_novo.to_csv(arq, index=False, sep=";")
+        
+        st.session_state.msg_sucesso = f"✅ O Aluno de Frequência {nova_freq} foi gravado com sucesso!"
+        
+        # O Reset Mágico dos campos do Aluno (Mantém a Turma preenchida!)
+        st.session_state.nome_aluno_input = ""
+        st.session_state.freq_d = "0"
+        st.session_state.freq_u = "0"
+        for q in range(1, total_q_global + 1):
+            st.session_state[f"q_{q}"] = "Branco"
+
+    # ---------------------------------------------------------
+    # INICIALIZAÇÃO DE VARIÁVEIS DA TELA PARA NÃO DAR ERRO
+    # ---------------------------------------------------------
+    if "freq_d" not in st.session_state: st.session_state.freq_d = "0"
+    if "freq_u" not in st.session_state: st.session_state.freq_u = "0"
+    if "nome_aluno_input" not in st.session_state: st.session_state.nome_aluno_input = ""
+    if "escola_input" not in st.session_state: st.session_state.escola_input = ""
+    if "ano_input" not in st.session_state: st.session_state.ano_input = ""
+    if "turma_input" not in st.session_state: st.session_state.turma_input = ""
+    if "turno_input" not in st.session_state: st.session_state.turno_input = ""
+    for q in range(1, 100): # Garante margem de segurança para qualquer tamanho de prova
+        if f"q_{q}" not in st.session_state: st.session_state[f"q_{q}"] = "Branco"
+
     st.markdown("### 🖱️ Transcrição Intuitiva do Aluno")
     st.info(f"Olá, **{nome_operador}**. Os dados que você digitar aqui serão salvos com segurança em sua sessão exclusiva.")
     
+    # Exibe Mensagens de Sucesso ou Erro do Callback
+    if "msg_erro" in st.session_state:
+        st.error(st.session_state.msg_erro)
+        del st.session_state.msg_erro
+    if "msg_sucesso" in st.session_state:
+        st.success(st.session_state.msg_sucesso)
+        del st.session_state.msg_sucesso
+
+    # ---------------------------------------------------------
+    # O LAYOUT VISUAL
+    # ---------------------------------------------------------
     with st.container(border=True):
         st.markdown("#### 🏫 1. Identificação da Turma e Escola (Preencha 1 vez)")
-        
-        nome_escola = st.text_input("Nome da Escola:", placeholder="Ex: Escola Municipal...")
+        st.text_input("Nome da Escola:", placeholder="Ex: Escola Municipal...", key="escola_input")
         
         col_t1, col_t2, col_t3 = st.columns(3)
-        with col_t1: 
-            ano_ensino = st.selectbox("Ano de Ensino:", ["", "1º Ano", "2º Ano", "3º Ano", "4º Ano", "5º Ano", "6º Ano", "7º Ano", "8º Ano", "9º Ano"])
-        with col_t2: 
-            turma_aluno = st.selectbox("Turma:", ["", "A", "B", "C", "D", "E", "F", "G", "H", "Única"])
-        with col_t3:
-            turno_aluno = st.selectbox("Turno:", ["", "Manhã", "Tarde", "Integral", "Noite"])
+        with col_t1: st.selectbox("Ano de Ensino:", ["", "1º Ano", "2º Ano", "3º Ano", "4º Ano", "5º Ano", "6º Ano", "7º Ano", "8º Ano", "9º Ano"], key="ano_input")
+        with col_t2: st.selectbox("Turma:", ["", "A", "B", "C", "D", "E", "F", "G", "H", "Única"], key="turma_input")
+        with col_t3: st.selectbox("Turno:", ["", "Manhã", "Tarde", "Integral", "Noite"], key="turno_input")
 
     st.write("")
 
-    with st.form("form_digitacao", clear_on_submit=True):
+    with st.container(border=True):
         st.markdown("#### 👤 2. Preenchimento do Cartão-Resposta")
-        nome_aluno = st.text_input("Nome do Aluno (Opcional, mas recomendado para o arquivo visual):", max_chars=100)
+        st.text_input("Nome do Aluno (Opcional, mas recomendado para o arquivo visual):", max_chars=100, key="nome_aluno_input")
         
         st.divider()
         
         st.markdown("##### 📌 Frequência do Aluno")
-        col_f1, col_f2 = st.columns(2)
-        with col_f1: freq_d = st.radio("Dezena (D):", ["0","1","2","3","4","5","6","7","8","9"], horizontal=True)
-        with col_f2: freq_u = st.radio("Unidade (U):", ["0","1","2","3","4","5","6","7","8","9"], horizontal=True)
+        col_f1, col_f2, col_f3 = st.columns([2, 2, 1])
+        with col_f1: 
+            st.radio("Dezena (D):", ["0","1","2","3","4","5","6","7","8","9"], horizontal=True, key="freq_d")
+        with col_f2: 
+            st.radio("Unidade (U):", ["0","1","2","3","4","5","6","7","8","9"], horizontal=True, key="freq_u")
+        with col_f3:
+            # O VISOR LUMINOSO AO VIVO
+            st.markdown(
+                f"<div style='text-align: center; border: 2px dashed #4CAF50; border-radius: 10px; padding: 10px;'>"
+                f"<p style='margin:0; font-size: 14px; font-weight: bold;'>Número Selecionado:</p>"
+                f"<h1 style='margin:0; font-size: 3.5rem; color: #4CAF50;'>{st.session_state.freq_d}{st.session_state.freq_u}</h1>"
+                f"</div>", 
+                unsafe_allow_html=True
+            )
             
         st.divider()
         
@@ -517,10 +585,7 @@ with tab3:
         
         blocos_prova = [g for g in conf.grids if g.questao_inicial > 0]
         cols_blocos = st.columns(len(blocos_prova)) 
-        respostas_marcadas = {}
-        
         opcoes_visuais = ["A", "B", "C", "D", "Branco", "Rasura"]
-        mapa_valores = {"A":"A", "B":"B", "C":"C", "D":"D", "Branco":"-", "Rasura":"*"}
 
         for i, bloco in enumerate(blocos_prova):
             with cols_blocos[i]:
@@ -529,22 +594,11 @@ with tab3:
                     st.caption(bloco.texto_extra)
                     for r in range(bloco.rows):
                         q = bloco.questao_inicial + r
-                        escolha = st.radio(f"Questão {q:02d}", options=opcoes_visuais, index=4, horizontal=True)
-                        respostas_marcadas[q] = mapa_valores[escolha]
+                        st.radio(f"Questão {q:02d}", options=opcoes_visuais, horizontal=True, key=f"q_{q}")
             
         st.write("")
-        if st.form_submit_button("💾 Salvar Cartão deste Aluno e Limpar Tela", type="primary", use_container_width=True):
-            if not nome_escola or not ano_ensino or not turma_aluno or not turno_aluno:
-                st.error("⚠️ Atenção: Preencha a 'Escola', o 'Ano', a 'Turma' e o 'Turno' na etapa 1 antes de salvar.")
-            else:
-                nova_freq = freq_d + freq_u
-                resp_str = "".join([respostas_marcadas[q] for q in range(1, total_q_global + 1)])
-                novo_dado = {"Escola": nome_escola, "Ano_Ensino": ano_ensino, "Turma": turma_aluno, "Turno": turno_aluno, "Frequencia": nova_freq, "Nome_Aluno": nome_aluno, "Respostas_Brutas": resp_str}
-                df_novo = pd.DataFrame([novo_dado])
-                
-                if os.path.exists(ARQUIVO_TEMP): df_novo.to_csv(ARQUIVO_TEMP, mode='a', header=False, index=False, sep=";")
-                else: df_novo.to_csv(ARQUIVO_TEMP, index=False, sep=";")
-                st.success(f"✅ O Aluno de Frequência {nova_freq} foi gravado com sucesso!")
+        # Botão dispara a função "salvar_e_limpar_callback" sem recarregar a página inteira à toa
+        st.button("💾 Salvar Cartão deste Aluno e Limpar Tela", type="primary", use_container_width=True, on_click=salvar_e_limpar_callback)
 
     st.markdown("---")
     st.markdown("#### 📁 Progresso da Turma e Fechamento")
@@ -555,38 +609,35 @@ with tab3:
             if col not in df_temp.columns: df_temp[col] = ""
         df_temp = df_temp.fillna("")
         
-        # O SUPER EDITOR DE TABELA COMEÇA AQUI:
         col_info, col_save = st.columns([4, 1])
         with col_info:
             st.write(f"**Total de Alunos Transcritos nesta sessão:** {len(df_temp)}")
             st.info("💡 **Dica de Edição:** Se você digitou algo errado, dê **dois cliques na célula da tabela abaixo** para corrigir. Para apagar um aluno, clique na linha dele e aperte a tecla 'Delete'.")
         
-        # Transformando st.dataframe em st.data_editor (O Excel do Python)
         df_editado = st.data_editor(
             df_temp[["Escola", "Ano_Ensino", "Turma", "Turno", "Frequencia", "Nome_Aluno", "Respostas_Brutas"]], 
             use_container_width=True,
-            num_rows="dynamic", # Permite que linhas sejam apagadas
+            num_rows="dynamic", 
             key=f"editor_{nome_arquivo_seguro}"
         )
         
         with col_save:
             st.write("")
             if st.button("💾 Salvar Edições na Tabela", use_container_width=True):
-                # Substitui o arquivo temporário inteiro pela tabela corrigida
                 df_editado.to_csv(ARQUIVO_TEMP, index=False, sep=";")
                 st.success("Tabela atualizada com sucesso!")
                 st.rerun()
         
         st.write("")
-        escola_str = nome_escola.replace(" ", "_") if nome_escola else "Escola"
-        nome_sugerido = f"respostas_brutas_{escola_str}_{ano_ensino.replace(' ', '_')}_{turma_aluno}_{turno_aluno}.csv"
+        escola_str = st.session_state.escola_input.replace(" ", "_") if st.session_state.escola_input else "Escola"
+        nome_sugerido = f"respostas_brutas_{escola_str}_{st.session_state.ano_input.replace(' ', '_')}_{st.session_state.turma_input}_{st.session_state.turno_input}.csv"
         nome_arq_dig = st.text_input("Nome do arquivo de dados que será baixado:", value=nome_sugerido)
         
         c1, c2, c3 = st.columns(3)
         with c1:
             st.download_button(
                 label="📊 Baixar Dados (CSV)", 
-                data=df_editado.to_csv(index=False, sep=";"), # Baixa já pegando as edições ao vivo
+                data=df_editado.to_csv(index=False, sep=";"), 
                 file_name=nome_arq_dig, 
                 mime="text/csv", 
                 type="primary",
@@ -595,11 +646,11 @@ with tab3:
         with c2:
             if st.button("🖼️ Gerar Gabaritos Digitais (ZIP)", use_container_width=True):
                 with st.spinner("Gerando backup em imagens..."):
-                    zip_data = gerar_zip_gabaritos(df_editado, conf, modelo) # Pega os dados editados ao vivo
+                    zip_data = gerar_zip_gabaritos(df_editado, conf, modelo) 
                     st.download_button(
                         label="📥 Download Completo (ZIP)",
                         data=zip_data,
-                        file_name=f"Gabaritos_Imagens_{escola_str}_{ano_ensino}_{turma_aluno}_{turno_aluno}.zip",
+                        file_name=f"Gabaritos_Imagens_{escola_str}_{st.session_state.ano_input}_{st.session_state.turma_input}_{st.session_state.turno_input}.zip",
                         mime="application/zip",
                         type="primary",
                         use_container_width=True
