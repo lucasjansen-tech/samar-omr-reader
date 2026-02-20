@@ -11,11 +11,12 @@ import io
 import zipfile
 import hashlib
 import uuid
+from datetime import datetime
 
 st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
 
 # ====================================================================
-# FUNÇÃO DE SEGURANÇA E INICIALIZAÇÃO
+# FUNÇÃO DE SEGURANÇA E INICIALIZAÇÃO DE BANCOS
 # ====================================================================
 def hash_senha(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
@@ -35,12 +36,19 @@ else:
         df_check.loc[0, 'Perfil'] = 'Administrador' 
         df_check.to_csv(DB_USUARIOS, index=False, sep=";")
 
+# NOVO BANCO DE DADOS: ATAS DE OCORRÊNCIA
+DB_OCORRENCIAS = "atas_ocorrencias_samar.csv"
+if not os.path.exists(DB_OCORRENCIAS):
+    pd.DataFrame(columns=[
+        "Data_Registro", "Escola", "Ano_Ensino", "Turma", "Turno", 
+        "Aplicador", "Revisor_Digitador", "Ocorrencia"
+    ]).to_csv(DB_OCORRENCIAS, index=False, sep=";")
+
 if 'usuario_logado' not in st.session_state:
     st.session_state['usuario_logado'] = None
     st.session_state['nome_logado'] = None
     st.session_state['perfil_logado'] = None
 
-# A "Chave Dinâmica" para garantir que a tela limpe sem gerar o erro vermelho
 if 'reset_key' not in st.session_state:
     st.session_state['reset_key'] = 0
 
@@ -170,8 +178,9 @@ for g in conf.grids:
         for r in range(g.rows): mapa_disc_global[g.questao_inicial + r] = disc
 
 if is_admin:
-    tabs = st.tabs(["1. Gerador", "2. Leitor Robô", "3. Cartão Digital", "4. Corretor Lotes", "5. 👥 Controle de Usuários"])
-    tab1, tab2, tab3, tab4, tab5 = tabs
+    # A NOVA ABA 6 PARA ATAS FOI INCLUÍDA AQUI:
+    tabs = st.tabs(["1. Gerador", "2. Leitor Robô", "3. Cartão Digital", "4. Corretor Lotes", "5. 👥 Usuários", "6. 📋 Atas Registradas"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = tabs
 else:
     tabs = st.tabs(["📝 Cartão-Resposta Digital (Área de Transcrição)"])
     tab3 = tabs[0]
@@ -463,17 +472,33 @@ if is_admin:
                                 st.error("Você não pode excluir o último usuário do sistema.")
                 else:
                     st.info("Nenhum usuário cadastrado.")
-                    
-        st.write("")
-        with st.expander("⚠️ Zona de Perigo (Apenas T.I.)"):
-            if st.button("🚨 Resetar Banco de Usuários", type="primary"):
-                try:
-                    os.remove(DB_USUARIOS)
-                    st.success("Banco apagado! Faça logout para o sistema recriar o arquivo Mestre.")
-                except Exception: pass
 
 # ====================================================================
-# ABA 3 COMPARTILHADA: CARTÃO-RESPOSTA DIGITAL (TRANSCRIÇÃO)
+# NOVA ABA 6: ATAS DE OCORRÊNCIA (Admin)
+# ====================================================================
+if is_admin:
+    with tab6:
+        st.markdown("### 📋 Livro de Atas e Ocorrências")
+        st.info("Painel central de monitoramento de problemas físicos das provas relatados pelos digitadores em tempo real.")
+
+        if os.path.exists(DB_OCORRENCIAS):
+            df_atas = pd.read_csv(DB_OCORRENCIAS, sep=";", dtype=str)
+            if not df_atas.empty:
+                st.dataframe(df_atas, use_container_width=True)
+                st.download_button(
+                    label="📥 Exportar Livro de Atas (Excel/CSV)",
+                    data=df_atas.to_csv(index=False, sep=";"),
+                    file_name=f"atas_ocorrencias_samar_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    type="primary"
+                )
+            else:
+                st.success("Nenhuma ocorrência registrada até o momento.")
+        else:
+            st.success("Nenhuma ocorrência registrada até o momento.")
+
+# ====================================================================
+# ABA 3 COMPARTILHADA: CARTÃO-RESPOSTA DIGITAL E ATA (TRANSCRIÇÃO)
 # ====================================================================
 with tab3:
     nome_operador = st.session_state['nome_logado']
@@ -481,9 +506,7 @@ with tab3:
     ARQUIVO_TEMP = f"temp_transcricao_{modelo}_{nome_arquivo_seguro}.csv"
     st.session_state['ARQUIVO_TEMP'] = ARQUIVO_TEMP
     
-    # ---------------------------------------------------------
-    # RECUPERAÇÃO MÁGICA: PUXA DADOS DO CSV SE A SESSÃO APAGAR
-    # ---------------------------------------------------------
+    # RECUPERAÇÃO MÁGICA
     if os.path.exists(ARQUIVO_TEMP):
         try:
             df_recuperacao = pd.read_csv(ARQUIVO_TEMP, sep=";", dtype=str)
@@ -499,9 +522,7 @@ with tab3:
                     st.session_state.turno_val = str(ultima_linha["Turno"])
         except: pass
 
-    # ---------------------------------------------------------
-    # MEMÓRIA PERSISTENTE DA TELA
-    # ---------------------------------------------------------
+    # MEMÓRIA PERSISTENTE E CALLBACKS
     for k in ["escola_val", "ano_val", "turma_val", "turno_val"]:
         if k not in st.session_state: st.session_state[k] = ""
         
@@ -563,13 +584,10 @@ with tab3:
         st.success(st.session_state.msg_sucesso)
         del st.session_state.msg_sucesso
 
-    # ---------------------------------------------------------
-    # LAYOUT DE PREENCHIMENTO DO ALUNO
-    # ---------------------------------------------------------
-    rk = st.session_state.reset_key # A Chave Mágica para não dar erro no Streamlit
+    rk = st.session_state.reset_key 
     
     with st.container(border=True):
-        st.markdown("#### 🏫 1. Identificação da Turma e Escola (Sobrevive a mudanças de Aba e Logouts)")
+        st.markdown("#### 🏫 1. Identificação da Turma e Escola")
         st.text_input("Nome da Escola:", value=st.session_state.escola_val, placeholder="Ex: Escola Municipal...", key=f"_escola_{rk}", on_change=sync_header)
         
         col_t1, col_t2, col_t3 = st.columns(3)
@@ -715,15 +733,42 @@ with tab3:
                     try: os.remove(ARQUIVO_TEMP)
                     except Exception: pass
                     
-                    # Limpa a memória das variáveis
-                    st.session_state.escola_val = ""
-                    st.session_state.ano_val = ""
-                    st.session_state.turma_val = ""
-                    st.session_state.turno_val = ""
+                    for campo in ["escola_val", "ano_val", "turma_val", "turno_val"]:
+                        st.session_state[campo] = ""
                         
-                    # Gira a chave da tela para recriar os campos do zero (Bypass do Streamlit API Exception)
                     st.session_state.reset_key += 1
-                            
                     st.rerun()
+
+        # ====================================================================
+        # NOVIDADE: ATA DE OCORRÊNCIAS DIGITAL (NO FIM DA PÁGINA)
+        # ====================================================================
+        st.markdown("---")
+        st.markdown("#### 📋 Registrar Ocorrência da Turma (Ata)")
+        with st.expander("Clique aqui para relatar problemas com as provas desta turma", expanded=False):
+            st.info("Relate provas rasgadas, alunos que assinaram mas não fizeram a prova, ou falta de material.")
+            
+            with st.form("form_ata", clear_on_submit=True):
+                nome_aplicador = st.text_input("Nome do Aplicador da Prova (Físico):")
+                texto_ata = st.text_area("Descreva a Ocorrência detalhadamente:")
+                
+                if st.form_submit_button("💾 Assinar e Enviar Ata de Ocorrência", type="primary"):
+                    if not st.session_state.escola_val or not st.session_state.turma_val:
+                        st.error("⚠️ Preencha pelo menos a Escola e a Turma no topo da página antes de registrar a ata.")
+                    elif not nome_aplicador or not texto_ata:
+                        st.error("⚠️ Preencha o nome do Aplicador e a descrição da Ocorrência.")
+                    else:
+                        nova_ata = {
+                            "Data_Registro": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                            "Escola": st.session_state.escola_val,
+                            "Ano_Ensino": st.session_state.ano_val,
+                            "Turma": st.session_state.turma_val,
+                            "Turno": st.session_state.turno_val,
+                            "Aplicador": nome_aplicador,
+                            "Revisor_Digitador": nome_operador,
+                            "Ocorrencia": texto_ata
+                        }
+                        df_ata = pd.DataFrame([nova_ata])
+                        df_ata.to_csv(DB_OCORRENCIAS, mode='a', header=False, index=False, sep=";")
+                        st.success("✅ Ata de Ocorrência gravada com sucesso! A Coordenação já tem acesso a este registro.")
     else:
         st.info("O painel de controle da turma aparecerá aqui após o registro do primeiro aluno.")
