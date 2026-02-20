@@ -15,24 +15,26 @@ import base64
 from datetime import datetime
 
 # ====================================================================
-# INJEÇÃO DE DESIGN E CORES (AZUL CORPORATIVO)
+# INJEÇÃO DE DESIGN (ALTERANDO CORES PARA AZUL CORPORATIVO)
 # ====================================================================
 st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
 
 st.markdown("""
     <style>
-    /* Transforma os botões principais de Rosa/Vermelho para Azul Seguro */
+    /* Muda a cor dos botões principais de Vermelho para Azul */
     div.stButton > button[kind="primary"] {
         background-color: #0d6efd !important;
         color: white !important;
         border: 1px solid #0d6efd !important;
-        font-weight: 600 !important;
+        font-weight: bold !important;
         border-radius: 6px !important;
     }
     div.stButton > button[kind="primary"]:hover {
         background-color: #0b5ed7 !important;
         border: 1px solid #0b5ed7 !important;
     }
+    /* Deixa o texto do Data Editor mais legível */
+    .stDataFrame { font-size: 14px !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -372,7 +374,7 @@ if is_admin:
 if is_admin:
     with tab4:
         st.markdown("### ☁️ Torre de Controle do Supabase")
-        st.info("Utilize os filtros em cascata para organizar a tabela antes de visualizar ou corrigir.")
+        st.info("Utilize os filtros abaixo para organizar a visualização em cascata (Ano > Escola > Turma).")
 
         if usa_nuvem:
             res_nuvem = supabase.table("respostas_geral").select("*").execute()
@@ -385,75 +387,75 @@ if is_admin:
                 df_master = df_master[colunas_display]
                 df_master.columns = ['ID', 'Escola', 'Ano_Ensino', 'Turma', 'Turno', 'Frequencia', 'Nome_Aluno', 'Respostas_Brutas', 'Digitador']
 
-                # FILTROS EM CASCATA DA COORDENAÇÃO (Ano > Escola > Turma)
-                with st.container(border=True):
-                    st.markdown("#### 🔍 Filtro de Turmas")
-                    f_col1, f_col2, f_col3 = st.columns(3)
-                    
-                    anos_unicos = ["Todos"] + sorted(list(df_master['Ano_Ensino'].dropna().unique()))
-                    with f_col1: sel_ano = st.selectbox("1. Filtrar por Ano de Ensino:", anos_unicos, key="admin_f_ano")
-                    df_f1 = df_master if sel_ano == "Todos" else df_master[df_master['Ano_Ensino'] == sel_ano]
-                    
-                    escolas_unicas = ["Todas"] + sorted(list(df_f1['Escola'].dropna().unique()))
-                    with f_col2: sel_escola = st.selectbox("2. Filtrar por Escola:", escolas_unicas, key="admin_f_esc")
-                    df_f2 = df_f1 if sel_escola == "Todas" else df_f1[df_f1['Escola'] == sel_escola]
-                    
-                    turmas_unicas = ["Todas"] + sorted(list(df_f2['Turma'].dropna().unique()))
-                    with f_col3: sel_turma = st.selectbox("3. Filtrar por Turma:", turmas_unicas, key="admin_f_tur")
-                    df_f3 = df_f2 if sel_turma == "Todas" else df_f2[df_f2['Turma'] == sel_turma]
+                # FILTRO HIERÁRQUICO
+                anos_disp = sorted(list(df_master['Ano_Ensino'].dropna().unique()))
+                if anos_disp:
+                    sel_ano = st.selectbox("1. Filtrar Banco por Ano de Ensino:", anos_disp)
+                    df_ano = df_master[df_master['Ano_Ensino'] == sel_ano]
+                    escolas_disp = sorted(list(df_ano['Escola'].dropna().unique()))
 
-                st.write(f"**Resultados encontrados:** {len(df_f3)} alunos")
-                
-                # Prepara a tabela cortando a "tripa" de respostas para edição fácil
-                df_visual = df_f3.copy()
-                if not df_visual.empty:
-                    for q in range(1, total_q_global + 1):
-                        df_visual[f"Q{q:02d}"] = df_visual["Respostas_Brutas"].apply(lambda x: x[q-1] if isinstance(x, str) and len(x) >= q else "-")
+                    st.markdown("---")
+                    st.markdown(f"#### 🏫 Escolas com registros no {sel_ano}")
                     
-                    cols_editar = ["ID", "Escola", "Ano_Ensino", "Turma", "Turno", "Frequencia", "Nome_Aluno"] + [f"Q{q:02d}" for q in range(1, total_q_global + 1)] + ["Digitador"]
-                    df_visual = df_visual[cols_editar]
+                    # O MENU SANFONA MÁGICO
+                    for esc in escolas_disp:
+                        with st.expander(f"🏫 {esc} (Clique para expandir as turmas)", expanded=False):
+                            df_esc = df_ano[df_ano['Escola'] == esc]
+                            # Pega as combinações únicas de Turma e Turno desta escola
+                            turmas_turnos = df_esc[['Turma', 'Turno']].drop_duplicates().values.tolist()
 
-                config_cols_admin = {"ID": None, "Digitador": st.column_config.TextColumn("Feito por:", disabled=True)}
-                for q in range(1, total_q_global + 1): config_cols_admin[f"Q{q:02d}"] = st.column_config.SelectboxColumn(options=["A", "B", "C", "D", "-", "*"])
+                            for (tur, tur_no) in turmas_turnos:
+                                df_tur = df_esc[(df_esc['Turma'] == tur) & (df_esc['Turno'] == tur_no)].copy()
+                                
+                                st.markdown(f"**📚 Turma {tur} | Turno: {tur_no}** - ({len(df_tur)} alunos registrados)")
+                                
+                                # Fatiando as respostas para visualização da coordenação
+                                for q in range(1, total_q_global + 1):
+                                    df_tur[f"Q{q:02d}"] = df_tur["Respostas_Brutas"].apply(lambda x: x[q-1] if isinstance(x, str) and len(x) >= q else "-")
 
-                df_master_editado = st.data_editor(
-                    df_visual,
-                    column_config=config_cols_admin,
-                    use_container_width=True,
-                    num_rows="dynamic",
-                    height=350,
-                    key="editor_master_nuvem"
-                )
+                                cols_editar = ["ID", "Frequencia", "Nome_Aluno"] + [f"Q{q:02d}" for q in range(1, total_q_global+1)] + ["Digitador"]
+                                config_cols_admin = {
+                                    "ID": None, 
+                                    "Frequencia": st.column_config.TextColumn(width="small"),
+                                    "Digitador": st.column_config.TextColumn("Feito por:", disabled=True)
+                                }
+                                for q in range(1, total_q_global+1): config_cols_admin[f"Q{q:02d}"] = st.column_config.SelectboxColumn(options=["A", "B", "C", "D", "-", "*"], width="small")
 
-                if not df_visual.empty and st.button("Salvar Alterações Desta Tabela na Nuvem", type="primary"):
-                    with st.spinner("Sincronizando correções..."):
-                        df_salvar_admin = df_master_editado.copy()
-                        df_salvar_admin["Respostas_Brutas"] = df_salvar_admin[[f"Q{q:02d}" for q in range(1, total_q_global + 1)]].agg(lambda x: ''.join(x.astype(str)), axis=1)
-                        
-                        records_upsert = []
-                        for _, row in df_salvar_admin.iterrows():
-                            records_upsert.append({
-                                "id": row["ID"] if pd.notna(row.get("ID")) else str(uuid.uuid4()),
-                                "escola": str(row["Escola"]), "ano_ensino": str(row["Ano_Ensino"]),
-                                "turma": str(row["Turma"]), "turno": str(row["Turno"]),
-                                "frequencia": str(row["Frequencia"]), "nome_aluno": str(row["Nome_Aluno"]),
-                                "respostas_brutas": str(row["Respostas_Brutas"]), "digitador": str(row["Digitador"])
-                            })
-                        supabase.table("respostas_geral").upsert(records_upsert).execute()
-                        st.success("✅ Banco Central atualizado com sucesso!")
-                        st.rerun()
+                                # Chave única para cada tabela renderizada
+                                key_ed = f"ed_adm_{sel_ano}_{esc}_{tur}_{tur_no}"
+                                df_ed = st.data_editor(df_tur[cols_editar], column_config=config_cols_admin, use_container_width=True, num_rows="dynamic", key=key_ed)
+
+                                if st.button(f"💾 Salvar Edições - Turma {tur}", key=f"btn_adm_{sel_ano}_{esc}_{tur}_{tur_no}", type="primary"):
+                                    with st.spinner("Sincronizando correções na nuvem..."):
+                                        df_salvar = df_ed.copy()
+                                        df_salvar["Respostas_Brutas"] = df_salvar[[f"Q{q:02d}" for q in range(1, total_q_global + 1)]].agg(lambda x: ''.join(x.astype(str)), axis=1)
+                                        
+                                        records_upsert = []
+                                        for _, row in df_salvar.iterrows():
+                                            records_upsert.append({
+                                                "id": row["ID"] if pd.notna(row.get("ID")) else str(uuid.uuid4()),
+                                                "escola": esc, "ano_ensino": sel_ano, "turma": tur, "turno": tur_no,
+                                                "frequencia": str(row["Frequencia"]), "nome_aluno": str(row["Nome_Aluno"]),
+                                                "respostas_brutas": str(row["Respostas_Brutas"]), 
+                                                "digitador": str(row["Digitador"]) if pd.notna(row.get("Digitador")) else st.session_state['nome_logado']
+                                            })
+                                        
+                                        supabase.table("respostas_geral").upsert(records_upsert).execute()
+                                        st.success(f"✅ Turma {tur} atualizada com sucesso!")
+                                        st.rerun()
+                                st.divider()
 
                 st.markdown("---")
-                st.markdown("#### ⚙️ Processador de Notas (Exportação Looker Studio)")
+                st.markdown("#### ⚙️ Motor Gerador de Notas (Toda a Rede)")
                 gabarito_admin = st.text_input(f"Gabarito Oficial ({total_q_global} questões):", value="A"*total_q_global).upper().strip()
                 gab_dict_admin = {}
                 if len(gabarito_admin) >= total_q_global:
                     for i, char in enumerate(gabarito_admin[:total_q_global]): gab_dict_admin[i+1] = "NULA" if char in ["X", "N"] else char
 
-                if st.button("🚀 Calcular Notas de Todo o Banco e Baixar Planilha Final", type="primary", use_container_width=True):
-                    with st.spinner("Analisando respostas..."):
+                if st.button("🚀 Calcular Notas do Banco e Baixar Planilha Consolidada", type="primary", use_container_width=True):
+                    with st.spinner("Corrigindo todos os milhares de alunos da nuvem..."):
                         todos_resultados = []
-                        # Repuxa tudo direto do banco para calcular geral, não apenas os filtrados
+                        # Repuxa tudo direto do banco para calcular geral
                         res_todas_notas = supabase.table("respostas_geral").select("*").execute()
                         df_total = pd.DataFrame(res_todas_notas.data)
                         
@@ -491,7 +493,7 @@ if is_admin:
                             df_final_admin = pd.DataFrame(todos_resultados)
                             df_final_admin['Ordem_Num'] = pd.to_numeric(df_final_admin['Frequencia'], errors='coerce')
                             df_final_admin = df_final_admin.sort_values(by=['Escola', 'Ano_Ensino', 'Turma', 'Turno', 'Ordem_Num'], ascending=[True, True, True, True, True], na_position='last').drop(columns=['Ordem_Num']) 
-                            st.success(f"✅ {len(df_final_admin)} alunos processados!")
+                            st.success(f"✅ Sucesso! {len(df_final_admin)} alunos foram corrigidos e processados.")
                             st.download_button("📥 Baixar Planilha Final (CSV)", df_final_admin.to_csv(index=False, sep=";"), f"samar_dados_consolidados_nuvem.csv", "text/csv", type="primary")
             else:
                 st.info("A Nuvem está vazia. Aguarde os digitadores enviarem os dados.")
@@ -570,7 +572,7 @@ if is_admin:
 with tab3:
     nome_operador = st.session_state['nome_logado']
     
-    # MEMÓRIA PERSISTENTE DA TELA
+    # MEMÓRIA PERSISTENTE DO CABEÇALHO
     for k in ["escola_val", "ano_val", "turma_val", "turno_val"]:
         if k not in st.session_state: st.session_state[k] = ""
         
@@ -614,7 +616,7 @@ with tab3:
     for q in range(1, 100): 
         if f"q_{q}" not in st.session_state: st.session_state[f"q_{q}"] = None 
 
-    st.markdown("### 🖱️ Painel de Transcrição e Edição")
+    st.markdown("### 🖱️ Painel de Transcrição")
     
     if "msg_erro" in st.session_state:
         st.error(st.session_state.msg_erro)
@@ -625,6 +627,9 @@ with tab3:
 
     rk = st.session_state.reset_key 
     
+    # ------------------------------------------------------------------
+    # CABEÇALHO DO DIGITADOR
+    # ------------------------------------------------------------------
     with st.container(border=True):
         st.markdown("#### 🏫 1. Defina a Turma de Trabalho Atual")
         idx_escola = ESCOLAS_SAMAR.index(st.session_state.escola_val) if st.session_state.escola_val in ESCOLAS_SAMAR else 0
@@ -642,6 +647,9 @@ with tab3:
 
     st.write("")
 
+    # ------------------------------------------------------------------
+    # CARTÃO DO ALUNO
+    # ------------------------------------------------------------------
     with st.container(border=True):
         st.markdown("#### 👤 2. Inserir Novo Cartão-Resposta")
         st.text_input("Nome do Aluno:", max_chars=100, key="nome_aluno_input")
@@ -671,9 +679,11 @@ with tab3:
         st.button("Salvar Cartão deste Aluno e Limpar Tela", type="primary", use_container_width=True, on_click=salvar_e_limpar_callback)
 
     st.markdown("---")
-    # Tabela Inteligente: Mostra os alunos da turma selecionada no cabeçalho
-    st.markdown(f"#### 📁 Alunos Registrados na {st.session_state.ano_val} - {st.session_state.turma_val}")
     
+    # ------------------------------------------------------------------
+    # TABELA ESPELHO DA TURMA ATUAL (NUVEM)
+    # ------------------------------------------------------------------
+    st.markdown(f"#### 📁 Alunos Registrados na Turma Atual")
     if usa_nuvem and st.session_state.escola_val and st.session_state.ano_val and st.session_state.turma_val:
         res_turma = supabase.table("respostas_geral").select("*").eq("escola", st.session_state.escola_val).eq("ano_ensino", st.session_state.ano_val).eq("turma", st.session_state.turma_val).eq("digitador", nome_operador).execute()
         
@@ -692,18 +702,11 @@ with tab3:
             }
             for q in range(1, total_q_global + 1): config_colunas[f"Q{q:02d}"] = st.column_config.SelectboxColumn(f"Q{q:02d}", options=["A", "B", "C", "D", "-", "*"], width="small", required=True)
 
-            st.caption("Você está visualizando os dados sincronizados na nuvem. Dê dois cliques para corrigir ou aperte 'Delete' para apagar um aluno duplicado.")
+            st.caption(f"Visualizando dados da nuvem. Dê dois cliques para corrigir ou aperte 'Delete' para apagar.")
             
-            df_editado_ui = st.data_editor(
-                df_turma[colunas_exibir], 
-                use_container_width=True,
-                num_rows="dynamic", 
-                column_config=config_colunas,
-                height=300, 
-                key=f"editor_{nome_arquivo_seguro}"
-            )
+            df_editado_ui = st.data_editor(df_turma[colunas_exibir], use_container_width=True, num_rows="dynamic", column_config=config_colunas, height=300, key=f"editor_atual_{rk}")
             
-            if st.button("Salvar Edições Desta Turma", type="primary", use_container_width=True):
+            if st.button("💾 Salvar Edições Desta Turma", type="primary", use_container_width=True):
                 df_salvar = df_editado_ui.copy()
                 df_salvar["Respostas_Brutas"] = df_salvar[[f"Q{q:02d}" for q in range(1, total_q_global + 1)]].agg(lambda x: ''.join(x.astype(str)), axis=1)
                 
@@ -716,37 +719,83 @@ with tab3:
                         "frequencia": str(row["Frequencia"]), "nome_aluno": str(row["Nome_Aluno"]),
                         "respostas_brutas": str(row["Respostas_Brutas"]), "digitador": nome_operador
                     })
-                # Apaga os registros antigos deste lote para substituir pela visão limpa (caso o digitador tenha apagado uma linha)
                 supabase.table("respostas_geral").delete().eq("escola", st.session_state.escola_val).eq("ano_ensino", st.session_state.ano_val).eq("turma", st.session_state.turma_val).eq("digitador", nome_operador).execute()
                 supabase.table("respostas_geral").upsert(records_upsert).execute()
-                
                 st.success("Tabela sincronizada com sucesso na nuvem!")
                 st.rerun()
-                
-            c1, c2 = st.columns(2)
-            escola_str = st.session_state.escola_val.replace(" ", "_")
-            df_export_download = df_turma.copy()
-            with c1: st.download_button("📊 Baixar Tabela da Turma (CSV)", df_export_download.to_csv(index=False, sep=";"), f"Turma_{escola_str}_{st.session_state.turma_val}.csv", "text/csv", use_container_width=True)
-            with c2: 
-                if st.button("🖼️ Gerar Gabaritos em Imagem (ZIP)", use_container_width=True):
-                    st.download_button("📥 Download ZIP", gerar_zip_gabaritos(df_export_download, conf, modelo), f"Imagens_{escola_str}_{st.session_state.turma_val}.zip", "application/zip", type="primary", use_container_width=True)
         else:
             st.info("Nenhum aluno registrado para esta turma no momento.")
     else:
-        st.info("💡 Preencha o Ano, Escola e Turma no topo da página. Os alunos registrados aparecerão aqui embaixo magicamente.")
+        st.info("💡 Preencha o Ano, Escola e Turma no topo. Os alunos aparecerão aqui embaixo.")
 
-    with st.expander("🗑️ Trocar de Turma (Limpar Cabeçalho)", expanded=False):
-        if st.button("Apagar Campos e Iniciar Outra Turma", use_container_width=True):
-            for campo in ["escola_val", "ano_val", "turma_val", "turno_val"]: st.session_state[campo] = ""
-            st.session_state.reset_key += 1
-            st.rerun()
+    st.write("")
+    if st.button("🧹 Limpar Campos e Trocar de Turma/Escola", use_container_width=True): # Note que tirei o type="primary" daqui para ficar cinza!
+        for campo in ["escola_val", "ano_val", "turma_val", "turno_val"]: st.session_state[campo] = ""
+        st.session_state.reset_key += 1
+        st.rerun()
+
+    # ------------------------------------------------------------------
+    # O COFRE DE HISTÓRICO DO DIGITADOR (MENU SANFONA)
+    # ------------------------------------------------------------------
+    st.markdown("---")
+    st.markdown("#### ☁️ Meu Histórico de Digitação")
+    st.info("Esqueceu de corrigir um aluno de uma escola que você já fechou? Encontre ele aqui.")
+    
+    with st.expander("📂 Abrir Histórico (Suas Escolas Anteriores)", expanded=False):
+        if usa_nuvem:
+            res_meus = supabase.table("respostas_geral").select("*").eq("digitador", nome_operador).execute()
+            if res_meus.data:
+                df_meus = pd.DataFrame(res_meus.data)
+                df_meus.columns = ['id', 'Escola', 'Ano_Ensino', 'Turma', 'Turno', 'Frequencia', 'Nome_Aluno', 'Respostas_Brutas', 'digitador', 'criado_em']
+                
+                anos_meus = sorted(list(df_meus['Ano_Ensino'].dropna().unique()))
+                if anos_meus:
+                    sel_ano_meu = st.selectbox("Selecione o Ano:", anos_meus, key="meu_hist_ano")
+                    df_ano_meu = df_meus[df_meus['Ano_Ensino'] == sel_ano_meu]
+                    
+                    escolas_minhas = sorted(list(df_ano_meu['Escola'].dropna().unique()))
+                    for esc_m in escolas_minhas:
+                        st.markdown(f"**🏫 {esc_m}**")
+                        df_esc_m = df_ano_meu[df_ano_meu['Escola'] == esc_m]
+                        turmas_minhas = df_esc_m[['Turma', 'Turno']].drop_duplicates().values.tolist()
+                        
+                        for (tur_m, tur_no_m) in turmas_minhas:
+                            df_tur_m = df_esc_m[(df_esc_m['Turma'] == tur_m) & (df_esc_m['Turno'] == tur_no_m)].copy()
+                            st.caption(f"Turma {tur_m} ({tur_no_m}) - {len(df_tur_m)} alunos")
+                            
+                            for q in range(1, total_q_global + 1):
+                                df_tur_m[f"Q{q:02d}"] = df_tur_m["Respostas_Brutas"].apply(lambda x: x[q-1] if isinstance(x, str) and len(x) >= q else "-")
+                            
+                            cols_ed_m = ["id", "Frequencia", "Nome_Aluno"] + [f"Q{q:02d}" for q in range(1, total_q_global+1)]
+                            conf_ed_m = {"id": None, "Frequencia": st.column_config.TextColumn(width="small")}
+                            for q in range(1, total_q_global+1): conf_ed_m[f"Q{q:02d}"] = st.column_config.SelectboxColumn(options=["A", "B", "C", "D", "-", "*"])
+                            
+                            df_ed_meu = st.data_editor(df_tur_m[cols_ed_m], column_config=conf_ed_m, use_container_width=True, num_rows="dynamic", key=f"hist_{sel_ano_meu}_{esc_m}_{tur_m}_{tur_no_m}")
+                            
+                            if st.button(f"💾 Salvar Correção Histórica - Turma {tur_m}", key=f"btn_hist_{sel_ano_meu}_{esc_m}_{tur_m}_{tur_no_m}", type="primary"):
+                                df_salvar_hist = df_ed_meu.copy()
+                                df_salvar_hist["Respostas_Brutas"] = df_salvar_hist[[f"Q{q:02d}" for q in range(1, total_q_global + 1)]].agg(lambda x: ''.join(x.astype(str)), axis=1)
+                                
+                                records_upsert = []
+                                for _, row in df_salvar_hist.iterrows():
+                                    records_upsert.append({
+                                        "id": row["id"] if pd.notna(row.get("id")) else str(uuid.uuid4()),
+                                        "escola": esc_m, "ano_ensino": sel_ano_meu, "turma": tur_m, "turno": tur_no_m,
+                                        "frequencia": str(row["Frequencia"]), "nome_aluno": str(row["Nome_Aluno"]),
+                                        "respostas_brutas": str(row["Respostas_Brutas"]), "digitador": nome_operador
+                                    })
+                                supabase.table("respostas_geral").upsert(records_upsert).execute()
+                                st.success(f"✅ Histórico da turma atualizado!")
+                                st.rerun()
+            else:
+                st.write("Você ainda não tem histórico salvo na nuvem.")
 
     # ====================================================================
     # FORMULÁRIO DE ATA DIGITAL
     # ====================================================================
     st.markdown("---")
-    st.markdown("#### 📋 Registrar Ocorrência da Turma (Ata)")
-    with st.expander("➕ Nova Ata para esta Sala", expanded=False):
+    st.markdown("#### 📋 Registrar Ata de Ocorrência")
+    with st.expander("➕ Nova Ocorrência", expanded=False):
         with st.form("form_ata", clear_on_submit=True):
             nome_aplicador = st.text_input("NOME DO APLICADOR:")
             texto_ata = st.text_area("DESCRIÇÃO DA OCORRÊNCIA:", height=100)
@@ -768,4 +817,4 @@ with tab3:
                     st.session_state['ultima_ata_html'] = html_doc
                     st.success("✅ Ata sincronizada com a Nuvem!")
         if st.session_state.get('ultima_ata_html'):
-            st.download_button("🖨️ Baixar Via do Documento (HTML)", data=st.session_state['ultima_ata_html'], file_name="Ata.html", mime="text/html")
+            st.download_button("🖨️ Baixar Documento da Ata (HTML)", data=st.session_state['ultima_ata_html'], file_name="Ata.html", mime="text/html")
