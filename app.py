@@ -487,7 +487,6 @@ if is_admin:
         if os.path.exists(DB_OCORRENCIAS):
             df_atas = pd.read_csv(DB_OCORRENCIAS, sep=";", dtype=str)
             if not df_atas.empty:
-                # TABELA EDITÁVEL PARA A COORDENAÇÃO
                 df_atas_editado = st.data_editor(
                     df_atas, 
                     use_container_width=True, 
@@ -555,7 +554,8 @@ with tab3:
         if f"_turma_{rk}" in st.session_state: st.session_state.turma_val = st.session_state[f"_turma_{rk}"]
         if f"_turno_{rk}" in st.session_state: st.session_state.turno_val = st.session_state[f"_turno_{rk}"]
 
-    mapa_valores_global = {"A":"A", "B":"B", "C":"C", "D":"D", "Branco":"-", "Rasura":"*"}
+    # INCLUSÃO DO MAPA DE VALORES PARA "NONE" (NENHUMA SELEÇÃO = EM BRANCO)
+    mapa_valores_global = {"A":"A", "B":"B", "C":"C", "D":"D", "Branco":"-", "Rasura":"*", None: "-"}
     
     def salvar_e_limpar_callback():
         sync_header() 
@@ -564,7 +564,7 @@ with tab3:
             return
             
         nova_freq = st.session_state.freq_d + st.session_state.freq_u
-        resp_str = "".join([mapa_valores_global[st.session_state[f"q_{q}"]] for q in range(1, total_q_global + 1)])
+        resp_str = "".join([mapa_valores_global.get(st.session_state.get(f"q_{q}"), "-") for q in range(1, total_q_global + 1)])
         
         novo_dado = {
             "Escola": st.session_state.escola_val, "Ano_Ensino": st.session_state.ano_val, "Turma": st.session_state.turma_val, 
@@ -579,13 +579,15 @@ with tab3:
         st.session_state.nome_aluno_input = ""
         st.session_state.freq_d = "0"
         st.session_state.freq_u = "0"
-        for q in range(1, total_q_global + 1): st.session_state[f"q_{q}"] = "Branco"
+        
+        # AGORA AS QUESTÕES VOLTAM PARA "NONE" AO INVÉS DE "BRANCO"
+        for q in range(1, total_q_global + 1): st.session_state[f"q_{q}"] = None
 
     if "freq_d" not in st.session_state: st.session_state.freq_d = "0"
     if "freq_u" not in st.session_state: st.session_state.freq_u = "0"
     if "nome_aluno_input" not in st.session_state: st.session_state.nome_aluno_input = ""
     for q in range(1, 100): 
-        if f"q_{q}" not in st.session_state: st.session_state[f"q_{q}"] = "Branco"
+        if f"q_{q}" not in st.session_state: st.session_state[f"q_{q}"] = None # INICIALIZAÇÃO VAZIA (NENHUMA SELEÇÃO)
 
     st.markdown("### 🖱️ Transcrição Intuitiva do Aluno")
     st.info(f"Olá, **{nome_operador}**. Os dados que você digitar aqui serão salvos com segurança em sua sessão exclusiva.")
@@ -631,7 +633,7 @@ with tab3:
                 f"</div>", unsafe_allow_html=True
             )
         st.divider()
-        st.markdown("##### 📝 Respostas (Marque de acordo com a prova física)")
+        st.markdown("##### 📝 Respostas (As questões não selecionadas serão gravadas automaticamente como 'Em Branco')")
         blocos_prova = [g for g in conf.grids if g.questao_inicial > 0]
         cols_blocos = st.columns(len(blocos_prova)) 
         opcoes_visuais = ["A", "B", "C", "D", "Branco", "Rasura"]
@@ -642,7 +644,8 @@ with tab3:
                     st.caption(bloco.texto_extra)
                     for r in range(bloco.rows):
                         q = bloco.questao_inicial + r
-                        st.radio(f"Questão {q:02d}", options=opcoes_visuais, horizontal=True, key=f"q_{q}")
+                        # INDEX=NONE GARANTE QUE COMECE SEM BOLINHA MARCADA
+                        st.radio(f"Questão {q:02d}", options=opcoes_visuais, index=None, horizontal=True, key=f"q_{q}")
         st.write("")
         st.button("💾 Salvar Cartão deste Aluno e Limpar Tela", type="primary", use_container_width=True, on_click=salvar_e_limpar_callback)
 
@@ -763,14 +766,9 @@ with tab3:
                     df_ata = pd.DataFrame([nova_ata])
                     df_ata.to_csv(DB_OCORRENCIAS, mode='a', header=False, index=False, sep=";")
                     st.success("✅ Ata enviada! Ela aparecerá na tabela abaixo para você gerenciar e baixar.")
-                    # A página não recarrega automaticamente dentro de um form do Streamlit, então avisamos o usuário.
 
-    # --------------------------------------------------------------------
-    # TABELA DE EDIÇÃO DAS ATAS DO DIGITADOR (MAGIA ACONTECE AQUI)
-    # --------------------------------------------------------------------
     if os.path.exists(DB_OCORRENCIAS):
         df_todas_atas = pd.read_csv(DB_OCORRENCIAS, sep=";", dtype=str)
-        # Filtra para o digitador ver APENAS as atas dele
         df_minhas_atas = df_todas_atas[df_todas_atas['Revisor_Digitador'] == nome_operador]
         df_outras_atas = df_todas_atas[df_todas_atas['Revisor_Digitador'] != nome_operador]
         
@@ -789,13 +787,11 @@ with tab3:
             c_ata1, c_ata2 = st.columns(2)
             with c_ata1:
                 if st.button("💾 Salvar Edições nas Suas Atas", use_container_width=True):
-                    # Junta as atas dos outros com as atas editadas deste usuário e salva por cima
                     df_final_atas = pd.concat([df_outras_atas, df_minhas_editadas], ignore_index=True)
                     df_final_atas.to_csv(DB_OCORRENCIAS, index=False, sep=";")
                     st.success("Suas Atas foram atualizadas com sucesso no servidor!")
                     st.rerun()
             with c_ata2:
-                # Gera o ZIP só com as atas desse digitador, já com as edições refletidas
                 zip_minhas = gerar_zip_atas(df_minhas_editadas)
                 st.download_button(
                     label="🖨️ Baixar Suas Atas em Documento HTML (ZIP)",
