@@ -98,14 +98,16 @@ perfil = st.sidebar.radio("Selecione seu Perfil:", ["👨‍💻 Digitador (Tran
 is_authenticated = False
 is_admin = False
 
-# Senha: coted2026
-HASH_ADMIN = "d731835cdccf6874e0e5a871926c45f448e6fb10b37f4cfbd571066c1f727c00"
+# Deixamos o Python gerar o hash perfeito para garantir que a fechadura funcione
+SENHA_MESTRA = "coted2026"
+HASH_ADMIN = hash_senha(SENHA_MESTRA)
 
 if perfil == "⚙️ Coordenação (Admin)":
     senha = st.sidebar.text_input("Senha de Acesso:", type="password")
-    btn_entrar_admin = st.sidebar.button("Entrar 🚀") # NOVO BOTÃO ADICIONADO AQUI!
+    btn_entrar_admin = st.sidebar.button("Entrar 🚀")
     
-    if senha or btn_entrar_admin:
+    # Se a pessoa clicar no botão OU digitar a senha e apertar Enter
+    if btn_entrar_admin or senha:
         if hash_senha(senha) == HASH_ADMIN: 
             is_authenticated = True
             is_admin = True
@@ -115,7 +117,7 @@ if perfil == "⚙️ Coordenação (Admin)":
             st.info("👈 Autentique-se no menu lateral para acessar o sistema.")
             st.stop()
     else:
-        st.sidebar.warning("Digite a senha e clique em Entrar.")
+        st.sidebar.warning("Digite a senha e aperte Enter.")
         st.title("🖨️ Sistema SAMAR")
         st.info("👈 Autentique-se no menu lateral para acessar o sistema.")
         st.stop()
