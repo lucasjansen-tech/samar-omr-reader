@@ -20,9 +20,6 @@ st.set_page_config(layout="wide", page_title="SAMAR GRID PRO")
 def hash_senha(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
 
-# ====================================================================
-# INICIALIZAÇÃO DO BANCO DE USUÁRIOS E SESSÃO
-# ====================================================================
 DB_USUARIOS = "usuarios_samar.csv"
 if not os.path.exists(DB_USUARIOS):
     pd.DataFrame([{"Nome": "Digitador Teste", "Email": "teste@samar", "Senha": hash_senha("123")}]).to_csv(DB_USUARIOS, index=False, sep=";")
@@ -98,26 +95,31 @@ perfil = st.sidebar.radio("Selecione seu Perfil:", ["👨‍💻 Digitador (Tran
 is_authenticated = False
 is_admin = False
 
-# Senha: coted2026
-HASH_ADMIN = "d731835cdccf6874e0e5a871926c45f448e6fb10b37f4cfbd571066c1f727c00"
-
 if perfil == "⚙️ Coordenação (Admin)":
-    senha = st.sidebar.text_input("Senha de Acesso:", type="password")
-    btn_entrar_admin = st.sidebar.button("Entrar 🚀")
+    senha = st.sidebar.text_input("Senha de Acesso (Digite e aperte Enter):", type="password")
     
-    if btn_entrar_admin or senha:
-        if hash_senha(senha) == HASH_ADMIN: 
-            is_authenticated = True
-            is_admin = True
-        else:
-            st.sidebar.error("❌ Senha incorreta.")
-            st.title("🖨️ Sistema SAMAR")
-            st.info("👈 Autentique-se no menu lateral para acessar o sistema.")
-            st.stop()
+    if senha == "coted2026": 
+        is_authenticated = True
+        is_admin = True
+    elif senha != "":
+        st.sidebar.error("❌ Senha incorreta.")
+        st.stop()
     else:
-        st.sidebar.warning("Digite a senha e aperte Enter.")
         st.title("🖨️ Sistema SAMAR")
-        st.info("👈 Autentique-se no menu lateral para acessar o sistema.")
+        st.info("👈 Digite a senha 'coted2026' no menu lateral e aperte Enter para liberar o sistema.")
+        
+        # BOTÃO DE EMERGÊNCIA AQUI FORA (NÃO PRECISA LOGAR PARA APAGAR O ARQUIVO QUEBRADO)
+        st.write("")
+        st.write("")
+        with st.container(border=True):
+            st.error("⚠️ **Problemas com senhas antigas?** Se você não consegue logar como digitador, clique no botão abaixo para resetar o banco de dados de usuários.")
+            if st.button("🚨 CLIQUE AQUI PARA RESETAR O BANCO DE USUÁRIOS", type="primary"):
+                try:
+                    os.remove(DB_USUARIOS)
+                    st.success("✅ Banco apagado! O sistema criará um novo automaticamente. A página será recarregada.")
+                    st.rerun()
+                except Exception as e:
+                    st.warning("O arquivo já foi apagado ou não existe. O sistema está limpo!")
         st.stop()
 else:
     if st.session_state['usuario_logado']:
@@ -396,23 +398,9 @@ if is_admin:
         st.markdown("### 👥 Gestão de Digitadores")
         st.info("Painel de controle de acessos da equipe. As senhas são criptografadas (blindadas) no banco de dados.")
         
-        # Mostra a tabela de usuários
         df_usuarios = pd.read_csv(DB_USUARIOS, sep=";", dtype=str)
         st.dataframe(df_usuarios[["Nome", "Email"]], use_container_width=True)
         
-        st.markdown("---")
-        
-        # O BOTÃO MÁGICO PARA RESOLVER O SEU PROBLEMA ESTÁ AQUI:
-        with st.expander("⚠️ Zona de Perigo (Manutenção do Sistema)"):
-            st.warning("Use esta opção apenas se as senhas antigas estiverem dando erro de Login após a atualização de segurança.")
-            if st.button("🗑️ Apagar Banco de Dados Antigo (Resetar)", type="primary"):
-                try:
-                    os.remove(DB_USUARIOS)
-                    st.success("✅ Banco de dados apagado! O sistema criará um novo automaticamente. A página será recarregada em instantes.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Não foi possível apagar. O arquivo pode já não existir ou estar em uso. Erro: {e}")
-                    
         st.markdown("---")
         col_add, col_edit = st.columns(2)
         
