@@ -478,7 +478,7 @@ with tab3:
     st.session_state['ARQUIVO_TEMP'] = ARQUIVO_TEMP
     
     # ---------------------------------------------------------
-    # RECUPERAÇÃO MÁGICA: PUXA DADOS DO CSV SE A SESSÃO APAGAR
+    # RECUPERAÇÃO MÁGICA DE DADOS
     # ---------------------------------------------------------
     if os.path.exists(ARQUIVO_TEMP):
         try:
@@ -496,7 +496,7 @@ with tab3:
         except: pass
 
     # ---------------------------------------------------------
-    # MEMÓRIA PERSISTENTE: O COFRE DOS CAMPOS
+    # MEMÓRIA PERSISTENTE E CALLBACKS
     # ---------------------------------------------------------
     for k in ["escola_val", "ano_val", "turma_val", "turno_val"]:
         if k not in st.session_state: st.session_state[k] = ""
@@ -559,7 +559,7 @@ with tab3:
         del st.session_state.msg_sucesso
 
     # ---------------------------------------------------------
-    # CABEÇALHO LIGADO À MEMÓRIA PERSISTENTE E À RECUPERAÇÃO
+    # LAYOUT DE PREENCHIMENTO DO ALUNO
     # ---------------------------------------------------------
     with st.container(border=True):
         st.markdown("#### 🏫 1. Identificação da Turma e Escola (Sobrevive a mudanças de Aba e Logouts)")
@@ -625,28 +625,59 @@ with tab3:
     st.markdown("---")
     st.markdown("#### 📁 Progresso da Turma e Fechamento")
     
+    # ---------------------------------------------------------
+    # O NOVO EDITOR DE TABELA (COM COLUNAS FATIADAS E CABEÇALHO FIXO)
+    # ---------------------------------------------------------
     if os.path.exists(ARQUIVO_TEMP):
         df_temp = pd.read_csv(ARQUIVO_TEMP, sep=";", dtype=str)
         for col in ["Escola", "Ano_Ensino", "Turma", "Turno", "Nome_Aluno", "Frequencia", "Respostas_Brutas"]:
             if col not in df_temp.columns: df_temp[col] = ""
         df_temp = df_temp.fillna("")
         
+        # FATIANDO A TRIPA DE LETRAS EM COLUNAS INDIVIDUAIS
+        for q in range(1, total_q_global + 1):
+            df_temp[f"Q{q:02d}"] = df_temp["Respostas_Brutas"].apply(lambda x: x[q-1] if isinstance(x, str) and len(x) >= q else "-")
+        
         col_info, col_save = st.columns([4, 1])
         with col_info:
             st.write(f"**Total de Alunos Transcritos nesta sessão:** {len(df_temp)}")
-            st.info("💡 **Dica de Edição:** Se você digitou algo errado, dê **dois cliques na célula da tabela abaixo** para corrigir. Para apagar um aluno, clique na linha dele e aperte a tecla 'Delete'.")
+            st.info("💡 **Dica de Edição:** Dê dois cliques na célula da questão abaixo para corrigir a letra. O cabeçalho fica fixo se você rolar a tabela!")
         
-        df_editado = st.data_editor(
-            df_temp[["Escola", "Ano_Ensino", "Turma", "Turno", "Frequencia", "Nome_Aluno", "Respostas_Brutas"]], 
+        # CONFIGURAÇÃO DE COLUNAS: Define os menus suspensos e os limites da tabela
+        colunas_exibir = ["Escola", "Ano_Ensino", "Turma", "Turno", "Frequencia", "Nome_Aluno"] + [f"Q{q:02d}" for q in range(1, total_q_global + 1)]
+        
+        config_colunas = {
+            "Frequencia": st.column_config.TextColumn("Freq.", max_chars=2, width="small"),
+            "Escola": st.column_config.TextColumn(width="medium"),
+            "Nome_Aluno": st.column_config.TextColumn("Nome", width="medium"),
+        }
+        # Adiciona a trava (menu suspenso) para todas as colunas de questão
+        for q in range(1, total_q_global + 1):
+            config_colunas[f"Q{q:02d}"] = st.column_config.SelectboxColumn(f"Q{q:02d}", options=["A", "B", "C", "D", "-", "*"], width="small", required=True)
+
+        # RENDERIZA A TABELA COM ALTURA FIXA (Isso ativa o Cabeçalho Fixo do Streamlit!)
+        df_editado_ui = st.data_editor(
+            df_temp[colunas_exibir], 
             use_container_width=True,
             num_rows="dynamic", 
+            column_config=config_colunas,
+            height=400, 
             key=f"editor_{nome_arquivo_seguro}"
         )
+        
+        # RECONSTRUÇÃO SILENCIOSA: Junta as fatias de volta na "tripa" para o motor do Admin não quebrar
+        df_salvar = df_editado_ui.copy()
+        if not df_salvar.empty:
+            df_salvar["Respostas_Brutas"] = df_salvar[[f"Q{q:02d}" for q in range(1, total_q_global + 1)]].agg(lambda x: ''.join(x.astype(str)), axis=1)
+        else:
+            df_salvar["Respostas_Brutas"] = pd.Series(dtype=str)
+            
+        df_salvar = df_salvar[["Escola", "Ano_Ensino", "Turma", "Turno", "Frequencia", "Nome_Aluno", "Respostas_Brutas"]]
         
         with col_save:
             st.write("")
             if st.button("💾 Salvar Edições na Tabela", use_container_width=True):
-                df_editado.to_csv(ARQUIVO_TEMP, index=False, sep=";")
+                df_salvar.to_csv(ARQUIVO_TEMP, index=False, sep=";")
                 st.success("Tabela atualizada com sucesso!")
                 st.rerun()
         
@@ -659,7 +690,7 @@ with tab3:
         with c1:
             st.download_button(
                 label="📊 Baixar Dados (CSV)", 
-                data=df_editado.to_csv(index=False, sep=";"), 
+                data=df_salvar.to_csv(index=False, sep=";"), 
                 file_name=nome_arq_dig, 
                 mime="text/csv", 
                 type="primary",
@@ -668,7 +699,7 @@ with tab3:
         with c2:
             if st.button("🖼️ Gerar Gabaritos Digitais (ZIP)", use_container_width=True):
                 with st.spinner("Gerando backup em imagens..."):
-                    zip_data = gerar_zip_gabaritos(df_editado, conf, modelo) 
+                    zip_data = gerar_zip_gabaritos(df_salvar, conf, modelo) 
                     st.download_button(
                         label="📥 Download Completo (ZIP)",
                         data=zip_data,
@@ -678,11 +709,10 @@ with tab3:
                         use_container_width=True
                     )
         with c3:
-            # TRAVA DE SEGURANÇA NA EXCLUSÃO (Gaveta Expansível)
+            # GAVETA DE SEGURANÇA (Trava para não apagar sem querer)
             with st.expander("🗑️ Iniciar Nova Turma", expanded=False):
                 st.markdown("<p style='font-size:14px; color:#d32f2f;'><b>⚠️ Atenção:</b> Verifique se você já fez o download do CSV e do ZIP acima antes de prosseguir!</p>", unsafe_allow_html=True)
                 
-                # Botão final de exclusão
                 if st.button("🚨 Apagar Turma e Limpar Tela", use_container_width=True):
                     try: os.remove(ARQUIVO_TEMP)
                     except Exception: pass
@@ -691,7 +721,6 @@ with tab3:
                     for campo in ["escola_val", "ano_val", "turma_val", "turno_val"]:
                         st.session_state[campo] = ""
                         
-                    # Amnésia Forçada 2: Destrói o cache visual da tela
                     for widget in ["_escola", "_ano", "_turma", "_turno"]:
                         if widget in st.session_state:
                             del st.session_state[widget]
