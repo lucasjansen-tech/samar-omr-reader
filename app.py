@@ -142,18 +142,20 @@ if not ETAPAS_ATIVAS: ETAPAS_ATIVAS = TODAS_ETAPAS
 TURMAS_DISP = ["", "A", "B", "C", "D", "E", "F", "G", "H", "Única"]
 TURNOS_DISP = ["", "Manhã", "Tarde", "Integral", "Noite"]
 
+# --- ESTADOS DA SESSÃO PERMANENTES ---
 estados_padrao = {
     'usuario_logado': None, 'nome_logado': None, 'perfil_logado': None,
     'turma_confirmada': False, 'config_etapa': "", 'config_escola': "",
     'config_ano': "", 'config_turma': "", 'config_turno': "",
-    'freq_d': "0", 'freq_u': "0", 'nome_aluno_input': "",
-    'msg_erro': None, 'msg_sucesso_form': None, 'gerar_zip_digitador': False
+    'freq_d': "0", 'freq_u': None, 'nome_aluno_input': "",
+    'msg_erro': None, 'msg_sucesso_form': None, 'gerar_zip_digitador': False,
+    'reset_form_questoes': 0  # <--- Controle para resetar questões só em caso de sucesso
 }
 for key, valor in estados_padrao.items():
     if key not in st.session_state: st.session_state[key] = valor
 
 # ====================================================================
-# GERADORES DE ARQUIVOS (ALINHAMENTO CIRÚRGICO COMPLETO)
+# GERADORES DE ARQUIVOS (PDF COM CABEÇALHO OFICIAL E ALINHAMENTO FINO)
 # ====================================================================
 def gerar_zip_gabaritos(df, conf_prova, modelo_prova, etapa_nome, ano_nome):
     id_unico = uuid.uuid4().hex
@@ -587,12 +589,12 @@ if is_admin:
                             st.download_button("📥 Baixar CSV Corrigido", df_export.to_csv(index=False, sep=";"), f"Resultados_Robo_{ano_leitor}_{turma_leitor}.csv", "text/csv", type="primary")
 
 # ====================================================================
-# ABA 4 (ADMIN): TORRE DE CONTROLE (FILTROS CRUZADOS LIVRES E EXPORTAÇÃO)
+# ABA 4 (ADMIN): TORRE DE CONTROLE (FILTROS CRUZADOS LIVRES)
 # ====================================================================
 if is_admin:
     with tab4:
         st.markdown("### ☁️ Torre de Controle do Supabase")
-        st.info("Abaixo você tem a visão Raio-X de toda a Secretaria de Educação. Use os filtros para cruzar dados livremente e gerar relatórios por Ano de Ensino.")
+        st.info("Abaixo você tem a visão Raio-X de toda a Secretaria de Educação. Use os filtros para cruzar dados livremente e gerar relatórios.")
 
         if usa_nuvem:
             res_nuvem = supabase.table("respostas_geral").select("*").execute()
@@ -605,7 +607,6 @@ if is_admin:
                 df_master = df_master[colunas_display]
                 df_master.columns = ['ID', 'Etapa', 'Escola', 'Ano_Ensino', 'Turma', 'Turno', 'Frequencia', 'Nome_Aluno', 'Respostas_Brutas', 'Digitador', 'Status']
 
-                # FILTROS LIVRES (FIM DOS BUGS DE SELEÇÃO VAZIA)
                 df_final_filtro = df_master.copy()
                 
                 with st.container(border=True):
@@ -636,10 +637,10 @@ if is_admin:
                         if sel_tur_admin != "Todas as Turmas":
                             df_final_filtro = df_final_filtro[df_final_filtro['Turma'] == sel_tur_admin]
 
-                # MOSTRA AS TABELAS ENCONTRADAS NO FILTRO (Mesmo se for a Rede Inteira!)
+                # MOSTRA AS TABELAS ENCONTRADAS NO FILTRO
                 if not df_final_filtro.empty:
                     turmas_turnos = df_final_filtro[['Escola', 'Etapa', 'Ano_Ensino', 'Turma', 'Turno']].drop_duplicates().values.tolist()
-                    turmas_turnos.sort(key=lambda x: (x[2], x[0], x[3])) # Organiza Ano > Escola > Turma
+                    turmas_turnos.sort(key=lambda x: (x[2], x[0], x[3])) 
                     
                     for (esc, eta_b, ano_b, tur, tur_no) in turmas_turnos:
                         with st.expander(f"🏫 {esc} | 📚 {eta_b} | {ano_b} | Turma {tur} ({tur_no})", expanded=False):
@@ -674,10 +675,9 @@ if is_admin:
                             config_cols_admin = {"ID": None, "Frequencia": st.column_config.TextColumn(width="small"), "Digitador": st.column_config.TextColumn(disabled=True), "Status": st.column_config.TextColumn(disabled=True)}
                             for q in range(1, q_esperadas+1): config_cols_admin[f"Q{q:02d}"] = st.column_config.SelectboxColumn(options=["A", "B", "C", "D", "-", "*", "R"], width="small")
 
-                            key_ed = f"ed_adm_{eta_b}_{esc}_{ano_b}_{tur}_{tur_no}"
-                            df_ed = st.data_editor(df_tur[cols_editar], column_config=config_cols_admin, use_container_width=True, num_rows="dynamic", key=key_ed)
+                            df_ed = st.data_editor(df_tur[cols_editar], column_config=config_cols_admin, use_container_width=True, num_rows="dynamic", key=f"ed_adm_{eta_b}_{esc}_{ano_b}_{tur}_{tur_no}")
 
-                            # AUTO-SAVE DO ADMIN
+                            # AUTO-SAVE DO ADMIN EM TEMPO REAL
                             df_old = df_tur[cols_editar].reset_index(drop=True).fillna("")
                             df_new = df_ed.reset_index(drop=True).fillna("")
                             
@@ -852,9 +852,7 @@ if is_admin:
     with tab6:
         st.markdown("### 📋 Livro Oficial de Atas")
         
-        # BUSCA AS ATAS PREVENINDO ERRO SE ESTIVER VAZIO
         res_atas = supabase.table("atas_ocorrencias").select("*").execute() if usa_nuvem else None
-        
         if res_atas and res_atas.data:
             df_atas = pd.DataFrame(res_atas.data)
         else:
@@ -867,16 +865,12 @@ if is_admin:
         col_save_atas, c1, c2 = st.columns([1.5, 1, 1])
         with col_save_atas:
             if st.button("Salvar Edições de Atas na Nuvem", use_container_width=True, type="primary") and usa_nuvem:
-                
-                # 1. DELETA AS ATAS QUE O ADMIN APAGOU DA TABELA
                 if res_atas and res_atas.data:
                     c_ids = [str(r["id"]) for _, r in df_atas_editado.iterrows() if pd.notna(r.get("id")) and str(r.get("id")).strip()]
                     db_ids = [str(x["id"]) for x in res_atas.data]
                     to_del = [x for x in db_ids if x not in c_ids]
-                    if to_del:
-                        supabase.table("atas_ocorrencias").delete().in_("id", to_del).execute()
+                    if to_del: supabase.table("atas_ocorrencias").delete().in_("id", to_del).execute()
 
-                # 2. SALVA/ATUALIZA O RESTO
                 records_ata = []
                 for _, row in df_atas_editado.iterrows():
                     records_ata.append({
@@ -909,58 +903,13 @@ if is_admin:
                     st.rerun()
 
 # ====================================================================
-# ABA 3 COMPARTILHADA: A MÁGICA DO DIGITADOR (TEMPO REAL E EXCLUSÃO)
+# ABA 3 COMPARTILHADA: A MÁGICA DO DIGITADOR (FORMULÁRIO FECHADO DE ALTA PERFORMANCE)
 # ====================================================================
 with tab3:
     nome_operador = st.session_state['nome_logado']
     mapa_valores_global = {"A":"A", "B":"B", "C":"C", "D":"D", "Branco":"-", "Múltiplas":"*", "Rasura":"R", None: "-"}
-    
-    def salvar_aluno_callback():
-        if not st.session_state.nome_aluno_input.strip():
-            st.session_state.msg_erro = "⚠️ OBRIGATÓRIO: O campo 'Nome do Aluno' não pode ficar em branco."
-            return
-
-        q_esperadas_aluno, _ = get_padrao_por_ano(st.session_state.config_ano)
-        questoes_vazias = []
-        for q in range(1, q_esperadas_aluno + 1):
-            if st.session_state.get(f"q_{q}") is None: questoes_vazias.append(str(q))
-                
-        if questoes_vazias:
-            st.session_state.msg_erro = f"⚠️ OBRIGATÓRIO: Faltou marcar as questões: {', '.join(questoes_vazias)}. (Se o aluno não respondeu, marque a bolinha 'Branco')."
-            return
-        
-        nova_freq = st.session_state.freq_d + (st.session_state.freq_u if st.session_state.freq_u else "0")
-        resp_str = "".join([mapa_valores_global.get(st.session_state.get(f"q_{q}"), "-") for q in range(1, q_esperadas_aluno + 1)])
-        
-        novo_dado = {
-            "etapa": st.session_state.config_etapa, "escola": st.session_state.config_escola, 
-            "ano_ensino": st.session_state.config_ano, "turma": st.session_state.config_turma, 
-            "turno": st.session_state.config_turno, "frequencia": nova_freq, 
-            "nome_aluno": st.session_state.nome_aluno_input, "respostas_brutas": resp_str, 
-            "digitador": nome_operador, "status": "Aberto"
-        }
-        
-        if usa_nuvem:
-            res_check_dup = supabase.table("respostas_geral").select("frequencia").eq("etapa", st.session_state.config_etapa).eq("escola", st.session_state.config_escola).eq("ano_ensino", st.session_state.config_ano).eq("turma", st.session_state.config_turma).eq("turno", st.session_state.config_turno).execute()
-            if res_check_dup.data and nova_freq in [x['frequencia'] for x in res_check_dup.data]:
-                st.session_state.msg_erro = f"🚨 ERRO: Já existe um aluno com a Frequência '{nova_freq}'. Exclua o antigo na tabela ou altere o número."
-                return
-                
-            try: 
-                supabase.table("respostas_geral").insert([novo_dado]).execute()
-                st.session_state.msg_sucesso_form = f"✅ Aluno {st.session_state.nome_aluno_input} (Freq: {nova_freq}) salvo com sucesso!"
-                st.session_state.nome_aluno_input = ""
-                st.session_state.freq_d = "0"
-                st.session_state.freq_u = None
-            except Exception as e: print("Erro:", e)
 
     st.markdown("### 🖱️ Painel de Transcrição OMR")
-    if st.session_state.msg_erro:
-        st.error(st.session_state.msg_erro)
-        st.session_state.msg_erro = None
-    if st.session_state.msg_sucesso_form:
-        st.success(st.session_state.msg_sucesso_form)
-        st.session_state.msg_sucesso_form = None
 
     if not st.session_state['turma_confirmada']:
         tab_criar, tab_hist = st.tabs(["📝 Iniciar Nova Turma", "📂 Buscar do Meu Histórico (Nuvem)"])
@@ -1047,6 +996,10 @@ with tab3:
                         else: st.info("Nenhuma turma salva. Se o Admin excluiu a turma, ela some daqui.")
                     else: st.info("Nenhuma turma salva. Se o Admin excluiu a turma, ela some daqui.")
 
+        if st.session_state.msg_erro:
+            st.error(st.session_state.msg_erro)
+            st.session_state.msg_erro = None
+
     else:
         st.success(f"📌 **Local de Trabalho Fixo:** {st.session_state.config_etapa} | {st.session_state.config_escola} | {st.session_state.config_ano} - Turma {st.session_state.config_turma} ({st.session_state.config_turno})")
         if st.button("⬅️ Sair Desta Turma (Voltar ao Menu)"):
@@ -1079,6 +1032,15 @@ with tab3:
             with st.container(border=True):
                 st.markdown("#### 👤 Inserir Novo Cartão-Resposta")
                 
+                # Exibe a mensagem de erro (se houver) ANTES do formulário para não sumir o preenchimento
+                if st.session_state.msg_erro:
+                    st.error(st.session_state.msg_erro)
+                    st.session_state.msg_erro = None
+                if st.session_state.msg_sucesso_form:
+                    st.success(st.session_state.msg_sucesso_form)
+                    st.session_state.msg_sucesso_form = None
+
+                # Fora do form para atualizar o letreiro azul na hora
                 if "freq_d" not in st.session_state: st.session_state.freq_d = "0"
                 if "freq_u" not in st.session_state: st.session_state.freq_u = None
                 if "nome_aluno_input" not in st.session_state: st.session_state.nome_aluno_input = ""
@@ -1100,7 +1062,9 @@ with tab3:
                     )
 
                 st.divider()
-                with st.form("form_cartao_aluno", clear_on_submit=True):
+                
+                # A MÁGICA QUE MANTÉM OS DADOS SALVOS NA TELA EM CASO DE ERRO (clear_on_submit=False)
+                with st.form("form_cartao_aluno", clear_on_submit=False):
                     cols_blocos = st.columns(len(blocos_esperados_dig)) 
                     opcoes_visuais = ["A", "B", "C", "D", "Branco", "Múltiplas", "Rasura"]
                     
@@ -1110,11 +1074,52 @@ with tab3:
                         with cols_blocos[i]:
                             st.markdown(f"**{nome_disc}**")
                             for r in range(qtd_q):
-                                respostas_temp[q_num] = st.radio(f"Questão {q_num:02d}", options=opcoes_visuais, index=None, horizontal=True)
+                                # A Chave dinâmica garante que o form zere APENAS após o sucesso
+                                respostas_temp[q_num] = st.radio(f"Questão {q_num:02d}", options=opcoes_visuais, index=None, horizontal=True, key=f"q_{q_num}_{st.session_state.reset_form_questoes}")
                                 q_num += 1
                                 
                     st.write("")
-                    st.form_submit_button("Salvar Cartão deste Aluno", type="primary", use_container_width=True, on_click=salvar_aluno_callback)
+                    submit_aluno = st.form_submit_button("Salvar Cartão deste Aluno", type="primary", use_container_width=True)
+                    
+                    if submit_aluno:
+                        erros = []
+                        if not st.session_state.nome_aluno_input.strip(): erros.append("O campo 'Nome do Aluno' não pode ficar em branco.")
+                        if st.session_state.freq_u is None: erros.append("Marque a Unidade (U) da Frequência.")
+                        
+                        vazias = [str(q) for q, v in respostas_temp.items() if v is None]
+                        if vazias: erros.append(f"Faltam marcar as questões: {', '.join(vazias)}. (Se o aluno não respondeu, marque a bolinha 'Branco').")
+                        
+                        nova_freq = str(st.session_state.freq_d) + str(st.session_state.freq_u)
+                        
+                        if not erros and usa_nuvem:
+                            res_check_dup = supabase.table("respostas_geral").select("frequencia").eq("etapa", st.session_state.config_etapa).eq("escola", st.session_state.config_escola).eq("ano_ensino", st.session_state.config_ano).eq("turma", st.session_state.config_turma).eq("turno", st.session_state.config_turno).execute()
+                            if res_check_dup.data and nova_freq in [x['frequencia'] for x in res_check_dup.data]:
+                                erros.append(f"Já existe um aluno na tabela com a Frequência '{nova_freq}'. Exclua o antigo ou mude o número.")
+                        
+                        if erros:
+                            # Se der erro, ele exibe a mensagem, MAS COMO O RERUN NÃO ACONTECE NO FORM, OS DADOS FICAM NA TELA!
+                            for e in erros: st.error(f"⚠️ {e}")
+                        else:
+                            resp_str = "".join([mapa_valores_global[respostas_temp[q]] for q in range(1, q_esperadas_dig + 1)])
+                            novo_dado = {
+                                "etapa": st.session_state.config_etapa, "escola": st.session_state.config_escola, 
+                                "ano_ensino": st.session_state.config_ano, "turma": st.session_state.config_turma, 
+                                "turno": st.session_state.config_turno, "frequencia": nova_freq, 
+                                "nome_aluno": st.session_state.nome_aluno_input, "respostas_brutas": resp_str, 
+                                "digitador": nome_operador, "status": "Aberto"
+                            }
+                            try:
+                                supabase.table("respostas_geral").insert([novo_dado]).execute()
+                                st.session_state.msg_sucesso_form = f"✅ Aluno {st.session_state.nome_aluno_input} (Freq: {nova_freq}) salvo com sucesso!"
+                                
+                                # AQUI É ONDE O SISTEMA DE FATO ZERA OS DADOS PARA O PRÓXIMO ALUNO (Sucesso)
+                                st.session_state.reset_form_questoes += 1
+                                st.session_state.nome_aluno_input = ""
+                                st.session_state.freq_d = "0"
+                                st.session_state.freq_u = None
+                                st.rerun()
+                            except Exception as e:
+                                st.error("Erro ao salvar no banco de dados.")
 
         st.markdown("---")
         
@@ -1210,7 +1215,7 @@ with tab3:
                 st.info("Nenhum aluno registrado para esta turma no momento.")
 
         # ====================================================================
-        # ATA ÚNICA E EDITÁVEL POR TURMA (COM EXCLUSÃO PARA DIGITADOR)
+        # ATA ÚNICA E EDITÁVEL POR TURMA
         # ====================================================================
         st.markdown("---")
         st.markdown("#### 📋 Ata Oficial de Ocorrência da Turma")
@@ -1256,7 +1261,6 @@ with tab3:
                             st.success("✅ Ata consolidada salva com sucesso!")
                             st.rerun()
 
-                # BOTÃO DE DELETAR FORA DO FORMULÁRIO
                 if ata_texto_existente:
                     if st.button("🗑️ Excluir Ata desta Turma"):
                         supabase.table("atas_ocorrencias").delete().eq("etapa", st.session_state.config_etapa).eq("escola", st.session_state.config_escola).eq("ano_ensino", st.session_state.config_ano).eq("turma", st.session_state.config_turma).eq("turno", st.session_state.config_turno).execute()
