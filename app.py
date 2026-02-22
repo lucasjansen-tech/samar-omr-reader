@@ -17,7 +17,7 @@ import re
 from datetime import datetime
 
 # ====================================================================
-# CLASSES E FUNÇÕES DE APOIO (LIMPEZA, PADRÕES E IMAGENS)
+# CLASSES E FUNÇÕES DE APOIO
 # ====================================================================
 class MockUpload:
     def __init__(self, filepath):
@@ -75,7 +75,7 @@ if not HAS_SUPABASE: st.error("⚠️ A biblioteca supabase não está instalada
 def hash_senha(senha): return hashlib.sha256(senha.encode()).hexdigest()
 
 # ====================================================================
-# SEMEADOR DE DADOS DA NUVEM (LISTAS COMPLETAS PARA NÃO NASCER VAZIO)
+# SEMEADOR DE DADOS DA NUVEM (PARA NÃO NASCER VAZIO)
 # ====================================================================
 if usa_nuvem:
     try:
@@ -149,7 +149,7 @@ estados_padrao = {
     'config_ano': "", 'config_turma': "", 'config_turno': "",
     'freq_d': "0", 'freq_u': None, 'nome_aluno_input': "",
     'msg_erro': None, 'msg_sucesso_form': None, 'gerar_zip_digitador': False,
-    'reset_form_questoes': 0
+    'reset_form_questoes': 0 
 }
 for key, valor in estados_padrao.items():
     if key not in st.session_state: st.session_state[key] = valor
@@ -588,12 +588,12 @@ if is_admin:
                             st.download_button("📥 Baixar CSV Corrigido", df_export.to_csv(index=False, sep=";"), f"Resultados_Robo_{ano_leitor}_{turma_leitor}.csv", "text/csv", type="primary")
 
 # ====================================================================
-# ABA 4 (ADMIN): TORRE DE CONTROLE E FILTROS LIVRES
+# ABA 4 (ADMIN): TORRE DE CONTROLE (FILTROS LIVRES E EXPORTAÇÃO)
 # ====================================================================
 if is_admin:
     with tab4:
         st.markdown("### ☁️ Torre de Controle do Supabase")
-        st.info("Abaixo você tem a visão Raio-X de toda a Secretaria de Educação. Use os filtros para cruzar dados livremente e gerar relatórios por Ano de Ensino.")
+        st.info("Abaixo você tem a visão Raio-X de toda a Secretaria de Educação. Use os filtros para cruzar dados livremente e gerar relatórios.")
 
         if usa_nuvem:
             res_nuvem = supabase.table("respostas_geral").select("*").execute()
@@ -638,7 +638,7 @@ if is_admin:
 
                 if not df_final_filtro.empty:
                     turmas_turnos = df_final_filtro[['Escola', 'Etapa', 'Ano_Ensino', 'Turma', 'Turno']].drop_duplicates().values.tolist()
-                    turmas_turnos.sort(key=lambda x: (x[2], x[0], x[3])) 
+                    turmas_turnos.sort(key=lambda x: (x[2], x[0], x[3]))
                     
                     for (esc, eta_b, ano_b, tur, tur_no) in turmas_turnos:
                         with st.expander(f"🏫 {esc} | 📚 {eta_b} | {ano_b} | Turma {tur} ({tur_no})", expanded=False):
@@ -707,7 +707,7 @@ if is_admin:
                                     st.success("A turma foi apagada da nuvem instantaneamente.")
                                     st.rerun()
                 else:
-                    st.info("⬆️ Nenhum dado encontrado para o filtro selecionado.")
+                    st.info("⬆️ Nenhum aluno encontrado para o filtro selecionado.")
 
                 st.markdown("---")
                 st.markdown("#### ⚙️ Motor Inteligente de Notas & Exportação Global")
@@ -900,7 +900,7 @@ if is_admin:
                     st.rerun()
 
 # ====================================================================
-# ABA 3 COMPARTILHADA: A MÁGICA DO DIGITADOR (SEM ERRO DE TELA VERMELHA)
+# ABA 3 COMPARTILHADA: A MÁGICA DO DIGITADOR (COM PREVENÇÃO DE APAGÃO)
 # ====================================================================
 with tab3:
     nome_operador = st.session_state['nome_logado']
@@ -1029,7 +1029,15 @@ with tab3:
             with st.container(border=True):
                 st.markdown("#### 👤 Inserir Novo Cartão-Resposta")
                 
-                # Exibe a mensagem de erro (se houver) ANTES do formulário para não sumir o preenchimento
+                # INSTRUÇÕES DE PREENCHIMENTO DO DIGITADOR
+                st.info("""
+                **📌 Guia de Preenchimento:**
+                * **Branco:** Use se a bolinha do cartão físico estiver vazia.
+                * **Múltiplas:** Use se houver mais de uma letra pintada na mesma linha da questão.
+                * **Rasura:** Use se o campo estiver rasgado, manchado ou ilegível.
+                * Confira sempre se o número da Frequência bate com o papel antes de salvar!
+                """)
+                
                 if st.session_state.msg_erro:
                     st.error(st.session_state.msg_erro)
                     st.session_state.msg_erro = None
@@ -1059,7 +1067,6 @@ with tab3:
 
                 st.divider()
                 
-                # A MÁGICA QUE MANTÉM OS DADOS SALVOS NA TELA EM CASO DE ERRO
                 with st.form("form_cartao_aluno", clear_on_submit=False):
                     cols_blocos = st.columns(len(blocos_esperados_dig)) 
                     opcoes_visuais = ["A", "B", "C", "D", "Branco", "Múltiplas", "Rasura"]
@@ -1068,22 +1075,24 @@ with tab3:
                     q_num = 1
                     for i, (nome_disc, qtd_q) in enumerate(blocos_esperados_dig):
                         with cols_blocos[i]:
-                            st.markdown(f"**{nome_disc}**")
-                            for r in range(qtd_q):
-                                respostas_temp[q_num] = st.radio(f"Questão {q_num:02d}", options=opcoes_visuais, index=None, horizontal=True, key=f"q_{q_num}_{st.session_state.reset_form_questoes}")
-                                q_num += 1
+                            with st.container(border=True):
+                                st.markdown(f"**{nome_disc}**")
+                                for r in range(qtd_q):
+                                    # DIVISÃO EM QUADROS POR QUESTÃO
+                                    with st.container(border=True):
+                                        respostas_temp[q_num] = st.radio(f"Questão {q_num:02d}", options=opcoes_visuais, index=None, horizontal=True, key=f"q_{q_num}_{st.session_state.reset_form_questoes}")
+                                    q_num += 1
                                 
                     st.write("")
                     submit_aluno = st.form_submit_button("Salvar Cartão deste Aluno", type="primary", use_container_width=True)
                     
-                    # MOTOR DE SALVAMENTO DIRETO, SEM CONFLITOS DE CALLBACK
                     if submit_aluno:
                         erros = []
                         if not st.session_state.nome_aluno_input.strip(): erros.append("O campo 'Nome do Aluno' não pode ficar em branco.")
                         if st.session_state.freq_u is None: erros.append("Marque a Unidade (U) da Frequência.")
                         
                         vazias = [str(q) for q, v in respostas_temp.items() if v is None]
-                        if vazias: erros.append(f"Faltam marcar as questões: {', '.join(vazias)}.")
+                        if vazias: erros.append(f"Faltam marcar as questões: {', '.join(vazias)}. (Se o aluno não respondeu, marque a bolinha 'Branco').")
                         
                         nova_freq = str(st.session_state.freq_d) + str(st.session_state.freq_u)
                         
