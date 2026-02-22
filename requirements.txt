@@ -6,3 +6,5 @@ pdf2image
 Pillow
 reportlab
 supabase
+bcrypt
+
