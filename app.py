@@ -17,15 +17,8 @@ import re
 from datetime import datetime
 
 # ====================================================================
-# CLASSES E FUNÇÕES DE APOIO
+# FUNÇÕES DE APOIO E LIMPEZA
 # ====================================================================
-class MockUpload:
-    def __init__(self, filepath):
-        self.name = os.path.basename(filepath)
-        with open(filepath, "rb") as f: self.bytes = f.read()
-    def read(self): return self.bytes
-    def getvalue(self): return self.bytes
-
 def limpar_texto_imagem(txt):
     if not isinstance(txt, str): return ""
     txt = txt.replace('º', 'o').replace('ª', 'a').replace('°', 'o')
@@ -142,26 +135,26 @@ if not ETAPAS_ATIVAS: ETAPAS_ATIVAS = TODAS_ETAPAS
 TURMAS_DISP = ["", "A", "B", "C", "D", "E", "F", "G", "H", "Única"]
 TURNOS_DISP = ["", "Manhã", "Tarde", "Integral", "Noite"]
 
-# --- ESTADOS DA SESSÃO PERMANENTES ---
 estados_padrao = {
     'usuario_logado': None, 'nome_logado': None, 'perfil_logado': None,
     'turma_confirmada': False, 'config_etapa': "", 'config_escola': "",
     'config_ano': "", 'config_turma': "", 'config_turno': "",
     'freq_d': "0", 'freq_u': None, 'nome_aluno_input': "",
     'msg_erro': None, 'msg_sucesso_form': None, 'gerar_zip_digitador': False,
-    'reset_form_questoes': 0 
+    'reset_form_questoes': 0
 }
 for key, valor in estados_padrao.items():
     if key not in st.session_state: st.session_state[key] = valor
 
 # ====================================================================
-# GERADORES DE ARQUIVOS (PDF COM CABEÇALHO OFICIAL E ALINHAMENTO)
+# GERADORES DE ARQUIVOS (PDF COM CABEÇALHO OFICIAL)
 # ====================================================================
 def gerar_zip_gabaritos(df, conf_prova, modelo_prova, etapa_nome, ano_nome):
     id_unico = uuid.uuid4().hex
     fn_pdf = f"base_temp_{modelo_prova}_{id_unico}.pdf"
     
-    logo_file = MockUpload("Frame 18.png") if os.path.exists("Frame 18.png") else None
+    # RESOLUÇÃO DO ERRO DO GERADOR: Puxa a string direta do arquivo se ele existir
+    logo_file = "Frame 18.png" if os.path.exists("Frame 18.png") else None
     logos_dict = {'esq': None, 'cen': logo_file, 'dir': None}
     titulo_doc = str(etapa_nome).upper() if etapa_nome else conf_prova.titulo_prova
     sub_doc = f"Série/Ano: {ano_nome}" if ano_nome else conf_prova.subtitulo
@@ -456,7 +449,10 @@ if is_admin:
         with col_fmt2:
             st.write("")
             if st.button("Gerar Arquivo Pronto para Impressão", type="primary", use_container_width=True):
-                if logo_cen is None and os.path.exists("Frame 18.png"): logo_cen = MockUpload("Frame 18.png")
+                
+                # RESOLUÇÃO DO ERRO DO GERADOR AQUI TAMBÉM
+                if logo_cen is None and os.path.exists("Frame 18.png"): 
+                    logo_cen = "Frame 18.png"
                     
                 logos_dict = {'esq': logo_esq, 'cen': logo_cen, 'dir': logo_dir}
                 titulo_final = custom_titulo if custom_titulo else sel_etapa_gerador.upper()
@@ -588,7 +584,7 @@ if is_admin:
                             st.download_button("📥 Baixar CSV Corrigido", df_export.to_csv(index=False, sep=";"), f"Resultados_Robo_{ano_leitor}_{turma_leitor}.csv", "text/csv", type="primary")
 
 # ====================================================================
-# ABA 4 (ADMIN): TORRE DE CONTROLE (FILTROS LIVRES E EXPORTAÇÃO)
+# ABA 4 (ADMIN): TORRE DE CONTROLE E EXPORTAÇÃO
 # ====================================================================
 if is_admin:
     with tab4:
@@ -638,7 +634,7 @@ if is_admin:
 
                 if not df_final_filtro.empty:
                     turmas_turnos = df_final_filtro[['Escola', 'Etapa', 'Ano_Ensino', 'Turma', 'Turno']].drop_duplicates().values.tolist()
-                    turmas_turnos.sort(key=lambda x: (x[2], x[0], x[3]))
+                    turmas_turnos.sort(key=lambda x: (x[2], x[0], x[3])) 
                     
                     for (esc, eta_b, ano_b, tur, tur_no) in turmas_turnos:
                         with st.expander(f"🏫 {esc} | 📚 {eta_b} | {ano_b} | Turma {tur} ({tur_no})", expanded=False):
@@ -900,7 +896,7 @@ if is_admin:
                     st.rerun()
 
 # ====================================================================
-# ABA 3 COMPARTILHADA: A MÁGICA DO DIGITADOR (COM PREVENÇÃO DE APAGÃO)
+# ABA 3 COMPARTILHADA: A MÁGICA DO DIGITADOR 
 # ====================================================================
 with tab3:
     nome_operador = st.session_state['nome_logado']
@@ -1029,13 +1025,11 @@ with tab3:
             with st.container(border=True):
                 st.markdown("#### 👤 Inserir Novo Cartão-Resposta")
                 
-                # INSTRUÇÕES DE PREENCHIMENTO DO DIGITADOR
                 st.info("""
-                **📌 Guia de Preenchimento:**
+                **📌 Guia de Preenchimento Rápido:**
                 * **Branco:** Use se a bolinha do cartão físico estiver vazia.
                 * **Múltiplas:** Use se houver mais de uma letra pintada na mesma linha da questão.
                 * **Rasura:** Use se o campo estiver rasgado, manchado ou ilegível.
-                * Confira sempre se o número da Frequência bate com o papel antes de salvar!
                 """)
                 
                 if st.session_state.msg_erro:
@@ -1078,7 +1072,6 @@ with tab3:
                             with st.container(border=True):
                                 st.markdown(f"**{nome_disc}**")
                                 for r in range(qtd_q):
-                                    # DIVISÃO EM QUADROS POR QUESTÃO
                                     with st.container(border=True):
                                         respostas_temp[q_num] = st.radio(f"Questão {q_num:02d}", options=opcoes_visuais, index=None, horizontal=True, key=f"q_{q_num}_{st.session_state.reset_form_questoes}")
                                     q_num += 1
