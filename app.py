@@ -17,8 +17,15 @@ import re
 from datetime import datetime
 
 # ====================================================================
-# FUNÇÕES DE APOIO E LIMPEZA
+# CLASSES E FUNÇÕES DE APOIO (LIMPEZA, PADRÕES E IMAGENS)
 # ====================================================================
+class MockUpload:
+    def __init__(self, filepath):
+        self.name = os.path.basename(filepath)
+        with open(filepath, "rb") as f: self.bytes = f.read()
+    def read(self): return self.bytes
+    def getvalue(self): return self.bytes
+
 def limpar_texto_imagem(txt):
     if not isinstance(txt, str): return ""
     txt = txt.replace('º', 'o').replace('ª', 'a').replace('°', 'o')
@@ -68,7 +75,7 @@ if not HAS_SUPABASE: st.error("⚠️ A biblioteca supabase não está instalada
 def hash_senha(senha): return hashlib.sha256(senha.encode()).hexdigest()
 
 # ====================================================================
-# SEMEADOR DE DADOS DA NUVEM (PARA NÃO NASCER VAZIO)
+# SEMEADOR DE DADOS DA NUVEM (LISTAS COMPLETAS PARA NÃO NASCER VAZIO)
 # ====================================================================
 if usa_nuvem:
     try:
@@ -135,25 +142,25 @@ if not ETAPAS_ATIVAS: ETAPAS_ATIVAS = TODAS_ETAPAS
 TURMAS_DISP = ["", "A", "B", "C", "D", "E", "F", "G", "H", "Única"]
 TURNOS_DISP = ["", "Manhã", "Tarde", "Integral", "Noite"]
 
+# --- ESTADOS DA SESSÃO PERMANENTES ---
 estados_padrao = {
     'usuario_logado': None, 'nome_logado': None, 'perfil_logado': None,
     'turma_confirmada': False, 'config_etapa': "", 'config_escola': "",
     'config_ano': "", 'config_turma': "", 'config_turno': "",
-    'freq_d': "0", 'freq_u': None, 'nome_aluno_input': "",
     'msg_erro': None, 'msg_sucesso_form': None, 'gerar_zip_digitador': False,
-    'reset_form_questoes': 0
+    'reset_form_questoes': 0,
+    'pending_overwrite': None # <--- Nova trava para o aviso de substituição
 }
 for key, valor in estados_padrao.items():
     if key not in st.session_state: st.session_state[key] = valor
 
 # ====================================================================
-# GERADORES DE ARQUIVOS (PDF COM CABEÇALHO OFICIAL)
+# GERADORES DE ARQUIVOS (PDF COM CABEÇALHO OFICIAL E ALINHAMENTO FINO)
 # ====================================================================
 def gerar_zip_gabaritos(df, conf_prova, modelo_prova, etapa_nome, ano_nome):
     id_unico = uuid.uuid4().hex
     fn_pdf = f"base_temp_{modelo_prova}_{id_unico}.pdf"
     
-    # RESOLUÇÃO DO ERRO DO GERADOR: Puxa a string direta do arquivo se ele existir
     logo_file = "Frame 18.png" if os.path.exists("Frame 18.png") else None
     logos_dict = {'esq': None, 'cen': logo_file, 'dir': None}
     titulo_doc = str(etapa_nome).upper() if etapa_nome else conf_prova.titulo_prova
@@ -450,7 +457,6 @@ if is_admin:
             st.write("")
             if st.button("Gerar Arquivo Pronto para Impressão", type="primary", use_container_width=True):
                 
-                # RESOLUÇÃO DO ERRO DO GERADOR AQUI TAMBÉM
                 if logo_cen is None and os.path.exists("Frame 18.png"): 
                     logo_cen = "Frame 18.png"
                     
@@ -584,7 +590,7 @@ if is_admin:
                             st.download_button("📥 Baixar CSV Corrigido", df_export.to_csv(index=False, sep=";"), f"Resultados_Robo_{ano_leitor}_{turma_leitor}.csv", "text/csv", type="primary")
 
 # ====================================================================
-# ABA 4 (ADMIN): TORRE DE CONTROLE E EXPORTAÇÃO
+# ABA 4 (ADMIN): TORRE DE CONTROLE (FILTROS E EXPORTAÇÃO)
 # ====================================================================
 if is_admin:
     with tab4:
@@ -1022,100 +1028,156 @@ with tab3:
             st.error("🔒 **TURMA BLOQUEADA PELA COORDENAÇÃO:** O boletim desta turma já foi gerado.")
 
         if not turma_esta_bloqueada:
-            with st.container(border=True):
-                st.markdown("#### 👤 Inserir Novo Cartão-Resposta")
+            
+            # ---------------------------------------------------------------------
+            # NOVO MÓDULO: ALERTA DE SUBSTITUIÇÃO
+            # ---------------------------------------------------------------------
+            if st.session_state.get('pending_overwrite'):
+                st.warning(f"⚠️ **ATENÇÃO: ALUNO DUPLICADO DETECTADO!**")
+                st.write(f"Já existe um aluno na turma com a Frequência **'{st.session_state.pending_overwrite['dados']['frequencia']}'** ou com o Nome **'{st.session_state.pending_overwrite['dados']['nome_aluno']}'**.")
                 
-                st.info("""
-                **📌 Guia de Preenchimento Rápido:**
-                * **Branco:** Use se a bolinha do cartão físico estiver vazia.
-                * **Múltiplas:** Use se houver mais de uma letra pintada na mesma linha da questão.
-                * **Rasura:** Use se o campo estiver rasgado, manchado ou ilegível.
-                """)
-                
-                if st.session_state.msg_erro:
-                    st.error(st.session_state.msg_erro)
-                    st.session_state.msg_erro = None
-                if st.session_state.msg_sucesso_form:
-                    st.success(st.session_state.msg_sucesso_form)
-                    st.session_state.msg_sucesso_form = None
-
-                if "freq_d" not in st.session_state: st.session_state.freq_d = "0"
-                if "freq_u" not in st.session_state: st.session_state.freq_u = None
-                if "nome_aluno_input" not in st.session_state: st.session_state.nome_aluno_input = ""
-
-                st.text_input("Nome do Aluno:", max_chars=100, key="nome_aluno_input")
-                st.divider()
-
-                col_f1, col_f2, col_f3 = st.columns([2, 2, 1])
-                with col_f1: st.radio("Dezena (D):", ["0","1","2","3","4","5","6","7","8","9"], horizontal=True, key="freq_d")
-                with col_f2: st.radio("Unidade (U):", ["0","1","2","3","4","5","6","7","8","9"], horizontal=True, key="freq_u")
-                with col_f3:
-                    u_val = st.session_state.freq_u if st.session_state.freq_u else "_"
-                    d_val = st.session_state.freq_d if st.session_state.freq_d else "0"
-                    st.markdown(
-                        f"<div style='text-align: center; border: 2px dashed #0d6efd; border-radius: 10px; padding: 10px;'>"
-                        f"<p style='margin:0; font-size: 14px; font-weight: bold;'>Número:</p>"
-                        f"<h1 style='margin:0; font-size: 3.5rem; color: #0d6efd;'>{d_val}{u_val}</h1>"
-                        f"</div>", unsafe_allow_html=True
-                    )
-
-                st.divider()
-                
-                with st.form("form_cartao_aluno", clear_on_submit=False):
-                    cols_blocos = st.columns(len(blocos_esperados_dig)) 
-                    opcoes_visuais = ["A", "B", "C", "D", "Branco", "Múltiplas", "Rasura"]
-                    
-                    respostas_temp = {}
-                    q_num = 1
-                    for i, (nome_disc, qtd_q) in enumerate(blocos_esperados_dig):
-                        with cols_blocos[i]:
-                            with st.container(border=True):
-                                st.markdown(f"**{nome_disc}**")
-                                for r in range(qtd_q):
-                                    with st.container(border=True):
-                                        respostas_temp[q_num] = st.radio(f"Questão {q_num:02d}", options=opcoes_visuais, index=None, horizontal=True, key=f"q_{q_num}_{st.session_state.reset_form_questoes}")
-                                    q_num += 1
+                c_sub, c_can = st.columns(2)
+                with c_sub:
+                    if st.button("🔄 Substituir Dados Antigos por Estes", type="primary", use_container_width=True):
+                        try:
+                            # Apaga os antigos conflitantes
+                            for d_id in st.session_state.pending_overwrite['ids_to_replace']:
+                                supabase.table("respostas_geral").delete().eq("id", d_id).execute()
+                            
+                            # Salva o novo
+                            novo_aluno_db = st.session_state.pending_overwrite['dados']
+                            novo_aluno_db["id"] = str(uuid.uuid4())
+                            supabase.table("respostas_geral").insert([novo_aluno_db]).execute()
+                            
+                            st.session_state.msg_sucesso_form = f"✅ Aluno substituído com sucesso!"
+                            st.session_state.reset_form_questoes += 1
+                            st.session_state.pending_overwrite = None
+                            
+                            # Limpeza total via deleção de keys dinâmicas do cache
+                            for key_to_clear in [f"nome_aluno_input_{st.session_state.reset_form_questoes - 1}", 
+                                                 f"freq_d_{st.session_state.reset_form_questoes - 1}", 
+                                                 f"freq_u_{st.session_state.reset_form_questoes - 1}"]:
+                                if key_to_clear in st.session_state: del st.session_state[key_to_clear]
                                 
-                    st.write("")
-                    submit_aluno = st.form_submit_button("Salvar Cartão deste Aluno", type="primary", use_container_width=True)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao substituir: {e}")
+                with c_can:
+                    if st.button("❌ Cancelar e Corrigir os Dados Atuais", use_container_width=True):
+                        st.session_state.pending_overwrite = None
+                        st.rerun()
+            else:
+                with st.container(border=True):
+                    st.markdown("#### 👤 Inserir Novo Cartão-Resposta")
                     
-                    if submit_aluno:
-                        erros = []
-                        if not st.session_state.nome_aluno_input.strip(): erros.append("O campo 'Nome do Aluno' não pode ficar em branco.")
-                        if st.session_state.freq_u is None: erros.append("Marque a Unidade (U) da Frequência.")
+                    st.info("""
+                    **📌 Guia de Preenchimento Rápido:**
+                    * **Branco:** Use se a bolinha do cartão físico estiver vazia.
+                    * **Múltiplas:** Use se houver mais de uma letra pintada na mesma linha da questão.
+                    * **Rasura:** Use se o campo estiver rasgado, manchado ou ilegível.
+                    """)
+                    
+                    if st.session_state.msg_erro:
+                        st.error(st.session_state.msg_erro)
+                        st.session_state.msg_erro = None
+                    if st.session_state.msg_sucesso_form:
+                        st.success(st.session_state.msg_sucesso_form)
+                        st.session_state.msg_sucesso_form = None
+
+                    # CHAVES DINÂMICAS PARA LIMPEZA PERFEITA
+                    nome_key = f"nome_aluno_input_{st.session_state.reset_form_questoes}"
+                    freq_d_key = f"freq_d_{st.session_state.reset_form_questoes}"
+                    freq_u_key = f"freq_u_{st.session_state.reset_form_questoes}"
+
+                    if nome_key not in st.session_state: st.session_state[nome_key] = ""
+                    if freq_d_key not in st.session_state: st.session_state[freq_d_key] = "0"
+                    if freq_u_key not in st.session_state: st.session_state[freq_u_key] = None
+
+                    st.text_input("Nome do Aluno:", max_chars=100, key=nome_key)
+                    st.divider()
+
+                    col_f1, col_f2, col_f3 = st.columns([2, 2, 1])
+                    with col_f1: st.radio("Dezena (D):", ["0","1","2","3","4","5","6","7","8","9"], horizontal=True, key=freq_d_key)
+                    with col_f2: st.radio("Unidade (U):", ["0","1","2","3","4","5","6","7","8","9"], horizontal=True, key=freq_u_key)
+                    with col_f3:
+                        u_val = st.session_state[freq_u_key] if st.session_state[freq_u_key] else "_"
+                        d_val = st.session_state[freq_d_key] if st.session_state[freq_d_key] else "0"
+                        st.markdown(
+                            f"<div style='text-align: center; border: 2px dashed #0d6efd; border-radius: 10px; padding: 10px;'>"
+                            f"<p style='margin:0; font-size: 14px; font-weight: bold;'>Número:</p>"
+                            f"<h1 style='margin:0; font-size: 3.5rem; color: #0d6efd;'>{d_val}{u_val}</h1>"
+                            f"</div>", unsafe_allow_html=True
+                        )
+
+                    st.divider()
+                    with st.form("form_cartao_aluno", clear_on_submit=False):
+                        cols_blocos = st.columns(len(blocos_esperados_dig)) 
+                        opcoes_visuais = ["A", "B", "C", "D", "Branco", "Múltiplas", "Rasura"]
                         
-                        vazias = [str(q) for q, v in respostas_temp.items() if v is None]
-                        if vazias: erros.append(f"Faltam marcar as questões: {', '.join(vazias)}. (Se o aluno não respondeu, marque a bolinha 'Branco').")
+                        respostas_temp = {}
+                        q_num = 1
+                        for i, (nome_disc, qtd_q) in enumerate(blocos_esperados_dig):
+                            with cols_blocos[i]:
+                                with st.container(border=True):
+                                    st.markdown(f"**{nome_disc}**")
+                                    for r in range(qtd_q):
+                                        with st.container(border=True):
+                                            respostas_temp[q_num] = st.radio(f"Questão {q_num:02d}", options=opcoes_visuais, index=None, horizontal=True, key=f"q_{q_num}_{st.session_state.reset_form_questoes}")
+                                        q_num += 1
+                                    
+                        st.write("")
+                        submit_aluno = st.form_submit_button("Salvar Cartão deste Aluno", type="primary", use_container_width=True)
                         
-                        nova_freq = str(st.session_state.freq_d) + str(st.session_state.freq_u)
-                        
-                        if not erros and usa_nuvem:
-                            res_check_dup = supabase.table("respostas_geral").select("frequencia").eq("etapa", st.session_state.config_etapa).eq("escola", st.session_state.config_escola).eq("ano_ensino", st.session_state.config_ano).eq("turma", st.session_state.config_turma).eq("turno", st.session_state.config_turno).execute()
-                            if res_check_dup.data and nova_freq in [x['frequencia'] for x in res_check_dup.data]:
-                                erros.append(f"Já existe um aluno na tabela com a Frequência '{nova_freq}'. Exclua o antigo ou mude o número.")
-                        
-                        if erros:
-                            for e in erros: st.error(f"⚠️ {e}")
-                        else:
-                            resp_str = "".join([mapa_valores_global[respostas_temp[q]] for q in range(1, q_esperadas_dig + 1)])
-                            novo_dado = {
-                                "id": str(uuid.uuid4()),
-                                "etapa": st.session_state.config_etapa, "escola": st.session_state.config_escola, 
-                                "ano_ensino": st.session_state.config_ano, "turma": st.session_state.config_turma, 
-                                "turno": st.session_state.config_turno, "frequencia": nova_freq, 
-                                "nome_aluno": st.session_state.nome_aluno_input, "respostas_brutas": resp_str, 
-                                "digitador": nome_operador, "status": "Aberto"
-                            }
-                            try:
-                                supabase.table("respostas_geral").insert([novo_dado]).execute()
-                                st.session_state.msg_sucesso_form = f"✅ Aluno {st.session_state.nome_aluno_input} (Freq: {nova_freq}) salvo com sucesso!"
-                                st.session_state.reset_form_questoes += 1
-                                st.session_state.nome_aluno_input = ""
-                                st.session_state.freq_d = "0"
-                                st.session_state.freq_u = None
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Erro ao salvar no banco de dados: {e}")
+                        if submit_aluno:
+                            erros = []
+                            nome_inserido = st.session_state[nome_key]
+                            freq_u_inserida = st.session_state[freq_u_key]
+                            freq_d_inserida = st.session_state[freq_d_key]
+                            
+                            if not nome_inserido.strip(): erros.append("O campo 'Nome do Aluno' não pode ficar em branco.")
+                            if freq_u_inserida is None: erros.append("Marque a Unidade (U) da Frequência.")
+                            
+                            vazias = [str(q) for q, v in respostas_temp.items() if v is None]
+                            if vazias: erros.append(f"Faltam marcar as questões: {', '.join(vazias)}. (Se o aluno não respondeu, marque a bolinha 'Branco').")
+                            
+                            nova_freq = str(freq_d_inserida) + str(freq_u_inserida)
+                            
+                            if not erros and usa_nuvem:
+                                resp_str = "".join([mapa_valores_global[respostas_temp[q]] for q in range(1, q_esperadas_dig + 1)])
+                                novo_dado = {
+                                    "etapa": st.session_state.config_etapa, "escola": st.session_state.config_escola, 
+                                    "ano_ensino": st.session_state.config_ano, "turma": st.session_state.config_turma, 
+                                    "turno": st.session_state.config_turno, "frequencia": nova_freq, 
+                                    "nome_aluno": nome_inserido, "respostas_brutas": resp_str, 
+                                    "digitador": nome_operador, "status": "Aberto"
+                                }
+                                
+                                res_check_dup = supabase.table("respostas_geral").select("id, frequencia, nome_aluno").eq("etapa", st.session_state.config_etapa).eq("escola", st.session_state.config_escola).eq("ano_ensino", st.session_state.config_ano).eq("turma", st.session_state.config_turma).eq("turno", st.session_state.config_turno).execute()
+                                
+                                dup_ids = []
+                                if res_check_dup.data:
+                                    for r in res_check_dup.data:
+                                        if r['frequencia'] == nova_freq or r['nome_aluno'].strip().lower() == nome_inserido.strip().lower():
+                                            dup_ids.append(r['id'])
+                                
+                                if dup_ids:
+                                    # CHAMA O POPUP DE SUBSTITUIÇÃO EM VEZ DE DAR ERRO
+                                    st.session_state.pending_overwrite = {"dados": novo_dado, "ids_to_replace": dup_ids}
+                                    st.rerun()
+                                else:
+                                    novo_dado["id"] = str(uuid.uuid4())
+                                    try:
+                                        supabase.table("respostas_geral").insert([novo_dado]).execute()
+                                        st.session_state.msg_sucesso_form = f"✅ Aluno {nome_inserido} (Freq: {nova_freq}) salvo com sucesso!"
+                                        st.session_state.reset_form_questoes += 1
+                                        if nome_key in st.session_state: del st.session_state[nome_key]
+                                        if freq_d_key in st.session_state: del st.session_state[freq_d_key]
+                                        if freq_u_key in st.session_state: del st.session_state[freq_u_key]
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Erro ao salvar no banco de dados: {e}")
+                            elif erros:
+                                for e in erros: st.error(f"⚠️ {e}")
 
         st.markdown("---")
         
