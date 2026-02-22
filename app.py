@@ -76,12 +76,18 @@ if HAS_SUPABASE:
 if not HAS_SUPABASE: st.error("⚠️ A biblioteca supabase não está instalada.")
 
 # ====================================================================
-# INICIALIZAÇÃO DE BANCOS DE DADOS LOCAIS
+# INICIALIZAÇÃO DE BANCOS DE DADOS LOCAIS (LISTAS COMPLETAS RESTAURADAS)
 # ====================================================================
 def hash_senha(senha): return hashlib.sha256(senha.encode()).hexdigest()
 
 DB_USUARIOS = "usuarios_samar.csv"
 if not os.path.exists(DB_USUARIOS): pd.DataFrame([{"Nome": "Coordenação Master", "Email": "admin", "Senha": hash_senha("coted2026"), "Perfil": "Administrador"}]).to_csv(DB_USUARIOS, index=False, sep=";")
+else:
+    df_check = pd.read_csv(DB_USUARIOS, sep=";", dtype=str)
+    if 'Perfil' not in df_check.columns:
+        df_check['Perfil'] = 'Digitador'
+        df_check.loc[0, 'Perfil'] = 'Administrador' 
+        df_check.to_csv(DB_USUARIOS, index=False, sep=";")
 
 DB_OCORRENCIAS = "atas_ocorrencias_samar.csv"
 if not os.path.exists(DB_OCORRENCIAS): pd.DataFrame(columns=["etapa", "Data_Registro", "Escola", "Ano_Ensino", "Turma", "Turno", "Aplicador", "Revisor_Digitador", "Ocorrencia"]).to_csv(DB_OCORRENCIAS, index=False, sep=";")
@@ -96,14 +102,26 @@ if not os.path.exists(DB_ESCOLAS):
         "UNIDADE INTEGRADA PROFESSORA MARIA ROSA REIS TRINDADE", "UNIDADE INTEGRADA RURAL BOA ESPERANÇA",
         "UNIDADE INTEGRADA SANTO ANTÔNIO", "UNIDADE INTEGRADA SARNEY FILHO"
     ]
-   pd.DataFrame([{"Nome_Escola": e} for e in escolas_iniciais]).to_csv(DB_ESCOLAS, index=False, sep=";")
+    pd.DataFrame([{"Nome_Escola": e} for e in escolas_iniciais]).to_csv(DB_ESCOLAS, index=False, sep=";")
 
 DB_ANOS = "anos_ensino_samar.csv"
 if not os.path.exists(DB_ANOS):
     anos_iniciais = ["1º Ano", "2º Ano", "3º Ano", "4º Ano", "5º Ano", "6º Ano", "7º Ano", "8º Ano", "9º Ano"]
     pd.DataFrame([{"Ano_Ensino": a} for a in anos_iniciais]).to_csv(DB_ANOS, index=False, sep=";")
+
 DB_ETAPAS = "etapas_samar.csv"
-if not os.path.exists(DB_ETAPAS): pd.DataFrame([{"Nome_Etapa": "Avaliação Diagnóstica", "Data_Abertura": "2020-01-01", "Data_Limite": "2030-12-31"}]).to_csv(DB_ETAPAS, index=False, sep=";")
+if not os.path.exists(DB_ETAPAS): 
+    pd.DataFrame([{"Nome_Etapa": "Avaliação Diagnóstica", "Data_Abertura": "2020-01-01", "Data_Limite": "2030-12-31"}]).to_csv(DB_ETAPAS, index=False, sep=";")
+else:
+    df_e = pd.read_csv(DB_ETAPAS, sep=";", dtype=str)
+    mudou = False
+    if "Data_Limite" not in df_e.columns:
+        df_e["Data_Limite"] = "2030-12-31"
+        mudou = True
+    if "Data_Abertura" not in df_e.columns:
+        df_e["Data_Abertura"] = "2020-01-01"
+        mudou = True
+    if mudou: df_e.to_csv(DB_ETAPAS, index=False, sep=";")
 
 df_esc_lida = pd.read_csv(DB_ESCOLAS, sep=";", dtype=str)
 ESCOLAS_SAMAR = [""] + df_esc_lida['Nome_Escola'].dropna().tolist()
@@ -140,12 +158,13 @@ if usa_nuvem:
             for item in res_gabs.data: dict_gabaritos_mestres[(item['etapa'], item['ano_ensino'])] = str(item['gabarito']).upper().strip()
     except: pass
 
+# --- ESTADOS DA SESSÃO PERMANENTES ---
 estados_padrao = {
     'usuario_logado': None, 'nome_logado': None, 'perfil_logado': None,
     'turma_confirmada': False, 'config_etapa': "", 'config_escola': "",
     'config_ano': "", 'config_turma': "", 'config_turno': "",
     'freq_d': "0", 'freq_u': "0", 'nome_aluno_input': "",
-    'msg_erro': None, 'msg_sucesso': None
+    'msg_erro': None, 'msg_sucesso': None, 'gerar_zip_digitador': False
 }
 for key, valor in estados_padrao.items():
     if key not in st.session_state: st.session_state[key] = valor
@@ -160,7 +179,7 @@ def gerar_zip_gabaritos(df, conf_prova, modelo_prova, etapa_nome, ano_nome):
     # Injeta a Logo e os Títulos Oficiais no PDF Branco antes de carimbar os dados
     logo_file = MockUpload("Frame 18.png") if os.path.exists("Frame 18.png") else None
     logos_dict = {'esq': None, 'cen': logo_file, 'dir': None}
-    titulo_doc = etapa_nome.upper() if etapa_nome else conf_prova.titulo_prova
+    titulo_doc = str(etapa_nome).upper() if etapa_nome else conf_prova.titulo_prova
     sub_doc = f"Série/Ano: {ano_nome}" if ano_nome else conf_prova.subtitulo
     
     gerar_pdf(conf_prova, fn_pdf, titulo_doc, sub_doc, logos_dict)
@@ -193,12 +212,12 @@ def gerar_zip_gabaritos(df, conf_prova, modelo_prova, etapa_nome, ano_nome):
             espessura = 2
             h, w = conf_prova.REF_H, conf_prova.REF_W
             
-            # MATEMÁTICA DO ESPAÇO MILIMÉTRICO (Sentado na linha pontilhada)
-            cv2.putText(img_aluno, escola, (int(w * 0.25), int(h * 0.146)), fonte, escala, cor_caneta, espessura)
-            cv2.putText(img_aluno, ano, (int(w * 0.10), int(h * 0.178)), fonte, escala, cor_caneta, espessura)
-            cv2.putText(img_aluno, turma, (int(w * 0.38), int(h * 0.178)), fonte, escala, cor_caneta, espessura)
-            cv2.putText(img_aluno, turno, (int(w * 0.63), int(h * 0.178)), fonte, escala, cor_caneta, espessura)
-            cv2.putText(img_aluno, nome, (int(w * 0.10), int(h * 0.213)), fonte, escala, cor_caneta, espessura)
+            # MATEMÁTICA DO ESPAÇO MILIMÉTRICO (Sentado na linha pontilhada, evitando rótulos)
+            cv2.putText(img_aluno, escola, (int(w * 0.28), int(h * 0.146)), fonte, escala, cor_caneta, espessura)
+            cv2.putText(img_aluno, ano, (int(w * 0.12), int(h * 0.178)), fonte, escala, cor_caneta, espessura)
+            cv2.putText(img_aluno, turma, (int(w * 0.42), int(h * 0.178)), fonte, escala, cor_caneta, espessura)
+            cv2.putText(img_aluno, turno, (int(w * 0.67), int(h * 0.178)), fonte, escala, cor_caneta, espessura)
+            cv2.putText(img_aluno, nome, (int(w * 0.12), int(h * 0.213)), fonte, escala, cor_caneta, espessura)
             cv2.putText(img_aluno, freq, (int(w * 0.89), int(h * 0.213)), fonte, escala, cor_caneta, espessura)
             
             for grid in conf_prova.grids:
@@ -321,8 +340,19 @@ if is_admin:
         with st.container(border=True):
             st.markdown("#### 📅 1. Definir Ciclos e Prazos de Acesso")
             df_etapas_edit = pd.read_csv(DB_ETAPAS, sep=";", dtype=str)
-            edited_etapas = st.data_editor(df_etapas_edit, num_rows="dynamic", use_container_width=True, key="ed_etp")
+            df_etapas_edit['Data_Abertura'] = pd.to_datetime(df_etapas_edit['Data_Abertura'], dayfirst=True, errors='coerce').dt.date
+            df_etapas_edit['Data_Abertura'] = df_etapas_edit['Data_Abertura'].fillna(datetime(2020, 1, 1).date())
+            df_etapas_edit['Data_Limite'] = pd.to_datetime(df_etapas_edit['Data_Limite'], dayfirst=True, errors='coerce').dt.date
+            df_etapas_edit['Data_Limite'] = df_etapas_edit['Data_Limite'].fillna(datetime(2030, 12, 31).date())
+            
+            edited_etapas = st.data_editor(
+                df_etapas_edit,
+                column_config={"Nome_Etapa": st.column_config.TextColumn("Nome do Ciclo", required=True), "Data_Abertura": st.column_config.DateColumn("Abertura", format="DD/MM/YYYY"), "Data_Limite": st.column_config.DateColumn("Prazo Final", format="DD/MM/YYYY")},
+                num_rows="dynamic", use_container_width=True, key="ed_etp"
+            )
             if st.button("💾 Salvar Ciclos e Prazos", type="primary"):
+                edited_etapas['Data_Abertura'] = edited_etapas['Data_Abertura'].apply(lambda x: x.strftime('%Y-%m-%d') if pd.notna(x) else '2020-01-01')
+                edited_etapas['Data_Limite'] = edited_etapas['Data_Limite'].apply(lambda x: x.strftime('%Y-%m-%d') if pd.notna(x) else '2030-12-31')
                 edited_etapas.to_csv(DB_ETAPAS, index=False, sep=";")
                 st.success("Ciclos atualizados!")
                 st.rerun()
@@ -331,6 +361,7 @@ if is_admin:
         
         with st.container(border=True):
             st.markdown("#### 🔑 2. Atribuir Gabaritos Mestres por Ciclo")
+            
             c_gab1, c_gab2 = st.columns(2)
             with c_gab1: sel_eta_gab = st.selectbox("Selecione o Ciclo:", TODAS_ETAPAS, key="sel_eta_gab")
             with c_gab2: sel_ano_gab = st.selectbox("Selecione o Ano de Ensino Avaliado:", ANOS_ENSINO, key="sel_ano_gab")
@@ -387,7 +418,7 @@ if is_admin:
                 st.rerun()
 
 # ====================================================================
-# ABA 1: GERADOR DE PDF (CABEÇALHO OFICIAL INJETADO)
+# ABA 1: GERADOR DE PDF
 # ====================================================================
 if is_admin:
     with tab1:
@@ -407,13 +438,12 @@ if is_admin:
         with col_fmt2:
             st.write("")
             if st.button("Gerar Arquivo Pronto para Impressão", type="primary", use_container_width=True):
-                # Se não subir a logo central, tenta pegar a Frame 18.png oficial do sistema
+                
+                # Se não subir a logo central, usa a oficial automaticamente
                 if logo_cen is None and os.path.exists("Frame 18.png"):
                     logo_cen = MockUpload("Frame 18.png")
                     
                 logos_dict = {'esq': logo_esq, 'cen': logo_cen, 'dir': logo_dir}
-                
-                # Nomes automatizados para injetar no cabeçalho se o admin não digitar nada
                 titulo_final = custom_titulo if custom_titulo else sel_etapa_gerador.upper()
                 
                 ext = fmt.split()[0].lower()
@@ -535,7 +565,7 @@ if is_admin:
                             st.download_button("📥 Baixar CSV Corrigido", df_export.to_csv(index=False, sep=";"), f"Resultados_Robo_{ano_leitor}_{turma_leitor}.csv", "text/csv", type="primary")
 
 # ====================================================================
-# ABA 4 (ADMIN): TORRE DE CONTROLE (FILTROS INTELIGENTES LIVRES)
+# ABA 4 (ADMIN): TORRE DE CONTROLE (FILTROS CRUZADOS LIVRES E EXPORTAÇÃO)
 # ====================================================================
 if is_admin:
     with tab4:
@@ -609,8 +639,8 @@ if is_admin:
                                         st.rerun()
                             
                             with c_lock3:
-                                # EXPORTAÇÃO DOS GABARITOS DIGITAIS PARA A COORDENAÇÃO
-                                if st.button(f"🖼️ Baixar Gabaritos (ZIP)", key=f"zip_{eta_b}_{esc}_{ano_b}_{tur}_{tur_no}"):
+                                # EXPORTAÇÃO DOS GABARITOS DIGITAIS PARA A COORDENAÇÃO (Com Cabeçalho Injetado)
+                                if st.button(f"🖼️ Baixar Gabaritos em PDF/JPG", key=f"zip_{eta_b}_{esc}_{ano_b}_{tur}_{tur_no}"):
                                     with st.spinner("Desenhando gabaritos..."):
                                         zip_adm = gerar_zip_gabaritos(df_tur, conf, modelo, eta_b, ano_b)
                                         st.download_button("📥 Clique aqui para salvar", zip_adm, f"Gabaritos_{esc}_{ano_b}_{tur}.zip", "application/zip", type="primary", key=f"d_zip_{eta_b}_{esc}_{ano_b}_{tur}")
@@ -651,7 +681,8 @@ if is_admin:
                                     st.success("A turma foi apagada da nuvem instantaneamente.")
                                     st.rerun()
                 else:
-                    st.info("⬆️ A base de dados não encontrou nenhum aluno para o filtro atual.")
+                    if sel_etapa_admin:
+                        st.info("⬆️ Nenhum aluno encontrado para o filtro atual.")
 
                 st.markdown("---")
                 st.markdown("#### ⚙️ Motor Inteligente de Notas & Exportação Global")
@@ -801,7 +832,7 @@ if is_admin:
             else: st.success("Nenhuma ocorrência na nuvem.")
 
 # ====================================================================
-# ABA 3 COMPARTILHADA: A MÁGICA DO DIGITADOR E ATA ÚNICA EDITÁVEL
+# ABA 3 COMPARTILHADA: A MÁGICA DO DIGITADOR (SEM ERRO DE TELA E COM EXPORTAÇÃO CSV)
 # ====================================================================
 with tab3:
     nome_operador = st.session_state['nome_logado']
@@ -872,7 +903,6 @@ with tab3:
                             st.session_state.msg_erro = "⚠️ Preencha todos os campos obrigatórios da turma!"
                             st.rerun()
                         else:
-                            # BLOQUEIO DE PADRÃO PARA O DIGITADOR
                             q_esperadas_check, _ = get_padrao_por_ano(s_ano)
                             if total_q_global != q_esperadas_check:
                                 st.session_state.msg_erro = f"❌ O **{s_ano}** exige {q_esperadas_check} questões. Por favor, mude o 'Modelo da Prova' no menu superior da página para continuar."
@@ -883,7 +913,7 @@ with tab3:
                                 if check_exist.data:
                                     dono = check_exist.data[0]['digitador']
                                     if dono != nome_operador:
-                                        st.session_state.msg_erro = f"⚠️ COLISÃO DE DADOS: A turma {s_turma} ({s_turno}) já foi iniciada pelo usuário '{dono}'. Você não pode duplicar uma turma da rede."
+                                        st.session_state.msg_erro = f"⚠️ COLISÃO DE DADOS: A turma {s_turma} ({s_turno}) já foi iniciada pelo usuário '{dono}'."
                                         st.rerun()
                                     else:
                                         st.session_state.msg_erro = f"⚠️ AVISO: Você já iniciou essa turma anteriormente! Vá para a aba 'Buscar do Meu Histórico'."
@@ -932,8 +962,8 @@ with tab3:
                                         st.rerun()
                             with c_hist_sync:
                                 if st.button("🔄 Sincronizar", use_container_width=True): st.rerun()
-                        else: st.info("Você não tem nenhuma turma salva na nuvem ainda.")
-                    else: st.info("Você não tem nenhuma turma salva na nuvem ainda.")
+                        else: st.info("Nenhuma turma salva. Se o Admin excluiu a turma, ela some daqui.")
+                    else: st.info("Nenhuma turma salva. Se o Admin excluiu a turma, ela some daqui.")
 
     else:
         st.success(f"📌 **Local de Trabalho Fixo:** {st.session_state.config_etapa} | {st.session_state.config_escola} | {st.session_state.config_ano} - Turma {st.session_state.config_turma} ({st.session_state.config_turno})")
@@ -1016,7 +1046,8 @@ with tab3:
                 else:
                     st.caption("Dê dois cliques na célula para corrigir uma letra ou aperte 'Delete' para apagar um aluno duplicado.")
                     
-                    df_editado_ui = st.data_editor(df_turma[colunas_exibir], use_container_width=True, num_rows="dynamic", column_config=config_colunas, height=300, key=f"editor_dig_{st.session_state.config_turma}")
+                    # SEM VARIÁVEL FANTASMA NO KEY!
+                    df_editado_ui = st.data_editor(df_turma[colunas_exibir], use_container_width=True, num_rows="dynamic", column_config=config_colunas, height=300, key=f"editor_dig_fixo")
                     
                     if st.button("Salvar Edições da Tabela na Nuvem", type="primary", use_container_width=True):
                         df_salvar = df_editado_ui.copy()
@@ -1043,12 +1074,11 @@ with tab3:
                     st.download_button("📊 Exportar Tabela em CSV", df_turma.to_csv(index=False, sep=";"), f"Turma_{st.session_state.config_turma}.csv", "text/csv", use_container_width=True)
                 
                 with col_down2:
-                    st.info("O sistema desenhará as imagens preenchidas para todos os alunos da tabela.")
-                    if st.button("Empacotar Imagens (ZIP)", key="btn_zip_dig", use_container_width=True):
+                    if st.button("🖼️ Empacotar Imagens (ZIP)", key="btn_zip_dig", use_container_width=True):
                         st.session_state.gerar_zip_digitador = True
                     
                     if st.session_state.get('gerar_zip_digitador', False):
-                        with st.spinner("Gerando imagens, aguarde..."):
+                        with st.spinner("Injetando Cabeçalho e Gerando imagens, aguarde..."):
                             zip_data = gerar_zip_gabaritos(df_turma, conf, modelo, st.session_state.config_etapa, st.session_state.config_ano)
                             esc_cln = st.session_state.config_escola.replace(' ','_')
                             st.download_button(
@@ -1059,11 +1089,8 @@ with tab3:
                                 type="primary", use_container_width=True
                             )
             else:
-                st.info("Nenhum aluno registrado para esta turma. Se o administrador excluiu a turma na Torre de Controle, o histórico foi apagado.")
+                st.info("Nenhum aluno registrado para esta turma no momento.")
 
-        # ====================================================================
-        # ATA ÚNICA E EDITÁVEL POR TURMA
-        # ====================================================================
         st.markdown("---")
         st.markdown("#### 📋 Ata Oficial de Ocorrência da Turma")
         
@@ -1109,4 +1136,3 @@ with tab3:
 
                 if st.session_state.get('ultima_ata_html'):
                     st.download_button("🖨️ Baixar Via da Ata (HTML)", data=st.session_state['ultima_ata_html'], file_name="Ata.html", mime="text/html")
-
