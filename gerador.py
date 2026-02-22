@@ -49,7 +49,7 @@ def desenhar_layout_grid(c, conf: ConfiguracaoProva, titulo_custom=None, subtitu
     # ====================================================================
     # CABEÇALHO 
     # ====================================================================
-    c.setStrokeColor(colors.black); c.setLineWidth(0.5); c.setFont("Helvetica-Bold", 9)
+    c.setStrokeColor(colors.black); c.setLineWidth(0.8); c.setFont("Helvetica-Bold", 9)
     y = H - 130 
     
     c.drawString(m, y, "UNIDADE DE ENSINO:"); c.line(m+100, y-2, W-m, y-2)
