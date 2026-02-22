@@ -454,7 +454,9 @@ if is_admin:
         with col_fmt2:
             st.write("")
             if st.button("Gerar Arquivo Pronto para Impressão", type="primary", use_container_width=True):
-                if logo_cen is None and os.path.exists("Frame 18.png"): logo_cen = MockUpload("Frame 18.png")
+                # Se não subir a logo central, usa a oficial automaticamente
+                if logo_cen is None and os.path.exists("Frame 18.png"):
+                    logo_cen = MockUpload("Frame 18.png")
                     
                 logos_dict = {'esq': logo_esq, 'cen': logo_cen, 'dir': logo_dir}
                 titulo_final = custom_titulo if custom_titulo else sel_etapa_gerador.upper()
@@ -578,7 +580,7 @@ if is_admin:
                             st.download_button("📥 Baixar CSV Corrigido", df_export.to_csv(index=False, sep=";"), f"Resultados_Robo_{ano_leitor}_{turma_leitor}.csv", "text/csv", type="primary")
 
 # ====================================================================
-# ABA 4 (ADMIN): TORRE DE CONTROLE (FILTROS CRUZADOS LIVRES E EXPORTAÇÃO)
+# ABA 4 (ADMIN): TORRE DE CONTROLE E FILTROS LIVRES
 # ====================================================================
 if is_admin:
     with tab4:
@@ -627,7 +629,7 @@ if is_admin:
                         if sel_tur_admin != "Todas as Turmas":
                             df_final_filtro = df_final_filtro[df_final_filtro['Turma'] == sel_tur_admin]
 
-                # MOSTRA AS TABELAS ENCONTRADAS NO FILTRO (Mesmo se for a Rede Inteira!)
+                # MOSTRA AS TABELAS ENCONTRADAS NO FILTRO
                 if not df_final_filtro.empty:
                     turmas_turnos = df_final_filtro[['Escola', 'Etapa', 'Ano_Ensino', 'Turma', 'Turno']].drop_duplicates().values.tolist()
                     turmas_turnos.sort(key=lambda x: (x[2], x[0], x[3])) # Organiza Ano > Escola > Turma
@@ -652,7 +654,7 @@ if is_admin:
                                         st.rerun()
                             
                             with c_lock3:
-                                # EXPORTAÇÃO DOS GABARITOS DIGITAIS PARA A COORDENAÇÃO
+                                # EXPORTAÇÃO DOS GABARITOS DIGITAIS PARA A COORDENAÇÃO (Com Cabeçalho Injetado)
                                 if st.button(f"🖼️ Baixar Gabaritos em PDF/JPG", key=f"zip_{eta_b}_{esc}_{ano_b}_{tur}_{tur_no}"):
                                     with st.spinner("Desenhando gabaritos..."):
                                         zip_adm = gerar_zip_gabaritos(df_tur, conf, modelo, eta_b, ano_b)
@@ -798,21 +800,36 @@ if is_admin:
                     st.markdown("#### ➕ Criar Novo Usuário")
                     with st.form("form_add_user", clear_on_submit=True):
                         novo_nome = st.text_input("Nome:")
-                        novo_email = st.text_input("Login:")
+                        novo_email = st.text_input("Login (E-mail):")
                         nova_senha = st.text_input("Senha:", type="password")
                         novo_perfil = st.selectbox("Perfil:", ["Digitador", "Administrador"])
                         if st.form_submit_button("Cadastrar Usuário", type="primary", use_container_width=True):
                             if novo_nome and novo_email and nova_senha:
-                                supabase.table("usuarios_oficiais").insert({"nome": novo_nome, "email": novo_email, "senha": hash_senha(nova_senha), "perfil": novo_perfil}).execute()
-                                st.rerun()
+                                if novo_email in df_usuarios['email'].values:
+                                    st.error("Email já cadastrado!")
+                                else:
+                                    supabase.table("usuarios_oficiais").insert({"nome": novo_nome, "email": novo_email, "senha": hash_senha(nova_senha), "perfil": novo_perfil}).execute()
+                                    st.rerun()
             with col_edit:
                 with st.container(border=True):
-                    st.markdown("#### ✏️ Editar")
+                    st.markdown("#### ✏️ Editar Senha")
                     if not df_usuarios.empty:
-                        user_to_edit = st.selectbox("Usuário:", df_usuarios['email'].tolist())
+                        user_to_edit = st.selectbox("Selecione o Usuário:", df_usuarios['email'].tolist(), key="sel_edit_user")
                         nova_senha_edit = st.text_input("Nova Senha:", type="password")
                         if st.button("Salvar Nova Senha", type="primary", use_container_width=True):
                             supabase.table("usuarios_oficiais").update({"senha": hash_senha(nova_senha_edit)}).eq("email", user_to_edit).execute()
+                            st.success(f"Senha de {user_to_edit} alterada com sucesso!")
+                            st.rerun()
+                
+                # NOVO MÓDULO: EXCLUSÃO DE USUÁRIOS
+                with st.container(border=True):
+                    st.markdown("#### 🚨 Excluir Usuário")
+                    if not df_usuarios.empty:
+                        user_to_del = st.selectbox("Selecione o Usuário para remover:", df_usuarios['email'].tolist(), key="sel_del_user")
+                        st.warning("⚠️ Esta ação apagará permanentemente o acesso deste usuário.")
+                        if st.button(f"🗑️ Confirmar Exclusão", use_container_width=True):
+                            supabase.table("usuarios_oficiais").delete().eq("email", user_to_del).execute()
+                            st.success(f"Acesso de {user_to_del} revogado!")
                             st.rerun()
 
     with tab6:
@@ -1058,7 +1075,8 @@ with tab3:
                 else:
                     st.caption("Dê dois cliques na célula para corrigir uma letra ou aperte 'Delete' para apagar um aluno duplicado.")
                     
-                    df_editado_ui = st.data_editor(df_turma[colunas_exibir], use_container_width=True, num_rows="dynamic", column_config=config_colunas, height=300, key=f"ed_dig_fixo")
+                    # SEM VARIÁVEL FANTASMA NO KEY!
+                    df_editado_ui = st.data_editor(df_turma[colunas_exibir], use_container_width=True, num_rows="dynamic", column_config=config_colunas, height=300, key=f"editor_dig_fixo")
                     
                     if st.button("Salvar Edições da Tabela na Nuvem", type="primary", use_container_width=True):
                         df_salvar = df_editado_ui.copy()
