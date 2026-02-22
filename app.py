@@ -73,90 +73,77 @@ if HAS_SUPABASE:
         usa_nuvem = True
     except Exception: pass
 
-if not HAS_SUPABASE: st.error("⚠️ A biblioteca supabase não está instalada.")
+if not HAS_SUPABASE: st.error("⚠️ A biblioteca supabase não está instalada ou o servidor está offline.")
 
-# ====================================================================
-# INICIALIZAÇÃO DE BANCOS DE DADOS LOCAIS (LISTAS COMPLETAS RESTAURADAS)
-# ====================================================================
 def hash_senha(senha): return hashlib.sha256(senha.encode()).hexdigest()
 
-DB_USUARIOS = "usuarios_samar.csv"
-if not os.path.exists(DB_USUARIOS): pd.DataFrame([{"Nome": "Coordenação Master", "Email": "admin", "Senha": hash_senha("coted2026"), "Perfil": "Administrador"}]).to_csv(DB_USUARIOS, index=False, sep=";")
-else:
-    df_check = pd.read_csv(DB_USUARIOS, sep=";", dtype=str)
-    if 'Perfil' not in df_check.columns:
-        df_check['Perfil'] = 'Digitador'
-        df_check.loc[0, 'Perfil'] = 'Administrador' 
-        df_check.to_csv(DB_USUARIOS, index=False, sep=";")
+# ====================================================================
+# SEMEADOR DE DADOS: GARANTE QUE AS LISTAS NÃO SUMAM NA NUVEM
+# ====================================================================
+if usa_nuvem:
+    try:
+        chk_esc = supabase.table("escolas_oficiais").select("id").limit(1).execute()
+        if not chk_esc.data:
+            escolas_iniciais = [
+                "COLÉGIO MILITAR TIRADENTES XII", "UNIDADE ESCOLAR JOSÉ LISBOA", "UNIDADE ESCOLAR MANOEL BATISTA",
+                "UNIDADE ESCOLAR NOVA ARAÇAGI", "UNIDADE ESCOLAR SOCORRO MAGALHÃES", "UNIDADE ESCOLAR SÃO JOAQUIM",
+                "UNIDADE ESCOLAR VILA NOVA", "UNIDADE ESCOLAR VILA SÃO JOÃO", "UNIDADE INTEGRADA CRIANÇA ESPERANÇA",
+                "UNIDADE INTEGRADA HENRIQUE DE LA ROQUE", "UNIDADE INTEGRADA JARBAS PASSARINHO", "UNIDADE INTEGRADA MARCONE CALDAS",
+                "UNIDADE INTEGRADA PROFESSORA MARIA ROSA REIS TRINDADE", "UNIDADE INTEGRADA RURAL BOA ESPERANÇA",
+                "UNIDADE INTEGRADA SANTO ANTÔNIO", "UNIDADE INTEGRADA SARNEY FILHO"
+            ]
+            supabase.table("escolas_oficiais").insert([{"nome_escola": e} for e in escolas_iniciais]).execute()
 
-DB_OCORRENCIAS = "atas_ocorrencias_samar.csv"
-if not os.path.exists(DB_OCORRENCIAS): pd.DataFrame(columns=["etapa", "Data_Registro", "Escola", "Ano_Ensino", "Turma", "Turno", "Aplicador", "Revisor_Digitador", "Ocorrencia"]).to_csv(DB_OCORRENCIAS, index=False, sep=";")
+        chk_ano = supabase.table("anos_oficiais").select("id").limit(1).execute()
+        if not chk_ano.data:
+            anos_iniciais = ["1º Ano", "2º Ano", "3º Ano", "4º Ano", "5º Ano", "6º Ano", "7º Ano", "8º Ano", "9º Ano"]
+            supabase.table("anos_oficiais").insert([{"ano_ensino": a} for a in anos_iniciais]).execute()
 
-DB_ESCOLAS = "escolas_samar.csv"
-if not os.path.exists(DB_ESCOLAS):
-    escolas_iniciais = [
-        "COLÉGIO MILITAR TIRADENTES XII", "UNIDADE ESCOLAR JOSÉ LISBOA", "UNIDADE ESCOLAR MANOEL BATISTA",
-        "UNIDADE ESCOLAR NOVA ARAÇAGI", "UNIDADE ESCOLAR SOCORRO MAGALHÃES", "UNIDADE ESCOLAR SÃO JOAQUIM",
-        "UNIDADE ESCOLAR VILA NOVA", "UNIDADE ESCOLAR VILA SÃO JOÃO", "UNIDADE INTEGRADA CRIANÇA ESPERANÇA",
-        "UNIDADE INTEGRADA HENRIQUE DE LA ROQUE", "UNIDADE INTEGRADA JARBAS PASSARINHO", "UNIDADE INTEGRADA MARCONE CALDAS",
-        "UNIDADE INTEGRADA PROFESSORA MARIA ROSA REIS TRINDADE", "UNIDADE INTEGRADA RURAL BOA ESPERANÇA",
-        "UNIDADE INTEGRADA SANTO ANTÔNIO", "UNIDADE INTEGRADA SARNEY FILHO"
-    ]
-    pd.DataFrame([{"Nome_Escola": e} for e in escolas_iniciais]).to_csv(DB_ESCOLAS, index=False, sep=";")
+        chk_eta = supabase.table("etapas_oficiais").select("id").limit(1).execute()
+        if not chk_eta.data:
+            supabase.table("etapas_oficiais").insert([{"nome_etapa": "Avaliação Diagnóstica", "data_abertura": "2020-01-01", "data_limite": "2030-12-31"}]).execute()
+    except: pass
 
-DB_ANOS = "anos_ensino_samar.csv"
-if not os.path.exists(DB_ANOS):
-    anos_iniciais = ["1º Ano", "2º Ano", "3º Ano", "4º Ano", "5º Ano", "6º Ano", "7º Ano", "8º Ano", "9º Ano"]
-    pd.DataFrame([{"Ano_Ensino": a} for a in anos_iniciais]).to_csv(DB_ANOS, index=False, sep=";")
+# ====================================================================
+# CARREGAMENTO GLOBAL DAS LISTAS DA NUVEM
+# ====================================================================
+ESCOLAS_SAMAR = [""]
+ANOS_ENSINO = [""]
+TODAS_ETAPAS = []
+ETAPAS_ATIVAS = []
+dict_gabaritos_mestres = {}
 
-DB_ETAPAS = "etapas_samar.csv"
-if not os.path.exists(DB_ETAPAS): 
-    pd.DataFrame([{"Nome_Etapa": "Avaliação Diagnóstica", "Data_Abertura": "2020-01-01", "Data_Limite": "2030-12-31"}]).to_csv(DB_ETAPAS, index=False, sep=";")
-else:
-    df_e = pd.read_csv(DB_ETAPAS, sep=";", dtype=str)
-    mudou = False
-    if "Data_Limite" not in df_e.columns:
-        df_e["Data_Limite"] = "2030-12-31"
-        mudou = True
-    if "Data_Abertura" not in df_e.columns:
-        df_e["Data_Abertura"] = "2020-01-01"
-        mudou = True
-    if mudou: df_e.to_csv(DB_ETAPAS, index=False, sep=";")
+if usa_nuvem:
+    try:
+        r_esc = supabase.table("escolas_oficiais").select("nome_escola").execute()
+        if r_esc.data: ESCOLAS_SAMAR += sorted([x['nome_escola'] for x in r_esc.data])
 
-df_esc_lida = pd.read_csv(DB_ESCOLAS, sep=";", dtype=str)
-ESCOLAS_SAMAR = [""] + df_esc_lida['Nome_Escola'].dropna().tolist()
+        r_ano = supabase.table("anos_oficiais").select("ano_ensino").execute()
+        if r_ano.data: ANOS_ENSINO += sorted([x['ano_ensino'] for x in r_ano.data])
 
-df_ano_lida = pd.read_csv(DB_ANOS, sep=";", dtype=str)
-ANOS_ENSINO = [""] + df_ano_lida['Ano_Ensino'].dropna().tolist()
+        r_eta = supabase.table("etapas_oficiais").select("*").execute()
+        hoje = datetime.now().date()
+        if r_eta.data:
+            for row in r_eta.data:
+                n_etapa = str(row.get('nome_etapa', '')).strip()
+                if not n_etapa: continue
+                TODAS_ETAPAS.append(n_etapa)
+                try:
+                    d_abert = datetime.strptime(str(row.get('data_abertura', '2020-01-01')).split()[0], "%Y-%m-%d").date()
+                    d_lim = datetime.strptime(str(row.get('data_limite', '2030-12-31')).split()[0], "%Y-%m-%d").date()
+                    if d_abert <= hoje <= d_lim: ETAPAS_ATIVAS.append(n_etapa)
+                except: ETAPAS_ATIVAS.append(n_etapa)
+
+        r_gab = supabase.table("gabaritos_oficiais").select("*").execute()
+        if r_gab.data:
+            for i in r_gab.data: dict_gabaritos_mestres[(i['etapa'], i['ano_ensino'])] = str(i['gabarito']).upper().strip()
+    except Exception as e: pass
+
+if not TODAS_ETAPAS: TODAS_ETAPAS = ["Padrão"]
+if not ETAPAS_ATIVAS: ETAPAS_ATIVAS = TODAS_ETAPAS
 
 TURMAS_DISP = ["", "A", "B", "C", "D", "E", "F", "G", "H", "Única"]
 TURNOS_DISP = ["", "Manhã", "Tarde", "Integral", "Noite"]
-
-# --- INTELIGÊNCIA DE PRAZOS (FILTRA O QUE ESTÁ ABERTO) ---
-df_etapas_lidas = pd.read_csv(DB_ETAPAS, sep=";", dtype=str)
-hoje = datetime.now().date()
-ETAPAS_ATIVAS = []
-TODAS_ETAPAS = []
-for _, row in df_etapas_lidas.iterrows():
-    nome_etapa = str(row.get('Nome_Etapa', '')).strip()
-    if not nome_etapa or nome_etapa == 'nan': continue
-    TODAS_ETAPAS.append(nome_etapa)
-    try:
-        dt_abert = datetime.strptime(str(row.get('Data_Abertura', '2020-01-01')).split()[0].replace('/','-'), "%Y-%m-%d").date()
-        dt_lim = datetime.strptime(str(row.get('Data_Limite', '2030-12-31')).split()[0].replace('/','-'), "%Y-%m-%d").date()
-        if dt_abert <= hoje <= dt_lim: ETAPAS_ATIVAS.append(nome_etapa)
-    except: ETAPAS_ATIVAS.append(nome_etapa) 
-
-if not TODAS_ETAPAS: TODAS_ETAPAS = ["Padrão"]
-if not ETAPAS_ATIVAS: ETAPAS_ATIVAS = TODAS_ETAPAS 
-
-dict_gabaritos_mestres = {}
-if usa_nuvem:
-    try:
-        res_gabs = supabase.table("gabaritos_oficiais").select("*").execute()
-        if res_gabs.data:
-            for item in res_gabs.data: dict_gabaritos_mestres[(item['etapa'], item['ano_ensino'])] = str(item['gabarito']).upper().strip()
-    except: pass
 
 # --- ESTADOS DA SESSÃO PERMANENTES ---
 estados_padrao = {
@@ -176,7 +163,6 @@ def gerar_zip_gabaritos(df, conf_prova, modelo_prova, etapa_nome, ano_nome):
     id_unico = uuid.uuid4().hex
     fn_pdf = f"base_temp_{modelo_prova}_{id_unico}.pdf"
     
-    # Injeta a Logo e os Títulos Oficiais no PDF Branco antes de carimbar os dados
     logo_file = MockUpload("Frame 18.png") if os.path.exists("Frame 18.png") else None
     logos_dict = {'esq': None, 'cen': logo_file, 'dir': None}
     titulo_doc = str(etapa_nome).upper() if etapa_nome else conf_prova.titulo_prova
@@ -206,7 +192,7 @@ def gerar_zip_gabaritos(df, conf_prova, modelo_prova, etapa_nome, ano_nome):
             freq = str(row.get("Frequencia", "00")).zfill(2)
             respostas = str(row.get("Respostas_Brutas", ""))
             
-            cor_caneta = (0, 0, 0) # Cor preta absoluta (Fim da fonte azul)
+            cor_caneta = (0, 0, 0) 
             fonte = cv2.FONT_HERSHEY_SIMPLEX
             escala = 0.55
             espessura = 2
@@ -271,7 +257,7 @@ def gerar_zip_atas(df_atas):
     return zip_buffer.getvalue()
 
 # ====================================================================
-# TELA DE LOGIN
+# TELA DE LOGIN E AUTENTICAÇÃO (SISTEMA NUVEM)
 # ====================================================================
 if not st.session_state['usuario_logado']:
     st.title("🖨️ Sistema SAMAR - Acesso Restrito")
@@ -280,19 +266,19 @@ if not st.session_state['usuario_logado']:
         email_input = st.text_input("E-mail ou Usuário:")
         senha_input = st.text_input("Senha:", type="password")
         if st.button("Entrar no Sistema", type="primary"):
-            df_users = pd.read_csv(DB_USUARIOS, sep=";", dtype=str)
             senha_criptografada = hash_senha(senha_input)
-            match = df_users[(df_users['Email'] == email_input) & (df_users['Senha'] == senha_criptografada)]
-            if not match.empty:
-                st.session_state['usuario_logado'] = email_input
-                st.session_state['nome_logado'] = match.iloc[0]['Nome']
-                st.session_state['perfil_logado'] = match.iloc[0]['Perfil']
+            # Acesso Mestre Universal
+            if email_input == "admin" and senha_input == "coted2026":
+                st.session_state['usuario_logado'] = "admin"
+                st.session_state['nome_logado'] = "Coordenação Master"
+                st.session_state['perfil_logado'] = "Administrador"
                 st.rerun()
-            else:
-                if email_input == "admin" and senha_input == "coted2026":
-                    st.session_state['usuario_logado'] = "admin"
-                    st.session_state['nome_logado'] = "Coordenação Master"
-                    st.session_state['perfil_logado'] = "Administrador"
+            elif usa_nuvem:
+                res = supabase.table("usuarios_oficiais").select("*").eq("email", email_input).eq("senha", senha_criptografada).execute()
+                if res.data:
+                    st.session_state['usuario_logado'] = email_input
+                    st.session_state['nome_logado'] = res.data[0]['nome']
+                    st.session_state['perfil_logado'] = res.data[0]['perfil']
                     st.rerun()
                 else:
                     st.error("❌ Usuário ou Senha incorretos.")
@@ -331,37 +317,50 @@ else:
     tab3 = tabs[0]
 
 # ====================================================================
-# ABA 7 (ADMIN): CONFIGURAÇÕES
+# ABA 7 (ADMIN): CONFIGURAÇÕES INTEGRADAS E GABARITOS
 # ====================================================================
 if is_admin:
     with tab7:
-        st.markdown("### ⚙️ Gestão de Ciclos e Gabaritos")
+        st.markdown("### ⚙️ Gestão de Ciclos e Gabaritos (100% Nuvem)")
         
         with st.container(border=True):
             st.markdown("#### 📅 1. Definir Ciclos e Prazos de Acesso")
-            df_etapas_edit = pd.read_csv(DB_ETAPAS, sep=";", dtype=str)
-            df_etapas_edit['Data_Abertura'] = pd.to_datetime(df_etapas_edit['Data_Abertura'], dayfirst=True, errors='coerce').dt.date
-            df_etapas_edit['Data_Abertura'] = df_etapas_edit['Data_Abertura'].fillna(datetime(2020, 1, 1).date())
-            df_etapas_edit['Data_Limite'] = pd.to_datetime(df_etapas_edit['Data_Limite'], dayfirst=True, errors='coerce').dt.date
-            df_etapas_edit['Data_Limite'] = df_etapas_edit['Data_Limite'].fillna(datetime(2030, 12, 31).date())
-            
-            edited_etapas = st.data_editor(
-                df_etapas_edit,
-                column_config={"Nome_Etapa": st.column_config.TextColumn("Nome do Ciclo", required=True), "Data_Abertura": st.column_config.DateColumn("Abertura", format="DD/MM/YYYY"), "Data_Limite": st.column_config.DateColumn("Prazo Final", format="DD/MM/YYYY")},
-                num_rows="dynamic", use_container_width=True, key="ed_etp"
-            )
-            if st.button("💾 Salvar Ciclos e Prazos", type="primary"):
-                edited_etapas['Data_Abertura'] = edited_etapas['Data_Abertura'].apply(lambda x: x.strftime('%Y-%m-%d') if pd.notna(x) else '2020-01-01')
-                edited_etapas['Data_Limite'] = edited_etapas['Data_Limite'].apply(lambda x: x.strftime('%Y-%m-%d') if pd.notna(x) else '2030-12-31')
-                edited_etapas.to_csv(DB_ETAPAS, index=False, sep=";")
-                st.success("Ciclos atualizados!")
-                st.rerun()
+            if usa_nuvem:
+                r_et = supabase.table("etapas_oficiais").select("*").execute()
+                df_etapas_edit = pd.DataFrame(r_et.data) if r_et.data else pd.DataFrame(columns=["id", "nome_etapa", "data_abertura", "data_limite"])
+                df_etapas_edit['data_abertura'] = pd.to_datetime(df_etapas_edit['data_abertura'], errors='coerce').dt.date
+                df_etapas_edit['data_limite'] = pd.to_datetime(df_etapas_edit['data_limite'], errors='coerce').dt.date
+                
+                edited_etapas = st.data_editor(
+                    df_etapas_edit,
+                    column_config={
+                        "id": None, 
+                        "nome_etapa": st.column_config.TextColumn("Nome do Ciclo", required=True), 
+                        "data_abertura": st.column_config.DateColumn("Abertura", format="DD/MM/YYYY"), 
+                        "data_limite": st.column_config.DateColumn("Prazo Final", format="DD/MM/YYYY")
+                    },
+                    num_rows="dynamic", use_container_width=True, key="ed_etp"
+                )
+                if st.button("💾 Salvar Ciclos e Prazos", type="primary"):
+                    c_ids = [r["id"] for _, r in edited_etapas.iterrows() if pd.notna(r.get("id")) and str(r.get("id")).strip()]
+                    db_ids = [x["id"] for x in r_et.data] if r_et.data else []
+                    to_del = [x for x in db_ids if x not in c_ids]
+                    if to_del: supabase.table("etapas_oficiais").delete().in_("id", to_del).execute()
+                    
+                    recs = []
+                    for _, r in edited_etapas.iterrows():
+                        if pd.notna(r["nome_etapa"]):
+                            d_a = r['data_abertura'].strftime('%Y-%m-%d') if pd.notna(r['data_abertura']) else '2020-01-01'
+                            d_l = r['data_limite'].strftime('%Y-%m-%d') if pd.notna(r['data_limite']) else '2030-12-31'
+                            recs.append({"id": r["id"] if pd.notna(r.get("id")) and str(r.get("id")).strip() else str(uuid.uuid4()), "nome_etapa": r["nome_etapa"], "data_abertura": d_a, "data_limite": d_l})
+                    if recs: supabase.table("etapas_oficiais").upsert(recs).execute()
+                    st.success("Ciclos atualizados no Supabase!")
+                    st.rerun()
 
         st.markdown("<br>", unsafe_allow_html=True)
         
         with st.container(border=True):
             st.markdown("#### 🔑 2. Atribuir Gabaritos Mestres por Ciclo")
-            
             c_gab1, c_gab2 = st.columns(2)
             with c_gab1: sel_eta_gab = st.selectbox("Selecione o Ciclo:", TODAS_ETAPAS, key="sel_eta_gab")
             with c_gab2: sel_ano_gab = st.selectbox("Selecione o Ano de Ensino Avaliado:", ANOS_ENSINO, key="sel_ano_gab")
@@ -404,18 +403,35 @@ if is_admin:
         c_cfg2, c_cfg3 = st.columns(2)
         with c_cfg2:
             st.markdown("#### 🏫 3. Escolas da Rede")
-            df_esc_edit = pd.read_csv(DB_ESCOLAS, sep=";", dtype=str)
-            edited_escolas = st.data_editor(df_esc_edit, num_rows="dynamic", use_container_width=True, key="ed_esc")
-            if st.button("💾 Salvar Escolas", type="primary"):
-                edited_escolas.to_csv(DB_ESCOLAS, index=False, sep=";")
-                st.rerun()
+            if usa_nuvem:
+                r_esc = supabase.table("escolas_oficiais").select("*").execute()
+                df_esc_edit = pd.DataFrame(r_esc.data) if r_esc.data else pd.DataFrame(columns=["id", "nome_escola"])
+                edited_escolas = st.data_editor(df_esc_edit, column_config={"id": None, "nome_escola": st.column_config.TextColumn("Nome da Escola", required=True)}, num_rows="dynamic", use_container_width=True, key="ed_esc")
+                if st.button("💾 Salvar Escolas", type="primary"):
+                    c_ids = [r["id"] for _, r in edited_escolas.iterrows() if pd.notna(r.get("id")) and str(r.get("id")).strip()]
+                    db_ids = [x["id"] for x in r_esc.data] if r_esc.data else []
+                    to_del = [x for x in db_ids if x not in c_ids]
+                    if to_del: supabase.table("escolas_oficiais").delete().in_("id", to_del).execute()
+                    
+                    recs = [{"id": r["id"] if pd.notna(r.get("id")) and str(r.get("id")).strip() else str(uuid.uuid4()), "nome_escola": r["nome_escola"]} for _, r in edited_escolas.iterrows() if pd.notna(r["nome_escola"])]
+                    if recs: supabase.table("escolas_oficiais").upsert(recs).execute()
+                    st.rerun()
+
         with c_cfg3:
             st.markdown("#### 🎓 4. Anos de Ensino")
-            df_ano_edit = pd.read_csv(DB_ANOS, sep=";", dtype=str)
-            edited_anos = st.data_editor(df_ano_edit, num_rows="dynamic", use_container_width=True, key="ed_ano")
-            if st.button("💾 Salvar Anos", type="primary"):
-                edited_anos.to_csv(DB_ANOS, index=False, sep=";")
-                st.rerun()
+            if usa_nuvem:
+                r_ano = supabase.table("anos_oficiais").select("*").execute()
+                df_ano_edit = pd.DataFrame(r_ano.data) if r_ano.data else pd.DataFrame(columns=["id", "ano_ensino"])
+                edited_anos = st.data_editor(df_ano_edit, column_config={"id": None, "ano_ensino": st.column_config.TextColumn("Ano / Série", required=True)}, num_rows="dynamic", use_container_width=True, key="ed_ano")
+                if st.button("💾 Salvar Anos", type="primary"):
+                    c_ids = [r["id"] for _, r in edited_anos.iterrows() if pd.notna(r.get("id")) and str(r.get("id")).strip()]
+                    db_ids = [x["id"] for x in r_ano.data] if r_ano.data else []
+                    to_del = [x for x in db_ids if x not in c_ids]
+                    if to_del: supabase.table("anos_oficiais").delete().in_("id", to_del).execute()
+                    
+                    recs = [{"id": r["id"] if pd.notna(r.get("id")) and str(r.get("id")).strip() else str(uuid.uuid4()), "ano_ensino": r["ano_ensino"]} for _, r in edited_anos.iterrows() if pd.notna(r["ano_ensino"])]
+                    if recs: supabase.table("anos_oficiais").upsert(recs).execute()
+                    st.rerun()
 
 # ====================================================================
 # ABA 1: GERADOR DE PDF
@@ -438,10 +454,7 @@ if is_admin:
         with col_fmt2:
             st.write("")
             if st.button("Gerar Arquivo Pronto para Impressão", type="primary", use_container_width=True):
-                
-                # Se não subir a logo central, usa a oficial automaticamente
-                if logo_cen is None and os.path.exists("Frame 18.png"):
-                    logo_cen = MockUpload("Frame 18.png")
+                if logo_cen is None and os.path.exists("Frame 18.png"): logo_cen = MockUpload("Frame 18.png")
                     
                 logos_dict = {'esq': logo_esq, 'cen': logo_cen, 'dir': logo_dir}
                 titulo_final = custom_titulo if custom_titulo else sel_etapa_gerador.upper()
@@ -570,7 +583,7 @@ if is_admin:
 if is_admin:
     with tab4:
         st.markdown("### ☁️ Torre de Controle do Supabase")
-        st.info("Abaixo você tem a visão Raio-X de toda a Secretaria de Educação. Use os filtros para cruzar dados livremente e gerar relatórios por Ano de Ensino.")
+        st.info("Abaixo você tem a visão Raio-X de toda a Secretaria de Educação. Use os filtros para cruzar dados livremente e gerar relatórios.")
 
         if usa_nuvem:
             res_nuvem = supabase.table("respostas_geral").select("*").execute()
@@ -639,7 +652,7 @@ if is_admin:
                                         st.rerun()
                             
                             with c_lock3:
-                                # EXPORTAÇÃO DOS GABARITOS DIGITAIS PARA A COORDENAÇÃO (Com Cabeçalho Injetado)
+                                # EXPORTAÇÃO DOS GABARITOS DIGITAIS PARA A COORDENAÇÃO
                                 if st.button(f"🖼️ Baixar Gabaritos em PDF/JPG", key=f"zip_{eta_b}_{esc}_{ano_b}_{tur}_{tur_no}"):
                                     with st.spinner("Desenhando gabaritos..."):
                                         zip_adm = gerar_zip_gabaritos(df_tur, conf, modelo, eta_b, ano_b)
@@ -681,8 +694,7 @@ if is_admin:
                                     st.success("A turma foi apagada da nuvem instantaneamente.")
                                     st.rerun()
                 else:
-                    if sel_etapa_admin:
-                        st.info("⬆️ Nenhum aluno encontrado para o filtro atual.")
+                    st.info("⬆️ A base de dados não encontrou nenhum aluno para o filtro atual.")
 
                 st.markdown("---")
                 st.markdown("#### ⚙️ Motor Inteligente de Notas & Exportação Global")
@@ -775,33 +787,33 @@ if is_admin:
 if is_admin:
     with tab5:
         st.markdown("### 👥 Controle de Usuários")
-        df_usuarios = pd.read_csv(DB_USUARIOS, sep=";", dtype=str)
-        st.dataframe(df_usuarios[["Nome", "Email", "Perfil"]], use_container_width=True)
-        col_add, col_edit = st.columns(2)
-        with col_add:
-            with st.container(border=True):
-                st.markdown("#### ➕ Criar Novo Usuário")
-                with st.form("form_add_user", clear_on_submit=True):
-                    novo_nome = st.text_input("Nome:")
-                    novo_email = st.text_input("Login:")
-                    nova_senha = st.text_input("Senha:", type="password")
-                    novo_perfil = st.selectbox("Perfil:", ["Digitador", "Administrador"])
-                    if st.form_submit_button("Cadastrar Usuário", type="primary", use_container_width=True):
-                        if novo_nome and novo_email and nova_senha:
-                            if novo_email in df_usuarios['Email'].values: st.error("Email já cadastrado!")
-                            else:
-                                pd.DataFrame([{"Nome": novo_nome, "Email": novo_email, "Senha": hash_senha(nova_senha), "Perfil": novo_perfil}]).to_csv(DB_USUARIOS, mode='a', header=False, index=False, sep=";")
+        if usa_nuvem:
+            res_users = supabase.table("usuarios_oficiais").select("nome, email, perfil").execute()
+            df_usuarios = pd.DataFrame(res_users.data) if res_users.data else pd.DataFrame(columns=["nome", "email", "perfil"])
+            st.dataframe(df_usuarios, use_container_width=True)
+            
+            col_add, col_edit = st.columns(2)
+            with col_add:
+                with st.container(border=True):
+                    st.markdown("#### ➕ Criar Novo Usuário")
+                    with st.form("form_add_user", clear_on_submit=True):
+                        novo_nome = st.text_input("Nome:")
+                        novo_email = st.text_input("Login:")
+                        nova_senha = st.text_input("Senha:", type="password")
+                        novo_perfil = st.selectbox("Perfil:", ["Digitador", "Administrador"])
+                        if st.form_submit_button("Cadastrar Usuário", type="primary", use_container_width=True):
+                            if novo_nome and novo_email and nova_senha:
+                                supabase.table("usuarios_oficiais").insert({"nome": novo_nome, "email": novo_email, "senha": hash_senha(nova_senha), "perfil": novo_perfil}).execute()
                                 st.rerun()
-        with col_edit:
-            with st.container(border=True):
-                st.markdown("#### ✏️ Editar")
-                if not df_usuarios.empty:
-                    user_to_edit = st.selectbox("Usuário:", df_usuarios['Email'].tolist())
-                    nova_senha_edit = st.text_input("Nova Senha:", type="password")
-                    if st.button("Salvar Nova Senha", type="primary", use_container_width=True):
-                        df_usuarios.loc[df_usuarios['Email'] == user_to_edit, 'Senha'] = hash_senha(nova_senha_edit)
-                        df_usuarios.to_csv(DB_USUARIOS, index=False, sep=";")
-                        st.rerun()
+            with col_edit:
+                with st.container(border=True):
+                    st.markdown("#### ✏️ Editar")
+                    if not df_usuarios.empty:
+                        user_to_edit = st.selectbox("Usuário:", df_usuarios['email'].tolist())
+                        nova_senha_edit = st.text_input("Nova Senha:", type="password")
+                        if st.button("Salvar Nova Senha", type="primary", use_container_width=True):
+                            supabase.table("usuarios_oficiais").update({"senha": hash_senha(nova_senha_edit)}).eq("email", user_to_edit).execute()
+                            st.rerun()
 
     with tab6:
         st.markdown("### 📋 Livro Oficial de Atas")
@@ -1046,8 +1058,7 @@ with tab3:
                 else:
                     st.caption("Dê dois cliques na célula para corrigir uma letra ou aperte 'Delete' para apagar um aluno duplicado.")
                     
-                    # SEM VARIÁVEL FANTASMA NO KEY!
-                    df_editado_ui = st.data_editor(df_turma[colunas_exibir], use_container_width=True, num_rows="dynamic", column_config=config_colunas, height=300, key=f"editor_dig_fixo")
+                    df_editado_ui = st.data_editor(df_turma[colunas_exibir], use_container_width=True, num_rows="dynamic", column_config=config_colunas, height=300, key=f"ed_dig_fixo")
                     
                     if st.button("Salvar Edições da Tabela na Nuvem", type="primary", use_container_width=True):
                         df_salvar = df_editado_ui.copy()
@@ -1089,8 +1100,11 @@ with tab3:
                                 type="primary", use_container_width=True
                             )
             else:
-                st.info("Nenhum aluno registrado para esta turma no momento.")
+                st.info("Nenhum aluno registrado para esta turma. Se o administrador excluiu a turma na Torre de Controle, o histórico foi apagado.")
 
+        # ====================================================================
+        # ATA ÚNICA E EDITÁVEL POR TURMA
+        # ====================================================================
         st.markdown("---")
         st.markdown("#### 📋 Ata Oficial de Ocorrência da Turma")
         
@@ -1113,6 +1127,7 @@ with tab3:
                     nome_aplicador = st.text_input("NOME DO APLICADOR:", value=ata_aplicador_existente)
                     texto_ata = st.text_area("DESCRIÇÃO DA OCORRÊNCIA:", value=ata_texto_existente, height=100)
                     data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
+                    
                     if st.form_submit_button("Salvar / Atualizar Ata da Turma", type="primary"):
                         if not nome_aplicador or not texto_ata:
                             st.error("⚠️ Preencha o nome do Aplicador e a Ocorrência.")
