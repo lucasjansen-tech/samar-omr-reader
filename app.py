@@ -149,13 +149,13 @@ estados_padrao = {
     'config_ano': "", 'config_turma': "", 'config_turno': "",
     'freq_d': "0", 'freq_u': None, 'nome_aluno_input': "",
     'msg_erro': None, 'msg_sucesso_form': None, 'gerar_zip_digitador': False,
-    'reset_form_questoes': 0  # <--- Controle para resetar questões só em caso de sucesso
+    'reset_form_questoes': 0
 }
 for key, valor in estados_padrao.items():
     if key not in st.session_state: st.session_state[key] = valor
 
 # ====================================================================
-# GERADORES DE ARQUIVOS (PDF COM CABEÇALHO OFICIAL E ALINHAMENTO FINO)
+# GERADORES DE ARQUIVOS (PDF COM CABEÇALHO OFICIAL E ALINHAMENTO)
 # ====================================================================
 def gerar_zip_gabaritos(df, conf_prova, modelo_prova, etapa_nome, ano_nome):
     id_unico = uuid.uuid4().hex
@@ -196,7 +196,6 @@ def gerar_zip_gabaritos(df, conf_prova, modelo_prova, etapa_nome, ano_nome):
             espessura = 2
             h, w = conf_prova.REF_H, conf_prova.REF_W
             
-            # MATEMÁTICA DO ESPAÇO MILIMÉTRICO (Sentado na linha pontilhada)
             cv2.putText(img_aluno, escola, (int(w * 0.28), int(h * 0.146)), fonte, escala, cor_caneta, espessura)
             cv2.putText(img_aluno, ano, (int(w * 0.12), int(h * 0.178)), fonte, escala, cor_caneta, espessura)
             cv2.putText(img_aluno, turma, (int(w * 0.42), int(h * 0.178)), fonte, escala, cor_caneta, espessura)
@@ -589,12 +588,12 @@ if is_admin:
                             st.download_button("📥 Baixar CSV Corrigido", df_export.to_csv(index=False, sep=";"), f"Resultados_Robo_{ano_leitor}_{turma_leitor}.csv", "text/csv", type="primary")
 
 # ====================================================================
-# ABA 4 (ADMIN): TORRE DE CONTROLE (FILTROS CRUZADOS LIVRES)
+# ABA 4 (ADMIN): TORRE DE CONTROLE E FILTROS LIVRES
 # ====================================================================
 if is_admin:
     with tab4:
         st.markdown("### ☁️ Torre de Controle do Supabase")
-        st.info("Abaixo você tem a visão Raio-X de toda a Secretaria de Educação. Use os filtros para cruzar dados livremente e gerar relatórios.")
+        st.info("Abaixo você tem a visão Raio-X de toda a Secretaria de Educação. Use os filtros para cruzar dados livremente e gerar relatórios por Ano de Ensino.")
 
         if usa_nuvem:
             res_nuvem = supabase.table("respostas_geral").select("*").execute()
@@ -637,7 +636,6 @@ if is_admin:
                         if sel_tur_admin != "Todas as Turmas":
                             df_final_filtro = df_final_filtro[df_final_filtro['Turma'] == sel_tur_admin]
 
-                # MOSTRA AS TABELAS ENCONTRADAS NO FILTRO
                 if not df_final_filtro.empty:
                     turmas_turnos = df_final_filtro[['Escola', 'Etapa', 'Ano_Ensino', 'Turma', 'Turno']].drop_duplicates().values.tolist()
                     turmas_turnos.sort(key=lambda x: (x[2], x[0], x[3])) 
@@ -677,7 +675,6 @@ if is_admin:
 
                             df_ed = st.data_editor(df_tur[cols_editar], column_config=config_cols_admin, use_container_width=True, num_rows="dynamic", key=f"ed_adm_{eta_b}_{esc}_{ano_b}_{tur}_{tur_no}")
 
-                            # AUTO-SAVE DO ADMIN EM TEMPO REAL
                             df_old = df_tur[cols_editar].reset_index(drop=True).fillna("")
                             df_new = df_ed.reset_index(drop=True).fillna("")
                             
@@ -710,7 +707,7 @@ if is_admin:
                                     st.success("A turma foi apagada da nuvem instantaneamente.")
                                     st.rerun()
                 else:
-                    st.info("⬆️ Nenhum aluno encontrado para o filtro selecionado.")
+                    st.info("⬆️ Nenhum dado encontrado para o filtro selecionado.")
 
                 st.markdown("---")
                 st.markdown("#### ⚙️ Motor Inteligente de Notas & Exportação Global")
@@ -903,7 +900,7 @@ if is_admin:
                     st.rerun()
 
 # ====================================================================
-# ABA 3 COMPARTILHADA: A MÁGICA DO DIGITADOR (FORMULÁRIO FECHADO DE ALTA PERFORMANCE)
+# ABA 3 COMPARTILHADA: A MÁGICA DO DIGITADOR (SEM ERRO DE TELA VERMELHA)
 # ====================================================================
 with tab3:
     nome_operador = st.session_state['nome_logado']
@@ -1040,7 +1037,6 @@ with tab3:
                     st.success(st.session_state.msg_sucesso_form)
                     st.session_state.msg_sucesso_form = None
 
-                # Fora do form para atualizar o letreiro azul na hora
                 if "freq_d" not in st.session_state: st.session_state.freq_d = "0"
                 if "freq_u" not in st.session_state: st.session_state.freq_u = None
                 if "nome_aluno_input" not in st.session_state: st.session_state.nome_aluno_input = ""
@@ -1063,7 +1059,7 @@ with tab3:
 
                 st.divider()
                 
-                # A MÁGICA QUE MANTÉM OS DADOS SALVOS NA TELA EM CASO DE ERRO (clear_on_submit=False)
+                # A MÁGICA QUE MANTÉM OS DADOS SALVOS NA TELA EM CASO DE ERRO
                 with st.form("form_cartao_aluno", clear_on_submit=False):
                     cols_blocos = st.columns(len(blocos_esperados_dig)) 
                     opcoes_visuais = ["A", "B", "C", "D", "Branco", "Múltiplas", "Rasura"]
@@ -1074,20 +1070,20 @@ with tab3:
                         with cols_blocos[i]:
                             st.markdown(f"**{nome_disc}**")
                             for r in range(qtd_q):
-                                # A Chave dinâmica garante que o form zere APENAS após o sucesso
                                 respostas_temp[q_num] = st.radio(f"Questão {q_num:02d}", options=opcoes_visuais, index=None, horizontal=True, key=f"q_{q_num}_{st.session_state.reset_form_questoes}")
                                 q_num += 1
                                 
                     st.write("")
                     submit_aluno = st.form_submit_button("Salvar Cartão deste Aluno", type="primary", use_container_width=True)
                     
+                    # MOTOR DE SALVAMENTO DIRETO, SEM CONFLITOS DE CALLBACK
                     if submit_aluno:
                         erros = []
                         if not st.session_state.nome_aluno_input.strip(): erros.append("O campo 'Nome do Aluno' não pode ficar em branco.")
                         if st.session_state.freq_u is None: erros.append("Marque a Unidade (U) da Frequência.")
                         
                         vazias = [str(q) for q, v in respostas_temp.items() if v is None]
-                        if vazias: erros.append(f"Faltam marcar as questões: {', '.join(vazias)}. (Se o aluno não respondeu, marque a bolinha 'Branco').")
+                        if vazias: erros.append(f"Faltam marcar as questões: {', '.join(vazias)}.")
                         
                         nova_freq = str(st.session_state.freq_d) + str(st.session_state.freq_u)
                         
@@ -1097,11 +1093,11 @@ with tab3:
                                 erros.append(f"Já existe um aluno na tabela com a Frequência '{nova_freq}'. Exclua o antigo ou mude o número.")
                         
                         if erros:
-                            # Se der erro, ele exibe a mensagem, MAS COMO O RERUN NÃO ACONTECE NO FORM, OS DADOS FICAM NA TELA!
                             for e in erros: st.error(f"⚠️ {e}")
                         else:
                             resp_str = "".join([mapa_valores_global[respostas_temp[q]] for q in range(1, q_esperadas_dig + 1)])
                             novo_dado = {
+                                "id": str(uuid.uuid4()),
                                 "etapa": st.session_state.config_etapa, "escola": st.session_state.config_escola, 
                                 "ano_ensino": st.session_state.config_ano, "turma": st.session_state.config_turma, 
                                 "turno": st.session_state.config_turno, "frequencia": nova_freq, 
@@ -1111,15 +1107,13 @@ with tab3:
                             try:
                                 supabase.table("respostas_geral").insert([novo_dado]).execute()
                                 st.session_state.msg_sucesso_form = f"✅ Aluno {st.session_state.nome_aluno_input} (Freq: {nova_freq}) salvo com sucesso!"
-                                
-                                # AQUI É ONDE O SISTEMA DE FATO ZERA OS DADOS PARA O PRÓXIMO ALUNO (Sucesso)
                                 st.session_state.reset_form_questoes += 1
                                 st.session_state.nome_aluno_input = ""
                                 st.session_state.freq_d = "0"
                                 st.session_state.freq_u = None
                                 st.rerun()
                             except Exception as e:
-                                st.error("Erro ao salvar no banco de dados.")
+                                st.error(f"Erro ao salvar no banco de dados: {e}")
 
         st.markdown("---")
         
@@ -1160,7 +1154,7 @@ with tab3:
                             records_upsert = []
                             for _, row in df_salvar.iterrows():
                                 records_upsert.append({
-                                    "id": str(row["ID"]) if pd.notna(row.get("ID")) else str(uuid.uuid4()),
+                                    "id": str(row["ID"]) if pd.notna(row.get("ID")) and str(row.get("ID")) else str(uuid.uuid4()),
                                     "etapa": st.session_state.config_etapa, "escola": st.session_state.config_escola, 
                                     "ano_ensino": st.session_state.config_ano, "turma": st.session_state.config_turma, 
                                     "turno": st.session_state.config_turno, "frequencia": str(row["Frequencia"]), 
